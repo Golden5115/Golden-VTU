@@ -2,7 +2,8 @@ import { auth } from "@/auth"
 import { redirect } from "next/navigation"
 import prisma from "@/lib/prisma"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Users, CreditCard, Activity, ArrowUpRight } from "lucide-react"
+import { Users, CreditCard, Activity, Wallet } from "lucide-react"
+import { ckGetWalletBalance } from "@/services/clubkonnect.service"
 
 export default async function AdminDashboardPage() {
   // Fetch High-level Metrics
@@ -24,6 +25,15 @@ export default async function AdminDashboardPage() {
 
   const totalVolume = (totalAirtimeSales._sum.amount || 0) + (totalDataSales._sum.amount || 0)
 
+  // ClubKonnect Provider Balance
+  let ckBalance = "N/A"
+  try {
+    const balanceData = await ckGetWalletBalance()
+    ckBalance = `₦${parseFloat(balanceData.balance).toLocaleString()}`
+  } catch (e) {
+    console.error("Failed to fetch ClubKonnect balance:", e)
+  }
+
   // Recent Users
   const recentUsers = await prisma.user.findMany({
     take: 5,
@@ -35,7 +45,7 @@ export default async function AdminDashboardPage() {
     <div className="space-y-6">
       <h1 className="text-3xl font-bold tracking-tight">Admin Overview</h1>
       
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
             <CardTitle className="text-sm font-medium">Total Users</CardTitle>
@@ -65,6 +75,17 @@ export default async function AdminDashboardPage() {
           <CardContent>
             <div className="text-2xl font-bold">₦{totalVolume.toFixed(2)}</div>
             <p className="text-xs text-muted-foreground">Successful Airtime & Data sales</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+            <CardTitle className="text-sm font-medium">ClubKonnect Balance</CardTitle>
+            <Wallet className="w-4 h-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{ckBalance}</div>
+            <p className="text-xs text-muted-foreground">VTU Provider wallet balance</p>
           </CardContent>
         </Card>
       </div>

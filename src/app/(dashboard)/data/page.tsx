@@ -1,26 +1,35 @@
 import { auth } from "@/auth"
 import { redirect } from "next/navigation"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Button } from "@/components/ui/button"
 import { purchaseData } from "@/services/vtu.service"
+import { ckGetDataPlans } from "@/services/clubkonnect.service"
+import { DataPurchaseForm } from "./DataPurchaseForm"
 
 export default async function DataPage() {
   const session = await auth()
   if (!session?.user?.id) redirect("/login")
 
+  // Fetch real data plans from ClubKonnect
+  let plans: any[] = []
+  try {
+    plans = await ckGetDataPlans()
+  } catch (error) {
+    console.error("[DataPage] Failed to fetch data plans:", error)
+  }
+
   async function buyDataAction(formData: FormData) {
     "use server"
-    const network = formData.get("network") as string
+    const networkId = formData.get("network") as string
+    const planId = formData.get("plan") as string
     const phone = formData.get("phone") as string
-    const plan = formData.get("plan") as string 
-    
-    // Simple mock logic to determine amount based on plan
-    const amount = plan === "1GB" ? 500 : plan === "2GB" ? 1000 : 2000
+    const amountStr = formData.get("amount") as string
+    const amount = parseFloat(amountStr)
+
+    if (!networkId || !planId || !phone || !amount || amount <= 0) {
+      throw new Error("Invalid input. Please select a valid plan and phone number.")
+    }
 
     try {
-      await purchaseData(session!.user!.id!, network, plan, phone, amount)
+      await purchaseData(session!.user!.id!, networkId, planId, phone, amount)
       redirect("/transactions")
     } catch (e: any) {
       console.error(e)
@@ -28,40 +37,5 @@ export default async function DataPage() {
     }
   }
 
-  return (
-    <div className="max-w-md mx-auto mt-10">
-      <Card>
-        <CardHeader>
-          <CardTitle>Buy Data</CardTitle>
-          <CardDescription>Instant data top-up for any network.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form action={buyDataAction} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="network">Network</Label>
-              <select name="network" id="network" className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background" required>
-                <option value="MTN">MTN</option>
-                <option value="AIRTEL">Airtel</option>
-                <option value="GLO">Glo</option>
-                <option value="9MOBILE">9Mobile</option>
-              </select>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="plan">Data Plan</Label>
-              <select name="plan" id="plan" className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background" required>
-                <option value="1GB">1GB - ₦500</option>
-                <option value="2GB">2GB - ₦1000</option>
-                <option value="5GB">5GB - ₦2000</option>
-              </select>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="phone">Phone Number</Label>
-              <Input id="phone" name="phone" type="tel" placeholder="08012345678" required />
-            </div>
-            <Button type="submit" className="w-full">Buy Data</Button>
-          </form>
-        </CardContent>
-      </Card>
-    </div>
-  )
+  return <DataPurchaseForm plans={plans} buyDataAction={buyDataAction} />
 }

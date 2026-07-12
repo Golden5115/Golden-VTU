@@ -1,6 +1,23 @@
 import prisma from "@/lib/prisma"
+import { ckBuyAirtime, ckBuyData } from "@/services/clubkonnect.service"
 
-export async function purchaseAirtime(userId: string, network: string, phone: string, amount: number) {
+// Determine the callback URL dynamically
+function getCallbackUrl(): string {
+  const baseUrl = process.env.NEXTAUTH_URL || process.env.VERCEL_URL 
+    ? `https://${process.env.VERCEL_URL}` 
+    : "http://localhost:3000"
+  return `${baseUrl}/api/webhooks/clubkonnect`
+}
+
+// Map network names to ClubKonnect IDs
+const NETWORK_TO_CK_ID: Record<string, string> = {
+  MTN: "01",
+  GLO: "02",
+  "9MOBILE": "03",
+  AIRTEL: "04",
+}
+
+export async function purchaseAirtime(userId: string, networkId: string, phone: string, amount: number) {
   return await prisma.$transaction(async (tx: any) => {
     // 1. Check wallet balance
     const user = await tx.user.findUnique({ where: { id: userId } })
@@ -14,41 +31,78 @@ export async function purchaseAirtime(userId: string, network: string, phone: st
       data: { walletBalance: { decrement: amount } },
     })
 
-    // 3. Generate references
+    // 3. Generate unique reference/request ID
     const reference = `AIR-${Date.now()}-${Math.random().toString(36).substring(7)}`
     
-    // 4. Create Wallet Transaction record
+    // 4. Create Wallet Transaction record (PENDING until confirmed)
     await tx.walletTransaction.create({
       data: {
         userId,
         amount,
         type: "DEBIT",
         reference,
-        status: "SUCCESS",
+        status: "PENDING",
       },
     })
 
-    // 5. Mock External API Call (Replace with real provider later)
-    // const providerResponse = await fetch("...");
-
-    // 6. Create Airtime Purchase record
+    // 5. Create Airtime Purchase record (PENDING)
     const purchase = await tx.airtimePurchase.create({
       data: {
         userId,
-        network,
+        network: networkId,
         phone,
         amount,
         reference,
-        status: "SUCCESS",
-        providerReference: `MOCK-PROV-${Date.now()}`
+        status: "PENDING",
+        providerReference: null,
       },
     })
 
-    return purchase
+    return { purchase, reference }
+  }).then(async ({ purchase, reference }) => {
+    // 6. Call ClubKonnect API OUTSIDE the transaction
+    // (so if it fails, we can handle the refund separately)
+    try {
+      const ckResponse = await ckBuyAirtime(
+        networkId, // Already a CK network ID like "01"
+        amount,
+        phone,
+        reference,
+        getCallbackUrl()
+      )
+
+      // Update purchase with provider order ID
+      await prisma.airtimePurchase.update({
+        where: { id: purchase.id },
+        data: { providerReference: ckResponse.orderid },
+      })
+
+      return purchase
+    } catch (error: any) {
+      console.error("[VTU] ClubKonnect airtime API call failed:", error.message)
+
+      // Refund the user's wallet
+      await prisma.$transaction(async (tx: any) => {
+        await tx.user.update({
+          where: { id: purchase.userId },
+          data: { walletBalance: { increment: amount } },
+        })
+        await tx.airtimePurchase.update({
+          where: { id: purchase.id },
+          data: { status: "FAILED" },
+        })
+        await tx.walletTransaction.updateMany({
+          where: { reference },
+          data: { status: "FAILED" },
+        })
+      })
+
+      throw new Error(`Airtime purchase failed: ${error.message}. Your wallet has been refunded.`)
+    }
   })
 }
 
-export async function purchaseData(userId: string, network: string, plan: string, phone: string, amount: number) {
+export async function purchaseData(userId: string, networkId: string, dataPlanId: string, phone: string, amount: number) {
   return await prisma.$transaction(async (tx: any) => {
     // 1. Check wallet balance
     const user = await tx.user.findUnique({ where: { id: userId } })
@@ -62,37 +116,73 @@ export async function purchaseData(userId: string, network: string, plan: string
       data: { walletBalance: { decrement: amount } },
     })
 
-    // 3. Generate references
+    // 3. Generate unique reference
     const reference = `DAT-${Date.now()}-${Math.random().toString(36).substring(7)}`
     
-    // 4. Create Wallet Transaction record
+    // 4. Create Wallet Transaction record (PENDING)
     await tx.walletTransaction.create({
       data: {
         userId,
         amount,
         type: "DEBIT",
         reference,
-        status: "SUCCESS",
+        status: "PENDING",
       },
     })
 
-    // 5. Mock External API Call
-    // const providerResponse = await fetch("...");
-
-    // 6. Create Data Purchase record
+    // 5. Create Data Purchase record (PENDING)
     const purchase = await tx.dataPurchase.create({
       data: {
         userId,
-        network,
-        plan,
+        network: networkId,
+        plan: dataPlanId,
         phone,
         amount,
         reference,
-        status: "SUCCESS",
-        providerReference: `MOCK-PROV-${Date.now()}`
+        status: "PENDING",
+        providerReference: null,
       },
     })
 
-    return purchase
+    return { purchase, reference }
+  }).then(async ({ purchase, reference }) => {
+    // 6. Call ClubKonnect API OUTSIDE the transaction
+    try {
+      const ckResponse = await ckBuyData(
+        networkId,
+        dataPlanId,
+        phone,
+        reference,
+        getCallbackUrl()
+      )
+
+      // Update purchase with provider order ID
+      await prisma.dataPurchase.update({
+        where: { id: purchase.id },
+        data: { providerReference: ckResponse.orderid },
+      })
+
+      return purchase
+    } catch (error: any) {
+      console.error("[VTU] ClubKonnect data API call failed:", error.message)
+
+      // Refund the user's wallet
+      await prisma.$transaction(async (tx: any) => {
+        await tx.user.update({
+          where: { id: purchase.userId },
+          data: { walletBalance: { increment: amount } },
+        })
+        await tx.dataPurchase.update({
+          where: { id: purchase.id },
+          data: { status: "FAILED" },
+        })
+        await tx.walletTransaction.updateMany({
+          where: { reference },
+          data: { status: "FAILED" },
+        })
+      })
+
+      throw new Error(`Data purchase failed: ${error.message}. Your wallet has been refunded.`)
+    }
   })
 }
