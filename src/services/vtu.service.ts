@@ -3,9 +3,11 @@ import { ckBuyAirtime, ckBuyData } from "@/services/clubkonnect.service"
 
 // Determine the callback URL dynamically
 function getCallbackUrl(): string {
-  const baseUrl = process.env.NEXTAUTH_URL || process.env.VERCEL_URL 
-    ? `https://${process.env.VERCEL_URL}` 
-    : "http://localhost:3000"
+  const domain = process.env.VERCEL_PROJECT_PRODUCTION_URL || process.env.VERCEL_URL
+  if (domain) {
+    return `https://${domain}/api/webhooks/clubkonnect`
+  }
+  const baseUrl = process.env.NEXTAUTH_URL || "http://localhost:3000"
   return `${baseUrl}/api/webhooks/clubkonnect`
 }
 

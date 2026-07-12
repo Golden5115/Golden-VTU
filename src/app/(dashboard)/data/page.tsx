@@ -28,12 +28,17 @@ export default async function DataPage() {
       throw new Error("Invalid input. Please select a valid plan and phone number.")
     }
 
+    let success = false;
     try {
       await purchaseData(session!.user!.id!, networkId, planId, phone, amount)
-      redirect("/transactions")
+      success = true;
     } catch (e: any) {
       console.error(e)
       throw new Error(e.message)
+    }
+
+    if (success) {
+      redirect("/transactions")
     }
   }
 

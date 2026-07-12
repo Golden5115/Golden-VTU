@@ -22,12 +22,17 @@ export default async function AirtimePage() {
       throw new Error("Invalid input. Minimum amount is ₦50.")
     }
 
+    let success = false;
     try {
       await purchaseAirtime(session!.user!.id!, networkId, phone, amount)
-      redirect("/transactions")
+      success = true;
     } catch (e: any) {
       console.error(e)
       throw new Error(e.message)
+    }
+
+    if (success) {
+      redirect("/transactions")
     }
   }
 
