@@ -40,7 +40,7 @@ export default async function TransactionsPage() {
                   <TableCell colSpan={5} className="text-center py-10 text-muted-foreground">No transactions found.</TableCell>
                 </TableRow>
               ) : (
-                transactions.map((tx) => (
+                transactions.map((tx: any) => (
                   <TableRow key={tx.id}>
                     <TableCell className="font-mono text-xs">{tx.reference}</TableCell>
                     <TableCell>

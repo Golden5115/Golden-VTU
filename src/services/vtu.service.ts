@@ -1,7 +1,7 @@
 import prisma from "@/lib/prisma"
 
 export async function purchaseAirtime(userId: string, network: string, phone: string, amount: number) {
-  return await prisma.$transaction(async (tx) => {
+  return await prisma.$transaction(async (tx: any) => {
     // 1. Check wallet balance
     const user = await tx.user.findUnique({ where: { id: userId } })
     if (!user || user.walletBalance < amount) {
@@ -49,7 +49,7 @@ export async function purchaseAirtime(userId: string, network: string, phone: st
 }
 
 export async function purchaseData(userId: string, network: string, plan: string, phone: string, amount: number) {
-  return await prisma.$transaction(async (tx) => {
+  return await prisma.$transaction(async (tx: any) => {
     // 1. Check wallet balance
     const user = await tx.user.findUnique({ where: { id: userId } })
     if (!user || user.walletBalance < amount) {

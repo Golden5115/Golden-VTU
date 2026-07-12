@@ -29,7 +29,7 @@ export default async function DashboardPage({
 
         if (!existingTx) {
           // Process it
-          await prisma.$transaction(async (tx) => {
+          await prisma.$transaction(async (tx: any) => {
             const amountInNaira = paymentData.amount / 100;
             
             await tx.walletTransaction.create({
