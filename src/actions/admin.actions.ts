@@ -23,7 +23,7 @@ export async function fundUserWallet(userId: string, amount: number, type: "CRED
   // @ts-ignore
   if (session?.user?.role !== "ADMIN") throw new Error("Unauthorized")
 
-  await prisma.$transaction(async (tx) => {
+  await prisma.$transaction(async (tx: any) => {
     // 1. Create transaction record
     await tx.walletTransaction.create({
       data: {
