@@ -29,7 +29,10 @@ export async function GET(request: NextRequest) {
     }
 
     // Determine if this is a success or failure
-    const isSuccess = statusCode === "200" && orderStatus === "ORDER_COMPLETED"
+    // ClubKonnect uses ORDER_COMPLETED as the status text for success.
+    // The statuscode in callbacks can vary (e.g. 522), so we rely on the status text.
+    const isSuccess = orderStatus === "ORDER_COMPLETED"
+    console.log(`[ClubKonnect Callback] isSuccess: ${isSuccess}`)
 
     // Try to find the purchase by providerReference (orderid) or by reference (requestid)
     // Check AirtimePurchase first
@@ -78,7 +81,7 @@ export async function POST(request: NextRequest) {
 
     console.log(`[ClubKonnect Callback POST] OrderID: ${orderId}, Status: ${orderStatus}, Code: ${statusCode}`)
 
-    const isSuccess = statusCode === "200" && orderStatus === "ORDER_COMPLETED"
+    const isSuccess = orderStatus === "ORDER_COMPLETED"
 
     // Check AirtimePurchase
     let airtimePurchase = await prisma.airtimePurchase.findFirst({
