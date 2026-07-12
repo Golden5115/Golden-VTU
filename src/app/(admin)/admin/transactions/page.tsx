@@ -36,7 +36,7 @@ export default async function AdminTransactionsPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {transactions.map((tx) => (
+              {transactions.map((tx: any) => (
                 <TableRow key={tx.id}>
                   <TableCell>
                     <div className="font-medium">{tx.user.name || "N/A"}</div>

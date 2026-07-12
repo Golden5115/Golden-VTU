@@ -18,7 +18,7 @@ export default async function AdminProvidersPage() {
       </div>
       
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        {providers.map((provider) => (
+        {providers.map((provider: any) => (
           <Card key={provider.id}>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <div className="space-y-1">

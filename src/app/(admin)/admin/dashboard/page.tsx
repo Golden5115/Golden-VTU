@@ -76,7 +76,7 @@ export default async function AdminDashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="space-y-8">
-              {recentUsers.map(user => (
+              {recentUsers.map((user: any) => (
                 <div key={user.id} className="flex items-center">
                   <div className="space-y-1">
                     <p className="text-sm font-medium leading-none">{user.name || "Unknown"}</p>
