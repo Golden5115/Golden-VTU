@@ -74,9 +74,23 @@ export async function purchaseAirtime(userId: string, networkId: string, phone: 
       )
 
       // Update purchase with provider order ID
-      await prisma.airtimePurchase.update({
-        where: { id: purchase.id },
-        data: { providerReference: ckResponse.orderid },
+      const isCompleted = ckResponse.statuscode === "200"
+      
+      await prisma.$transaction(async (tx: any) => {
+        await tx.airtimePurchase.update({
+          where: { id: purchase.id },
+          data: { 
+            providerReference: ckResponse.orderid,
+            status: isCompleted ? "SUCCESS" : "PENDING"
+          },
+        })
+
+        if (isCompleted) {
+          await tx.walletTransaction.updateMany({
+            where: { reference },
+            data: { status: "SUCCESS" }
+          })
+        }
       })
 
       return purchase
@@ -159,9 +173,23 @@ export async function purchaseData(userId: string, networkId: string, dataPlanId
       )
 
       // Update purchase with provider order ID
-      await prisma.dataPurchase.update({
-        where: { id: purchase.id },
-        data: { providerReference: ckResponse.orderid },
+      const isCompleted = ckResponse.statuscode === "200"
+
+      await prisma.$transaction(async (tx: any) => {
+        await tx.dataPurchase.update({
+          where: { id: purchase.id },
+          data: { 
+            providerReference: ckResponse.orderid,
+            status: isCompleted ? "SUCCESS" : "PENDING"
+          },
+        })
+
+        if (isCompleted) {
+          await tx.walletTransaction.updateMany({
+            where: { reference },
+            data: { status: "SUCCESS" }
+          })
+        }
       })
 
       return purchase
