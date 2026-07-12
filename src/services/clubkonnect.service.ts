@@ -192,40 +192,34 @@ export async function ckGetDataPlans(): Promise<ClubKonnectDataPlan[]> {
   const rawData = await response.json()
   const plans: ClubKonnectDataPlan[] = []
 
-  // The API returns an object keyed by network name
-  // Each network has an array of plan objects
-  if (Array.isArray(rawData)) {
-    // If the response is a flat array
-    for (const item of rawData) {
-      if (item.PRODUCT_ID && item.PRODUCT_NAME && item.PRODUCT_AMOUNT) {
-        const networkId = item.NETWORK?.toString() || ""
-        plans.push({
-          id: item.PRODUCT_ID.toString(),
-          network: networkId,
-          networkName: NETWORK_MAP[networkId] || networkId,
-          name: item.PRODUCT_NAME,
-          price: parseFloat(item.PRODUCT_AMOUNT),
-        })
-      }
-    }
-  } else if (typeof rawData === "object") {
-    // If the response is grouped by network
-    for (const [networkKey, networkPlans] of Object.entries(rawData)) {
-      if (Array.isArray(networkPlans)) {
-        for (const item of networkPlans as any[]) {
-          const planId = item.databundle_id || item.PRODUCT_ID || item.plan_id || ""
-          const planName = item.databundle_name || item.PRODUCT_NAME || item.plan_name || ""
-          const planPrice = parseFloat(item.databundle_amount || item.PRODUCT_AMOUNT || item.plan_amount || "0")
-          const networkId = item.network_id || NETWORK_ID_MAP[networkKey.toUpperCase()] || ""
+  let networksContainer = rawData
+  if (rawData.MOBILE_NETWORK) {
+    networksContainer = rawData.MOBILE_NETWORK
+  }
 
-          if (planId && planName) {
-            plans.push({
-              id: planId.toString(),
-              network: networkId.toString(),
-              networkName: NETWORK_MAP[networkId.toString()] || networkKey,
-              name: planName,
-              price: planPrice,
-            })
+  if (typeof networksContainer === "object") {
+    for (const [networkName, networkData] of Object.entries(networksContainer)) {
+      if (Array.isArray(networkData)) {
+        // networkData is like [ { ID: "01", PRODUCT: [ ... ] } ]
+        for (const networkEntry of networkData) {
+          const networkId = networkEntry.ID || NETWORK_ID_MAP[networkName.toUpperCase()] || ""
+          
+          if (Array.isArray(networkEntry.PRODUCT)) {
+            for (const item of networkEntry.PRODUCT) {
+              const planId = item.PRODUCT_ID || ""
+              const planName = item.PRODUCT_NAME || ""
+              const planPrice = parseFloat(item.PRODUCT_AMOUNT || "0")
+
+              if (planId && planName) {
+                plans.push({
+                  id: planId.toString(),
+                  network: networkId.toString(),
+                  networkName: NETWORK_MAP[networkId.toString()] || networkName,
+                  name: planName,
+                  price: planPrice,
+                })
+              }
+            }
           }
         }
       }
