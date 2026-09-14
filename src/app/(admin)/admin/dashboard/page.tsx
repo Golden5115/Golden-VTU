@@ -3,7 +3,7 @@ import { redirect } from "next/navigation"
 import prisma from "@/lib/prisma"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Users, CreditCard, Activity, Wallet } from "lucide-react"
-import { ckGetWalletBalance } from "@/services/clubkonnect.service"
+import { resolveServerAndProvider } from "@/services/providers/provider.factory"
 
 export default async function AdminDashboardPage() {
   // Fetch High-level Metrics
@@ -25,13 +25,16 @@ export default async function AdminDashboardPage() {
 
   const totalVolume = (totalAirtimeSales._sum.amount || 0) + (totalDataSales._sum.amount || 0)
 
-  // ClubKonnect Provider Balance
-  let ckBalance = "N/A"
+  // Dynamic Provider Balance
+  let activeServerTitle = "Active Server Balance"
+  let serverBalance = "N/A"
   try {
-    const balanceData = await ckGetWalletBalance()
-    ckBalance = `₦${parseFloat(balanceData.balance).toLocaleString()}`
+    const { server, provider } = await resolveServerAndProvider()
+    activeServerTitle = `${server.serverName} Balance`
+    const balanceData = await provider.getWalletBalance()
+    serverBalance = `₦${balanceData.balance.toLocaleString()}`
   } catch (e) {
-    console.error("Failed to fetch ClubKonnect balance:", e)
+    console.error("Failed to fetch active server balance:", e)
   }
 
   // Recent Users
@@ -80,12 +83,12 @@ export default async function AdminDashboardPage() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-            <CardTitle className="text-sm font-medium">ClubKonnect Balance</CardTitle>
-            <Wallet className="w-4 h-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium truncate" title={activeServerTitle}>{activeServerTitle}</CardTitle>
+            <Wallet className="w-4 h-4 text-muted-foreground shrink-0" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{ckBalance}</div>
-            <p className="text-xs text-muted-foreground">VTU Provider wallet balance</p>
+            <div className="text-2xl font-bold">{serverBalance}</div>
+            <p className="text-xs text-muted-foreground">Active provider wallet balance</p>
           </CardContent>
         </Card>
       </div>

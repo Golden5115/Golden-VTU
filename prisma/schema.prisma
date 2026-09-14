@@ -101,6 +101,9 @@ model AirtimePurchase {
   reference         String   @unique
   status            TxStatus
   providerReference String?
+  serverId          String?
+  serverName        String?
+  provider          String?
   createdAt         DateTime @default(now())
 
   user              User     @relation(fields: [userId], references: [id])
@@ -116,6 +119,9 @@ model DataPurchase {
   reference         String   @unique
   status            TxStatus
   providerReference String?
+  serverId          String?
+  serverName        String?
+  provider          String?
   createdAt         DateTime @default(now())
 
   user              User     @relation(fields: [userId], references: [id])
@@ -123,8 +129,18 @@ model DataPurchase {
 
 model Provider {
   id           String   @id @default(cuid())
-  providerName String
+  serverName   String   @default("Server 1") // e.g. "Server 1 (Fast Airtime/Data)"
+  serverCode   String?  @unique              // e.g. "server-1", "server-2"
+  providerName String                        // e.g. "ClubKonnect", "VTPass", "Husmodata"
+  identifier   String                        // e.g. "CLUBKONNECT", "VTPASS", "HUSMODATA", "MOCK"
   apiKey       String
+  secretKey    String?
+  userId       String?
+  publicKey    String?
   baseUrl      String
-  status       Boolean  @default(true)
+  status       Boolean  @default(true)       // true means enabled for user selection
+  isDefault    Boolean  @default(false)      // default selected server
+  sortOrder    Int      @default(1)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @default(now()) @updatedAt
 }

@@ -1,14 +1,13 @@
 "use client"
 
-import { useState, useTransition } from "react"
+import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
 import { BulkPhoneInputWithHistory } from "@/components/vtu/BulkPhoneInputWithHistory"
 import {
-  AlertTriangle,
-  CheckCircle,
   Server,
   Loader2,
   Zap,
@@ -27,19 +26,9 @@ export interface ServerOption {
   isDefault?: boolean
 }
 
-export interface PlanItem {
-  id: string
-  network: string
-  networkName: string
-  name: string
-  price: number
-  validity?: string
-}
-
-interface DataPurchaseFormProps {
+interface AirtimeFormProps {
   servers: ServerOption[]
   initialServerId: string
-  initialPlans: PlanItem[]
   walletBalance: number
 }
 
@@ -50,20 +39,16 @@ const NETWORK_OPTIONS = [
   { id: "03", name: "9Mobile", color: "bg-emerald-800 text-white border-emerald-700" },
 ]
 
-export function DataPurchaseForm({
+export function AirtimeForm({
   servers,
   initialServerId,
-  initialPlans,
   walletBalance: initialWalletBalance,
-}: DataPurchaseFormProps) {
+}: AirtimeFormProps) {
   const router = useRouter()
   const [walletBalance, setWalletBalance] = useState(initialWalletBalance)
   const [selectedServerId, setSelectedServerId] = useState(initialServerId)
-  const [plans, setPlans] = useState<PlanItem[]>(initialPlans)
-  const [isLoadingPlans, setIsLoadingPlans] = useState(false)
-
   const [selectedNetworkId, setSelectedNetworkId] = useState("01")
-  const [selectedPlan, setSelectedPlan] = useState<PlanItem | null>(null)
+  const [amount, setAmount] = useState("")
 
   // Bulk / Comma-separated Phone Input State
   const [rawPhones, setRawPhones] = useState("")
@@ -78,37 +63,10 @@ export function DataPurchaseForm({
     results: Array<{ phone: string; success: boolean; error?: string; reference?: string }>
   } | null>(null)
 
-  // When selected server changes, fetch plans for that server
-  const handleServerChange = async (serverId: string) => {
-    if (serverId === selectedServerId) return
-    setSelectedServerId(serverId)
-    setSelectedPlan(null)
-    setError(null)
-    setIsLoadingPlans(true)
-
-    try {
-      const res = await fetch(`/api/servers/${serverId}/plans`)
-      const data = await res.json()
-      if (data.success && Array.isArray(data.plans)) {
-        setPlans(data.plans)
-      } else {
-        setError(data.error || "Failed to load plans for this server")
-      }
-    } catch (err: any) {
-      setError("Network error while switching server")
-    } finally {
-      setIsLoadingPlans(false)
-    }
-  }
-
-  // Filter plans by selected network
-  const filteredPlans = plans.filter((p) => p.network === selectedNetworkId)
-
-  // Current server info
   const currentServer = servers.find((s) => s.id === selectedServerId)
 
-  // Total price calculation
-  const totalAmount = selectedPlan ? selectedPlan.price * selectedPhones.length : 0
+  const amountNum = parseFloat(amount) || 0
+  const totalAmount = amountNum * selectedPhones.length
   const hasInsufficientBalance = walletBalance < totalAmount
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -119,8 +77,13 @@ export function DataPurchaseForm({
       return
     }
 
-    if (!selectedPlan) {
-      setError("Please select a data bundle plan.")
+    if (!amountNum || amountNum < 50) {
+      setError("Minimum airtime amount is ₦50 per number.")
+      return
+    }
+
+    if (amountNum > 200000) {
+      setError("Maximum airtime amount is ₦200,000 per number.")
       return
     }
 
@@ -140,10 +103,9 @@ export function DataPurchaseForm({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          type: "data",
+          type: "airtime",
           networkId: selectedNetworkId,
-          planId: selectedPlan.id,
-          amount: selectedPlan.price,
+          amount: amountNum,
           serverId: selectedServerId,
           phones: selectedPhones,
         }),
@@ -151,13 +113,13 @@ export function DataPurchaseForm({
 
       const data = await res.json()
       if (!res.ok || !data.success) {
-        throw new Error(data.error || "Bulk purchase failed")
+        throw new Error(data.error || "Bulk airtime purchase failed")
       }
 
       setBatchResults(data)
-      setWalletBalance((prev) => Math.max(0, prev - selectedPlan.price * data.successCount))
+      setWalletBalance((prev) => Math.max(0, prev - amountNum * data.successCount))
     } catch (err: any) {
-      setError(err.message || "Failed to process data order")
+      setError(err.message || "Failed to process airtime order")
     } finally {
       setIsProcessing(false)
     }
@@ -167,14 +129,14 @@ export function DataPurchaseForm({
     setBatchResults(null)
     setRawPhones("")
     setSelectedPhones([])
-    setSelectedPlan(null)
+    setAmount("")
     setError(null)
     router.refresh()
   }
 
   return (
     <div className="max-w-2xl mx-auto mt-6 space-y-6">
-      {/* Multi-Server Selection Pill Navigation */}
+      {/* Multi-Server Selector */}
       {servers.length > 0 && (
         <div className="bg-muted/40 p-3 rounded-2xl border backdrop-blur-sm">
           <div className="flex items-center justify-between mb-2 px-1">
@@ -183,7 +145,7 @@ export function DataPurchaseForm({
               Select VTU Server
             </div>
             <span className="text-xs text-primary font-medium flex items-center gap-1">
-              <Zap className="w-3 h-3" /> Live Server Pricing
+              <Zap className="w-3 h-3" /> High-speed Delivery
             </span>
           </div>
 
@@ -194,7 +156,7 @@ export function DataPurchaseForm({
                 <button
                   key={srv.id}
                   type="button"
-                  onClick={() => handleServerChange(srv.id)}
+                  onClick={() => setSelectedServerId(srv.id)}
                   className={`flex flex-col items-start text-left p-2.5 rounded-xl border transition-all text-xs relative ${
                     isActive
                       ? "bg-primary text-primary-foreground border-primary shadow-md scale-[1.02]"
@@ -223,15 +185,15 @@ export function DataPurchaseForm({
         </div>
       )}
 
-      {/* Main Card */}
+      {/* Main Airtime Card */}
       <Card className="shadow-lg border">
         <CardHeader className="flex flex-row items-start justify-between pb-4">
           <div>
-            <CardTitle className="text-2xl font-bold flex items-center gap-2">
-              Buy Data Bundle (Single or Bulk)
+            <CardTitle className="text-2xl font-bold">
+              Buy Airtime Top-up (Single or Bulk)
             </CardTitle>
             <CardDescription className="text-xs mt-1">
-              Currently routed through:{" "}
+              Routing via:{" "}
               <span className="font-semibold text-foreground">
                 {currentServer?.serverName || "Default Server"}
               </span>
@@ -292,7 +254,7 @@ export function DataPurchaseForm({
                   onClick={resetForm}
                   className="flex-1 text-xs"
                 >
-                  <RefreshCw className="w-3.5 h-3.5 mr-1" /> Buy More Data
+                  <RefreshCw className="w-3.5 h-3.5 mr-1" /> Buy More Airtime
                 </Button>
                 <Button
                   type="button"
@@ -317,10 +279,7 @@ export function DataPurchaseForm({
                       <button
                         key={net.id}
                         type="button"
-                        onClick={() => {
-                          setSelectedNetworkId(net.id)
-                          setSelectedPlan(null)
-                        }}
+                        onClick={() => setSelectedNetworkId(net.id)}
                         className={`py-2.5 px-2 rounded-xl text-xs font-bold border transition-all text-center ${
                           isSelected
                             ? `${net.color} ring-2 ring-primary ring-offset-1 shadow-sm`
@@ -334,55 +293,38 @@ export function DataPurchaseForm({
                 </div>
               </div>
 
-              {/* 2. Plan Selector */}
+              {/* 2. Amount Input */}
               <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <Label className="text-xs font-semibold uppercase text-muted-foreground">
-                    2. Select Data Plan (Prices adjust per server)
-                  </Label>
-                  {isLoadingPlans && (
-                    <span className="text-xs text-primary flex items-center gap-1">
-                      <Loader2 className="w-3 h-3 animate-spin" /> Updating prices...
-                    </span>
-                  )}
+                <Label className="text-xs font-semibold uppercase text-muted-foreground">
+                  2. Airtime Amount per Number (₦)
+                </Label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground font-semibold">
+                    ₦
+                  </span>
+                  <Input
+                    type="number"
+                    placeholder="1000"
+                    value={amount}
+                    onChange={(e) => setAmount(e.target.value)}
+                    className="pl-8 text-base font-semibold"
+                    min="50"
+                    max="200000"
+                    required
+                  />
                 </div>
-
-                {isLoadingPlans ? (
-                  <div className="p-4 border rounded-xl text-center text-xs text-muted-foreground animate-pulse">
-                    Fetching latest data plans and pricing for {currentServer?.serverName}...
-                  </div>
-                ) : filteredPlans.length === 0 ? (
-                  <div className="p-4 border rounded-xl text-center text-xs text-muted-foreground bg-muted/20">
-                    No plans available for this network on {currentServer?.serverName}. Try selecting another server above.
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 gap-2 max-h-56 overflow-y-auto pr-1">
-                    {filteredPlans.map((plan) => {
-                      const isSelected = selectedPlan?.id === plan.id
-                      return (
-                        <div
-                          key={plan.id}
-                          onClick={() => setSelectedPlan(plan)}
-                          className={`flex items-center justify-between p-3 rounded-xl border cursor-pointer transition-all text-sm ${
-                            isSelected
-                              ? "border-primary bg-primary/5 ring-1 ring-primary shadow-sm"
-                              : "border-border hover:border-muted-foreground/30 hover:bg-muted/20"
-                          }`}
-                        >
-                          <div className="space-y-0.5">
-                            <p className="font-semibold text-foreground leading-tight">{plan.name}</p>
-                            <span className="text-[11px] text-muted-foreground">
-                              {plan.validity || "30 Days Validity"}
-                            </span>
-                          </div>
-                          <div className="text-right font-bold text-primary text-base">
-                            ₦{plan.price.toLocaleString()}
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
-                )}
+                <div className="flex gap-2">
+                  {[100, 200, 500, 1000, 2000, 5000].map((quick) => (
+                    <button
+                      key={quick}
+                      type="button"
+                      onClick={() => setAmount(quick.toString())}
+                      className="text-[11px] py-1 px-2.5 rounded-lg border bg-muted/30 hover:bg-muted font-medium text-foreground transition-all"
+                    >
+                      ₦{quick.toLocaleString()}
+                    </button>
+                  ))}
+                </div>
               </div>
 
               {/* 3. Recipient Phone Numbers with Live History and Comma Separation */}
@@ -391,7 +333,7 @@ export function DataPurchaseForm({
                   3. Recipient Numbers (Single or Bulk Comma-Separated)
                 </Label>
                 <BulkPhoneInputWithHistory
-                  type="data"
+                  type="airtime"
                   rawInput={rawPhones}
                   onRawInputChange={setRawPhones}
                   selectedPhones={selectedPhones}
@@ -407,12 +349,12 @@ export function DataPurchaseForm({
                 </div>
               )}
 
-              {/* Selected Plan and Price Breakdown */}
-              {selectedPlan && selectedPhones.length > 0 && (
+              {/* Selected Breakdown */}
+              {amountNum > 0 && selectedPhones.length > 0 && (
                 <div className="bg-primary/5 p-3.5 rounded-xl border border-primary/20 space-y-2 text-xs">
                   <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground">Selected Plan:</span>
-                    <span className="font-bold text-foreground">{selectedPlan.name} (₦{selectedPlan.price.toLocaleString()} each)</span>
+                    <span className="text-muted-foreground">Amount per Number:</span>
+                    <span className="font-bold text-foreground">₦{amountNum.toLocaleString()}</span>
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-muted-foreground">Recipients:</span>
@@ -432,8 +374,8 @@ export function DataPurchaseForm({
                 type="submit"
                 disabled={
                   isProcessing ||
-                  isLoadingPlans ||
-                  !selectedPlan ||
+                  !amountNum ||
+                  amountNum < 50 ||
                   selectedPhones.length === 0 ||
                   hasInsufficientBalance
                 }
