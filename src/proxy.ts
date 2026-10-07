@@ -10,7 +10,8 @@ export default auth((req) => {
                       req.nextUrl.pathname.startsWith('/airtime') || 
                       req.nextUrl.pathname.startsWith('/data') || 
                       req.nextUrl.pathname.startsWith('/transactions') ||
-                      req.nextUrl.pathname.startsWith('/admin');
+                      req.nextUrl.pathname.startsWith('/admin') ||
+                      req.nextUrl.pathname.startsWith('/trackers');
   
   if (isProtected && !isLoggedIn) {
     return Response.redirect(new URL('/login', req.nextUrl));

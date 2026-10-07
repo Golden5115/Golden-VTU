@@ -1,60 +1,37 @@
 import { redirect } from "next/navigation"
 import { auth } from "@/auth"
-import { initializePayment } from "@/services/paystack.service"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Button } from "@/components/ui/button"
+import prisma from "@/lib/prisma"
+import { FundWalletView } from "./FundWalletView"
 
 export default async function FundWalletPage() {
   const session = await auth()
-  
-  if (!session?.user?.email) {
+
+  if (!session?.user?.id) {
     redirect("/login")
   }
 
-  async function fundWalletAction(formData: FormData) {
-    "use server"
-    const amountStr = formData.get("amount") as string
-    const amount = parseFloat(amountStr)
+  const user = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: {
+      walletBalance: true,
+      email: true,
+      role: true,
+    },
+  })
 
-    if (!amount || amount <= 0) {
-      throw new Error("Invalid amount")
-    }
-
-    const { authorization_url } = await initializePayment(session!.user!.email!, amount)
-    
-    // Redirect user to Paystack checkout
-    redirect(authorization_url)
+  if (!user) {
+    redirect("/login")
   }
 
   return (
-    <div className="max-w-md mx-auto mt-10">
-      <Card>
-        <CardHeader>
-          <CardTitle>Fund Wallet</CardTitle>
-          <CardDescription>Enter the amount you wish to add to your wallet.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form action={fundWalletAction} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="amount">Amount (₦)</Label>
-              <Input
-                id="amount"
-                name="amount"
-                type="number"
-                min="100"
-                step="100"
-                placeholder="e.g 1000"
-                required
-              />
-            </div>
-            <Button type="submit" className="w-full">
-              Proceed to Pay
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
-    </div>
+    <FundWalletView
+      walletBalance={user.walletBalance || 0}
+      userEmail={user.email || session.user.email || "user@example.com"}
+      userRole={user.role}
+      virtualBankName={process.env.CLUBKONNECT_VIRTUAL_BANK_NAME || "MONIEPOINT MICROFINANCE BANK"}
+      virtualAccountNo={process.env.CLUBKONNECT_VIRTUAL_ACCOUNT_NO || "6990056172"}
+      virtualAccountName={process.env.CLUBKONNECT_VIRTUAL_ACCOUNT_NAME || "NELLOBYTE-AYOMIDE ABIODUN AYOOLA"}
+    />
   )
 }
+

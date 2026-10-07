@@ -17,8 +17,26 @@ export async function purchaseAirtime(
   networkId: string,
   phone: string,
   amount: number,
-  serverId?: string
+  serverIdOrOptions?: string | { serverId?: string; trackerId?: string }
 ) {
+  const options = typeof serverIdOrOptions === "object" ? serverIdOrOptions : { serverId: serverIdOrOptions }
+  const serverId = options.serverId
+  let trackerId = options.trackerId
+
+  // If no explicit trackerId passed, auto-detect if this phone number belongs to a registered tracker
+  if (!trackerId) {
+    const cleanPhone = phone.replace(/[^0-9]/g, "")
+    const localPhone = cleanPhone.startsWith("234") ? "0" + cleanPhone.slice(3) : cleanPhone
+    const matched = await prisma.vehicleTracker.findFirst({
+      where: {
+        userId,
+        OR: [{ simNumber: localPhone }, { simNumber: cleanPhone }],
+      },
+      select: { id: true },
+    })
+    if (matched) trackerId = matched.id
+  }
+
   // 1. Resolve server and provider engine first
   const { server, provider } = await resolveServerAndProvider(serverId)
 
@@ -62,6 +80,7 @@ export async function purchaseAirtime(
         serverId: server.id,
         serverName: server.serverName,
         provider: provider.identifier,
+        trackerId: trackerId || null,
       },
     })
 
@@ -93,6 +112,29 @@ export async function purchaseAirtime(
             where: { reference },
             data: { status: "SUCCESS" },
           })
+
+          if (server?.id && server.id !== "default-mock") {
+            const currentBaseline = parseFloat(server.publicKey || "0")
+            if (currentBaseline > 0) {
+              const updatedBaseline = Math.max(0, currentBaseline - amount)
+              await tx.provider.update({
+                where: { id: server.id },
+                data: { publicKey: updatedBaseline.toString() },
+              })
+            }
+          }
+
+          // Update Vehicle Tracker last airtime top-up details
+          if (trackerId) {
+            await tx.vehicleTracker.update({
+              where: { id: trackerId },
+              data: {
+                lastAirtimeDate: new Date(),
+                lastAirtimeAmount: amount,
+                lastAirtimeRef: reference,
+              },
+            })
+          }
         }
       })
 
@@ -129,8 +171,36 @@ export async function purchaseData(
   dataPlanId: string,
   phone: string,
   amount: number,
-  serverId?: string
+  serverIdOrOptions?: string | {
+    serverId?: string
+    trackerId?: string
+    planName?: string
+    validityDays?: number
+  }
 ) {
+  const options =
+    typeof serverIdOrOptions === "object"
+      ? serverIdOrOptions
+      : { serverId: serverIdOrOptions, trackerId: undefined, planName: undefined, validityDays: 30 }
+  const serverId = options.serverId
+  let trackerId = options.trackerId
+  const planName = options.planName
+  const validityDays = options.validityDays || 30
+
+  // If no explicit trackerId passed, auto-detect if this phone number belongs to a registered tracker
+  if (!trackerId) {
+    const cleanPhone = phone.replace(/[^0-9]/g, "")
+    const localPhone = cleanPhone.startsWith("234") ? "0" + cleanPhone.slice(3) : cleanPhone
+    const matched = await prisma.vehicleTracker.findFirst({
+      where: {
+        userId,
+        OR: [{ simNumber: localPhone }, { simNumber: cleanPhone }],
+      },
+      select: { id: true },
+    })
+    if (matched) trackerId = matched.id
+  }
+
   // 1. Resolve server and provider engine first
   const { server, provider } = await resolveServerAndProvider(serverId)
 
@@ -175,6 +245,7 @@ export async function purchaseData(
         serverId: server.id,
         serverName: server.serverName,
         provider: provider.identifier,
+        trackerId: trackerId || null,
       },
     })
 
@@ -206,6 +277,35 @@ export async function purchaseData(
             where: { reference },
             data: { status: "SUCCESS" },
           })
+
+          if (server?.id && server.id !== "default-mock") {
+            const wholesaleCost = Math.max(0, amount - 100)
+            const currentBaseline = parseFloat(server.publicKey || "0")
+            if (currentBaseline > 0) {
+              const updatedBaseline = Math.max(0, currentBaseline - wholesaleCost)
+              await tx.provider.update({
+                where: { id: server.id },
+                data: { publicKey: updatedBaseline.toString() },
+              })
+            }
+          }
+
+          // Update Vehicle Tracker last data top-up details and calculate expiry
+          if (trackerId) {
+            const expiryDate = new Date(Date.now() + validityDays * 24 * 60 * 60 * 1000)
+            await tx.vehicleTracker.update({
+              where: { id: trackerId },
+              data: {
+                lastDataDate: new Date(),
+                lastDataPlan: planName || dataPlanId,
+                lastDataAmount: amount,
+                lastDataRef: reference,
+                dataValidityDays: validityDays,
+                dataExpiryDate: expiryDate,
+                status: "ACTIVE",
+              },
+            })
+          }
         }
       })
 

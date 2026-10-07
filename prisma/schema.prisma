@@ -27,6 +27,7 @@ model User {
   transactions  WalletTransaction[]
   airtime       AirtimePurchase[]
   data          DataPurchase[]
+  trackers      VehicleTracker[]
 }
 
 model Account {
@@ -93,54 +94,107 @@ enum TxStatus {
 }
 
 model AirtimePurchase {
-  id                String   @id @default(cuid())
+  id                String          @id @default(cuid())
   userId            String
   network           String
   phone             String
   amount            Float
-  reference         String   @unique
+  reference         String          @unique
   status            TxStatus
   providerReference String?
   serverId          String?
   serverName        String?
   provider          String?
-  createdAt         DateTime @default(now())
+  trackerId         String?
+  createdAt         DateTime        @default(now())
 
-  user              User     @relation(fields: [userId], references: [id])
+  user              User            @relation(fields: [userId], references: [id])
+  tracker           VehicleTracker? @relation(fields: [trackerId], references: [id], onDelete: SetNull)
 }
 
 model DataPurchase {
-  id                String   @id @default(cuid())
+  id                String          @id @default(cuid())
   userId            String
   network           String
   plan              String
   phone             String
   amount            Float
-  reference         String   @unique
+  reference         String          @unique
   status            TxStatus
   providerReference String?
   serverId          String?
   serverName        String?
   provider          String?
-  createdAt         DateTime @default(now())
+  trackerId         String?
+  createdAt         DateTime        @default(now())
 
-  user              User     @relation(fields: [userId], references: [id])
+  user              User            @relation(fields: [userId], references: [id])
+  tracker           VehicleTracker? @relation(fields: [trackerId], references: [id], onDelete: SetNull)
+}
+
+model VehicleTracker {
+  id                 String           @id @default(cuid())
+  userId             String
+  vehicleName        String           // e.g. "Toyota Hilux (Fleet #12)"
+  plateNumber        String           // e.g. "ABJ-842-LK"
+  simNumber          String           // Phone number of tracker SIM (e.g. "08031234567")
+  network            String           // "01" (MTN), "02" (GLO), "03" (9mobile), "04" (AIRTEL)
+  deviceModel        String?          // e.g. "Concox GT06N", "Coban TK103", "Teltonika FMB920"
+  imei               String?          // e.g. "864210048123456"
+  clientName         String?          // Fleet owner / Client name
+  clientPhone        String?          // Client phone contact
+  notes              String?          // Installation notes / vehicle info
+  status             TrackerStatus    @default(ACTIVE)
+
+  // Last Airtime Details (Instant troubleshooting info)
+  lastAirtimeDate    DateTime?
+  lastAirtimeAmount  Float?
+  lastAirtimeRef     String?
+
+  // Last Data Details (Instant troubleshooting info)
+  lastDataDate       DateTime?
+  lastDataPlan       String?          // e.g. "500MB SME (30 Days)"
+  lastDataAmount     Float?
+  lastDataRef        String?
+  dataValidityDays   Int?             @default(30)
+  dataExpiryDate     DateTime?        // Calculated timestamp when data is expected to run out
+
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+
+  user               User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  airtimePurchases   AirtimePurchase[]
+  dataPurchases      DataPurchase[]
+
+  @@index([userId])
+  @@index([simNumber])
+  @@index([plateNumber])
+  @@index([dataExpiryDate])
+}
+
+enum TrackerStatus {
+  ACTIVE
+  EXPIRING_SOON
+  EXPIRED
+  INACTIVE
 }
 
 model Provider {
-  id           String   @id @default(cuid())
-  serverName   String   @default("Server 1") // e.g. "Server 1 (Fast Airtime/Data)"
-  serverCode   String?  @unique              // e.g. "server-1", "server-2"
-  providerName String                        // e.g. "ClubKonnect", "VTPass", "Husmodata"
-  identifier   String                        // e.g. "CLUBKONNECT", "VTPASS", "HUSMODATA", "MOCK"
-  apiKey       String
-  secretKey    String?
-  userId       String?
-  publicKey    String?
-  baseUrl      String
-  status       Boolean  @default(true)       // true means enabled for user selection
-  isDefault    Boolean  @default(false)      // default selected server
-  sortOrder    Int      @default(1)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @default(now()) @updatedAt
+  id               String   @id @default(cuid())
+  serverName       String   @default("Server 1") // e.g. "Server 1 (Fast Airtime/Data)"
+  serverCode       String?  @unique              // e.g. "server-1", "server-2"
+  providerName     String                        // e.g. "ClubKonnect", "VTPass", "Husmodata"
+  identifier       String                        // e.g. "CLUBKONNECT", "VTPASS", "HUSMODATA", "MOCK"
+  apiKey           String
+  secretKey        String?
+  userId           String?
+  publicKey        String?
+  baseUrl          String
+  lastKnownBalance Float?   @default(0)          // Tracks previous provider balance for delta deposit detection
+  status           Boolean  @default(true)       // true means enabled for user selection
+  isDefault        Boolean  @default(false)      // default selected server
+  sortOrder        Int      @default(1)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @default(now()) @updatedAt
 }
+

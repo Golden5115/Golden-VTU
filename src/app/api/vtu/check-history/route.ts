@@ -17,6 +17,25 @@ export interface PhoneHistoryItem {
   statusCategory: "ALREADY_LOADED" | "DUE_FOR_RENEWAL" | "NEVER_LOADED"
   isWithinMonth: boolean
   daysAgo: number | null
+  lastData?: {
+    id: string
+    date: string
+    formattedDate: string
+    daysAgo: number
+    plan: string
+    amount: number
+    daysUntilExpiry: number
+    isExpired: boolean
+    isExpiringSoon: boolean
+  } | null
+  lastAirtime?: {
+    id: string
+    date: string
+    formattedDate: string
+    daysAgo: number
+    amount: number
+    status: string
+  } | null
   lastPurchase: {
     id: string
     date: string
@@ -60,62 +79,137 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true, results: [] })
     }
 
-    // Fetch transactions for these numbers
-    let purchases: any[] = []
-    if (type === "data") {
-      purchases = await prisma.dataPurchase.findMany({
-        where: {
-          phone: { in: uniquePhones },
-          status: "SUCCESS",
-        },
-        orderBy: { createdAt: "desc" },
-      })
-    } else {
-      purchases = await prisma.airtimePurchase.findMany({
-        where: {
-          phone: { in: uniquePhones },
-          status: "SUCCESS",
-        },
-        orderBy: { createdAt: "desc" },
-      })
+    // Also include '234' format variants for deep history matching
+    const searchVariants = [...uniquePhones]
+    for (const p of uniquePhones) {
+      if (p.startsWith("0")) {
+        searchVariants.push("234" + p.slice(1))
+      }
     }
 
-    // Group by phone to find latest purchase per phone
-    const latestMap = new Map<string, any>()
-    for (const record of purchases) {
-      if (!latestMap.has(record.phone)) {
-        latestMap.set(record.phone, record)
+    // Fetch BOTH Data and Airtime transactions for these numbers simultaneously
+    const [dataPurchases, airtimePurchases] = await Promise.all([
+      prisma.dataPurchase.findMany({
+        where: {
+          phone: { in: searchVariants },
+          status: "SUCCESS",
+        },
+        orderBy: { createdAt: "desc" },
+      }),
+      prisma.airtimePurchase.findMany({
+        where: {
+          phone: { in: searchVariants },
+          status: "SUCCESS",
+        },
+        orderBy: { createdAt: "desc" },
+      }),
+    ])
+
+    // Group by standard 11-digit phone
+    const latestDataMap = new Map<string, any>()
+    for (const record of dataPurchases) {
+      const stdPhone = normalizePhoneNumber(record.phone)
+      if (!latestDataMap.has(stdPhone)) {
+        latestDataMap.set(stdPhone, record)
+      }
+    }
+
+    const latestAirtimeMap = new Map<string, any>()
+    for (const record of airtimePurchases) {
+      const stdPhone = normalizePhoneNumber(record.phone)
+      if (!latestAirtimeMap.has(stdPhone)) {
+        latestAirtimeMap.set(stdPhone, record)
       }
     }
 
     const results: PhoneHistoryItem[] = uniquePhones.map((phone) => {
       const net = detectNetwork(phone)
-      const record = latestMap.get(phone)
+      const dataRecord = latestDataMap.get(phone)
+      const airtimeRecord = latestAirtimeMap.get(phone)
 
-      if (record) {
-        const daysAgo = getDaysAgo(record.createdAt)
-        const isWithinMonth = daysAgo <= 30
-        const statusCategory = isWithinMonth ? "ALREADY_LOADED" : "DUE_FOR_RENEWAL"
+      // Calculate Data details
+      let lastData = null
+      if (dataRecord) {
+        const dAgo = getDaysAgo(dataRecord.createdAt)
+        const daysUntilExpiry = 30 - dAgo
+        lastData = {
+          id: dataRecord.id,
+          date: dataRecord.createdAt.toISOString(),
+          formattedDate: formatDisplayDate(dataRecord.createdAt),
+          daysAgo: dAgo,
+          plan: dataRecord.plan,
+          amount: dataRecord.amount,
+          daysUntilExpiry,
+          isExpired: daysUntilExpiry <= 0,
+          isExpiringSoon: daysUntilExpiry > 0 && daysUntilExpiry <= 3,
+        }
+      }
 
-        return {
-          phone,
-          networkId: net?.id || null,
-          networkName: net?.name || null,
-          statusCategory,
-          isWithinMonth,
+      // Calculate Airtime details
+      let lastAirtime = null
+      if (airtimeRecord) {
+        const aAgo = getDaysAgo(airtimeRecord.createdAt)
+        lastAirtime = {
+          id: airtimeRecord.id,
+          date: airtimeRecord.createdAt.toISOString(),
+          formattedDate: formatDisplayDate(airtimeRecord.createdAt),
+          daysAgo: aAgo,
+          amount: airtimeRecord.amount,
+          status: airtimeRecord.status,
+        }
+      }
+
+      // Context record (matching current active screen: data or airtime)
+      const contextRecord = type === "data" ? dataRecord : airtimeRecord
+
+      let statusCategory: PhoneHistoryItem["statusCategory"] = "NEVER_LOADED"
+      let isWithinMonth = false
+      let daysAgo: number | null = null
+      let lastPurchase: PhoneHistoryItem["lastPurchase"] = null
+
+      if (contextRecord) {
+        daysAgo = getDaysAgo(contextRecord.createdAt)
+        isWithinMonth = daysAgo <= 30
+        statusCategory = isWithinMonth ? "ALREADY_LOADED" : "DUE_FOR_RENEWAL"
+        lastPurchase = {
+          id: contextRecord.id,
+          date: contextRecord.createdAt.toISOString(),
+          formattedDate: formatDisplayDate(contextRecord.createdAt),
           daysAgo,
-          lastPurchase: {
-            id: record.id,
-            date: record.createdAt.toISOString(),
-            formattedDate: formatDisplayDate(record.createdAt),
-            daysAgo,
-            relativeText: formatRelativeDays(daysAgo),
-            plan: record.plan || null,
-            network: record.network,
-            amount: record.amount,
-            status: record.status,
-            type: type === "data" ? "DATA" : "AIRTIME",
-          },
+          relativeText: formatRelativeDays(daysAgo),
+          plan: contextRecord.plan || null,
+          network: contextRecord.network,
+          amount: contextRecord.amount,
+          status: contextRecord.status,
+          type: type === "data" ? "DATA" : "AIRTIME",
+        }
+      } else if (type === "data" && airtimeRecord) {
+        // Did buy airtime, but never data
+        lastPurchase = {
+          id: airtimeRecord.id,
+          date: airtimeRecord.createdAt.toISOString(),
+          formattedDate: formatDisplayDate(airtimeRecord.createdAt),
+          daysAgo: getDaysAgo(airtimeRecord.createdAt),
+          relativeText: formatRelativeDays(getDaysAgo(airtimeRecord.createdAt)),
+          plan: null,
+          network: airtimeRecord.network,
+          amount: airtimeRecord.amount,
+          status: airtimeRecord.status,
+          type: "AIRTIME",
+        }
+      } else if (type === "airtime" && dataRecord) {
+        // Did buy data, but never airtime
+        lastPurchase = {
+          id: dataRecord.id,
+          date: dataRecord.createdAt.toISOString(),
+          formattedDate: formatDisplayDate(dataRecord.createdAt),
+          daysAgo: getDaysAgo(dataRecord.createdAt),
+          relativeText: formatRelativeDays(getDaysAgo(dataRecord.createdAt)),
+          plan: dataRecord.plan,
+          network: dataRecord.network,
+          amount: dataRecord.amount,
+          status: dataRecord.status,
+          type: "DATA",
         }
       }
 
@@ -123,10 +217,12 @@ export async function POST(request: NextRequest) {
         phone,
         networkId: net?.id || null,
         networkName: net?.name || null,
-        statusCategory: "NEVER_LOADED",
-        isWithinMonth: false,
-        daysAgo: null,
-        lastPurchase: null,
+        statusCategory,
+        isWithinMonth,
+        daysAgo,
+        lastData,
+        lastAirtime,
+        lastPurchase,
       }
     })
 
@@ -153,53 +249,62 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url)
     const rawPhone = searchParams.get("phone") || ""
-    const type = searchParams.get("type") === "airtime" ? "airtime" : "data"
 
     const phone = normalizePhoneNumber(rawPhone)
     if (!phone) {
       return NextResponse.json({ error: "Phone number required" }, { status: 400 })
     }
 
-    let record: any = null
-    if (type === "data") {
-      record = await prisma.dataPurchase.findFirst({
-        where: { phone, status: "SUCCESS" },
-        orderBy: { createdAt: "desc" },
-      })
-    } else {
-      record = await prisma.airtimePurchase.findFirst({
-        where: { phone, status: "SUCCESS" },
-        orderBy: { createdAt: "desc" },
-      })
+    const phoneVariants = [phone]
+    if (phone.startsWith("0")) {
+      phoneVariants.push("234" + phone.slice(1))
     }
 
     const net = detectNetwork(phone)
-    if (record) {
-      const daysAgo = getDaysAgo(record.createdAt)
-      const isWithinMonth = daysAgo <= 30
-      const statusCategory = isWithinMonth ? "ALREADY_LOADED" : "DUE_FOR_RENEWAL"
 
-      return NextResponse.json({
-        success: true,
-        phone,
-        networkId: net?.id || null,
-        networkName: net?.name || null,
-        statusCategory,
-        isWithinMonth,
+    const [dataRecord, airtimeRecord] = await Promise.all([
+      prisma.dataPurchase.findFirst({
+        where: { phone: { in: phoneVariants }, status: "SUCCESS" },
+        orderBy: { createdAt: "desc" },
+      }),
+      prisma.airtimePurchase.findFirst({
+        where: { phone: { in: phoneVariants }, status: "SUCCESS" },
+        orderBy: { createdAt: "desc" },
+      }),
+    ])
+
+    let lastData = null
+    if (dataRecord) {
+      const daysAgo = getDaysAgo(dataRecord.createdAt)
+      const isWithinMonth = daysAgo <= 30
+      lastData = {
+        id: dataRecord.id,
+        date: dataRecord.createdAt.toISOString(),
+        formattedDate: formatDisplayDate(dataRecord.createdAt),
         daysAgo,
-        lastPurchase: {
-          id: record.id,
-          date: record.createdAt.toISOString(),
-          formattedDate: formatDisplayDate(record.createdAt),
-          daysAgo,
-          relativeText: formatRelativeDays(daysAgo),
-          plan: record.plan || null,
-          network: record.network,
-          amount: record.amount,
-          status: record.status,
-          type: type === "data" ? "DATA" : "AIRTIME",
-        },
-      })
+        plan: dataRecord.plan,
+        amount: dataRecord.amount,
+        status: dataRecord.status,
+        reference: dataRecord.reference,
+        isWithinMonth,
+        daysUntilExpiry: 30 - daysAgo,
+        isExpired: daysAgo > 30,
+      }
+    }
+
+    let lastAirtime = null
+    if (airtimeRecord) {
+      const daysAgo = getDaysAgo(airtimeRecord.createdAt)
+      lastAirtime = {
+        id: airtimeRecord.id,
+        date: airtimeRecord.createdAt.toISOString(),
+        formattedDate: formatDisplayDate(airtimeRecord.createdAt),
+        daysAgo,
+        amount: airtimeRecord.amount,
+        status: airtimeRecord.status,
+        reference: airtimeRecord.reference,
+        needsAirtime: daysAgo > 45,
+      }
     }
 
     return NextResponse.json({
@@ -207,10 +312,8 @@ export async function GET(request: NextRequest) {
       phone,
       networkId: net?.id || null,
       networkName: net?.name || null,
-      statusCategory: "NEVER_LOADED",
-      isWithinMonth: false,
-      daysAgo: null,
-      lastPurchase: null,
+      lastData,
+      lastAirtime,
     })
   } catch (error: any) {
     console.error("[CheckHistoryAPI] GET Error:", error)

@@ -1,5 +1,10 @@
+import dns from "node:dns"
 import { PrismaClient } from "@prisma/client"
 import { PrismaPg } from "@prisma/adapter-pg"
+
+if (typeof dns.setDefaultResultOrder === "function") {
+  dns.setDefaultResultOrder("ipv4first")
+}
 
 const prismaClientSingleton = () => {
   const adapter = new PrismaPg(process.env.DATABASE_URL!)

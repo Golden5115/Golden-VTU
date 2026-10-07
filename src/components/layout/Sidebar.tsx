@@ -1,9 +1,10 @@
 import Link from "next/link"
-import { Home, CreditCard, Wifi, Smartphone, History, Settings } from "lucide-react"
+import { Home, CreditCard, Wifi, Smartphone, History, Settings, Zap } from "lucide-react"
 
 export function Sidebar() {
   const links = [
     { name: "Dashboard", href: "/dashboard", icon: Home },
+    { name: "Tracker SIM Station", href: "/trackers", icon: Zap },
     { name: "Fund Wallet", href: "/wallet/fund", icon: CreditCard },
     { name: "Buy Airtime", href: "/airtime", icon: Smartphone },
     { name: "Buy Data", href: "/data", icon: Wifi },

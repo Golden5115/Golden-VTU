@@ -19,7 +19,10 @@ import {
   XCircle,
   Copy,
   Info,
+  Wifi,
+  Smartphone,
 } from "lucide-react"
+import { SimTroubleshootCard } from "@/components/vtu/SimTroubleshootCard"
 
 export interface PhoneHistoryItem {
   phone: string
@@ -28,6 +31,25 @@ export interface PhoneHistoryItem {
   statusCategory: "ALREADY_LOADED" | "DUE_FOR_RENEWAL" | "NEVER_LOADED"
   isWithinMonth: boolean
   daysAgo: number | null
+  lastData?: {
+    id: string
+    date: string
+    formattedDate: string
+    daysAgo: number
+    plan: string
+    amount: number
+    daysUntilExpiry: number
+    isExpired: boolean
+    isExpiringSoon: boolean
+  } | null
+  lastAirtime?: {
+    id: string
+    date: string
+    formattedDate: string
+    daysAgo: number
+    amount: number
+    status: string
+  } | null
   lastPurchase: {
     id: string
     date: string
@@ -49,6 +71,7 @@ interface BulkPhoneInputWithHistoryProps {
   selectedPhones: string[]
   onSelectedPhonesChange: (phones: string[]) => void
   targetNetworkId?: string
+  onNetworkChange?: (networkId: string) => void
 }
 
 export function BulkPhoneInputWithHistory({
@@ -58,6 +81,7 @@ export function BulkPhoneInputWithHistory({
   selectedPhones,
   onSelectedPhonesChange,
   targetNetworkId,
+  onNetworkChange,
 }: BulkPhoneInputWithHistoryProps) {
   const [historyMap, setHistoryMap] = useState<Record<string, PhoneHistoryItem>>({})
   const [isLoading, setIsLoading] = useState(false)
@@ -211,6 +235,16 @@ export function BulkPhoneInputWithHistory({
           <Info className="w-3 h-3 text-muted-foreground shrink-0" />
           Separate numbers with a comma <code>,</code>. Spaces, newlines and international prefixes (<code>+234</code>) are handled automatically.
         </p>
+
+        {/* Live Instant SIM Diagnostic Card when a single tracker SIM is entered or pasted */}
+        {parsedPhones.length === 1 && (
+          <div className="pt-2">
+            <SimTroubleshootCard
+              phone={parsedPhones[0]}
+              onNetworkDetected={onNetworkChange}
+            />
+          </div>
+        )}
       </div>
 
       {/* Summary Chips & Quick Filter Buttons */}
@@ -344,40 +378,73 @@ export function BulkPhoneInputWithHistory({
                       )}
                     </div>
 
-                    {/* Live History Message */}
+                    {/* Live History Message: Data & Airtime Dual Diagnostics */}
                     <div className="mt-1 text-[11px] leading-snug">
                       {!history ? (
                         <span className="text-muted-foreground flex items-center gap-1">
-                          <Loader2 className="w-3 h-3 animate-spin inline" /> Checking history...
+                          <Loader2 className="w-3 h-3 animate-spin inline" /> Checking SIM history...
                         </span>
-                      ) : isRecent ? (
-                        <div className="text-amber-700 dark:text-amber-400 flex items-start gap-1 font-medium bg-amber-500/10 p-1.5 rounded-md mt-1 border border-amber-500/20">
-                          <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5 text-amber-500" />
-                          <div>
-                            <strong>Added {history.daysAgo} days ago</strong> on {history.lastPurchase?.formattedDate}
-                            {history.lastPurchase?.plan && (
-                              <span className="block text-[10px] text-amber-600/90 dark:text-amber-400/90 font-normal">
-                                Plan: {history.lastPurchase.plan} | Status: {history.lastPurchase.status}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      ) : isDue ? (
-                        <div className="text-emerald-700 dark:text-emerald-400 flex items-start gap-1 font-medium bg-emerald-500/10 p-1.5 rounded-md mt-1 border border-emerald-500/20">
-                          <CheckCircle className="w-3.5 h-3.5 shrink-0 mt-0.5 text-emerald-500" />
-                          <div>
-                            <span>Due for top-up (Last added {history.daysAgo} days ago on {history.lastPurchase?.formattedDate})</span>
-                            {history.lastPurchase?.plan && (
-                              <span className="block text-[10px] text-emerald-600/90 dark:text-emerald-400/90 font-normal">
-                                Last Plan: {history.lastPurchase.plan}
-                              </span>
-                            )}
-                          </div>
-                        </div>
                       ) : (
-                        <div className="text-muted-foreground flex items-center gap-1 py-0.5">
-                          <Clock className="w-3 h-3 text-muted-foreground/70" />
-                          <span>No previous top-up record found on system</span>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 pt-1">
+                          {/* 1. GPRS Data Telemetry Status */}
+                          <div
+                            className={`p-1.5 rounded-md border text-[11px] ${
+                              history.lastData?.isExpired
+                                ? "bg-rose-50 border-rose-200 text-rose-900"
+                                : history.lastData?.isExpiringSoon
+                                ? "bg-amber-50 border-amber-200 text-amber-900"
+                                : history.lastData
+                                ? "bg-emerald-50 border-emerald-200 text-emerald-900"
+                                : "bg-gray-50 border-gray-200 text-gray-600"
+                            }`}
+                          >
+                            <div className="flex items-center justify-between font-semibold">
+                              <span className="flex items-center gap-1">
+                                <Wifi className="w-3 h-3 text-blue-600 shrink-0" /> Data:
+                              </span>
+                              {history.lastData ? (
+                                <span className="font-bold text-[10px]">
+                                  {history.lastData.isExpired
+                                    ? "EXPIRED"
+                                    : `${history.lastData.daysUntilExpiry}d left`}
+                                </span>
+                              ) : (
+                                <span className="text-[10px] text-gray-500 font-normal">Never bought</span>
+                              )}
+                            </div>
+                            {history.lastData && (
+                              <div className="text-[10px] opacity-90 mt-0.5 truncate">
+                                {history.lastData.plan} • {history.lastData.daysAgo}d ago
+                              </div>
+                            )}
+                          </div>
+
+                          {/* 2. SMS Airtime Status */}
+                          <div
+                            className={`p-1.5 rounded-md border text-[11px] ${
+                              history.lastAirtime
+                                ? "bg-emerald-50 border-emerald-200 text-emerald-900"
+                                : "bg-gray-50 border-gray-200 text-gray-600"
+                            }`}
+                          >
+                            <div className="flex items-center justify-between font-semibold">
+                              <span className="flex items-center gap-1">
+                                <Smartphone className="w-3 h-3 text-indigo-600 shrink-0" /> Airtime:
+                              </span>
+                              {history.lastAirtime ? (
+                                <span className="font-bold text-[10px]">
+                                  {history.lastAirtime.daysAgo}d ago
+                                </span>
+                              ) : (
+                                <span className="text-[10px] text-gray-500 font-normal">Never bought</span>
+                              )}
+                            </div>
+                            {history.lastAirtime && (
+                              <div className="text-[10px] opacity-90 mt-0.5 truncate">
+                                ₦{history.lastAirtime.amount.toLocaleString()} • {history.lastAirtime.formattedDate}
+                              </div>
+                            )}
+                          </div>
                         </div>
                       )}
                     </div>

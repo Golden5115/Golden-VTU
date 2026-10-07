@@ -1,9 +1,10 @@
 import Link from "next/link"
-import { Home, Users, History, Settings, LogOut, ArrowLeft } from "lucide-react"
+import { Home, Users, History, Settings, LogOut, ArrowLeft, Zap } from "lucide-react"
 
 export function AdminSidebar() {
   const links = [
     { name: "Admin Dashboard", href: "/admin/dashboard", icon: Home },
+    { name: "Tracker SIM Station", href: "/trackers", icon: Zap },
     { name: "Manage Users", href: "/admin/users", icon: Users },
     { name: "All Transactions", href: "/admin/transactions", icon: History },
     { name: "Providers", href: "/admin/providers", icon: Settings },

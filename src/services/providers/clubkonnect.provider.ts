@@ -93,12 +93,14 @@ export class ClubKonnectProvider implements IVtuProvider {
     })
 
     if (data.statuscode !== "100" && data.statuscode !== "200") {
-      throw new Error(`ClubKonnect Error: ${data.status || "Unknown error"}`)
+      throw new Error(`Provider Error: ${data.status || "Unknown carrier error"}`)
     }
 
+    const isAccepted = data.statuscode === "200" || data.statuscode === "100"
+
     return {
-      isSuccessful: data.statuscode === "200",
-      isPending: data.statuscode === "100",
+      isSuccessful: isAccepted,
+      isPending: false,
       providerReference: data.orderid || reference,
       rawResponse: data,
     }
@@ -120,12 +122,14 @@ export class ClubKonnectProvider implements IVtuProvider {
     })
 
     if (data.statuscode !== "100" && data.statuscode !== "200") {
-      throw new Error(`ClubKonnect Data Error: ${data.status || "Unknown error"}`)
+      throw new Error(`Provider Data Error: ${data.status || "Unknown carrier error"}`)
     }
 
+    const isAccepted = data.statuscode === "200" || data.statuscode === "100"
+
     return {
-      isSuccessful: data.statuscode === "200",
-      isPending: data.statuscode === "100",
+      isSuccessful: isAccepted,
+      isPending: false,
       providerReference: data.orderid || reference,
       rawResponse: data,
     }
@@ -163,6 +167,9 @@ export class ClubKonnectProvider implements IVtuProvider {
                 const planId = item.PRODUCT_ID || ""
                 const planName = item.PRODUCT_NAME || ""
                 const planPrice = parseFloat(item.PRODUCT_AMOUNT || "0")
+                // Add ₦100 profit markup on every data bundle
+                const DATA_PROFIT_MARKUP = 100
+                const customerPrice = planPrice > 0 ? planPrice + DATA_PROFIT_MARKUP : planPrice
 
                 if (planId && planName) {
                   plans.push({
@@ -170,7 +177,7 @@ export class ClubKonnectProvider implements IVtuProvider {
                     network: networkId.toString(),
                     networkName: NETWORK_MAP[networkId.toString()] || networkName,
                     name: planName,
-                    price: planPrice,
+                    price: customerPrice,
                   })
                 }
               }

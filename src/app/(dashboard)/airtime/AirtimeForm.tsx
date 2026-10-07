@@ -176,7 +176,7 @@ export function AirtimeForm({
                       isActive ? "text-primary-foreground/80" : "text-muted-foreground"
                     }`}
                   >
-                    {srv.providerName}
+                    {srv.providerName.toLowerCase().includes("club") ? "High-Speed Route" : srv.providerName.toLowerCase().includes("mock") ? "Sandbox Route" : "Express Route"}
                   </span>
                 </button>
               )
@@ -187,9 +187,9 @@ export function AirtimeForm({
 
       {/* Main Airtime Card */}
       <Card className="shadow-lg border">
-        <CardHeader className="flex flex-row items-start justify-between pb-4">
+        <CardHeader className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 pb-4">
           <div>
-            <CardTitle className="text-2xl font-bold">
+            <CardTitle className="text-xl sm:text-2xl font-bold">
               Buy Airtime Top-up (Single or Bulk)
             </CardTitle>
             <CardDescription className="text-xs mt-1">
@@ -199,7 +199,7 @@ export function AirtimeForm({
               </span>
             </CardDescription>
           </div>
-          <div className="text-right bg-primary/10 px-3 py-1.5 rounded-xl border border-primary/20">
+          <div className="text-left sm:text-right bg-primary/10 px-3 py-1.5 rounded-xl border border-primary/20 w-fit sm:w-auto">
             <span className="text-[11px] text-muted-foreground block font-medium">Balance</span>
             <span className="text-base font-bold text-primary">₦{walletBalance.toLocaleString()}</span>
           </div>
@@ -210,10 +210,24 @@ export function AirtimeForm({
           {batchResults ? (
             <div className="space-y-5 py-2">
               <div className="text-center space-y-1">
-                <div className="inline-flex p-3 rounded-full bg-primary/10 text-primary mb-2">
-                  <CheckCircle2 className="w-8 h-8" />
+                <div
+                  className={`inline-flex p-3 rounded-full mb-2 ${
+                    batchResults.successCount > 0
+                      ? "bg-emerald-500/10 text-emerald-600"
+                      : "bg-red-500/10 text-red-600"
+                  }`}
+                >
+                  {batchResults.successCount > 0 ? (
+                    <CheckCircle2 className="w-8 h-8" />
+                  ) : (
+                    <XCircle className="w-8 h-8" />
+                  )}
                 </div>
-                <h3 className="text-lg font-bold text-foreground">Order Completed</h3>
+                <h3 className="text-lg font-bold text-foreground">
+                  {batchResults.successCount > 0
+                    ? "Order Completed Successfully"
+                    : "Order Failed"}
+                </h3>
                 <p className="text-xs text-muted-foreground">
                   {batchResults.successCount} of {batchResults.totalProcessed} orders processed successfully.
                 </p>
@@ -339,6 +353,7 @@ export function AirtimeForm({
                   selectedPhones={selectedPhones}
                   onSelectedPhonesChange={setSelectedPhones}
                   targetNetworkId={selectedNetworkId}
+                  onNetworkChange={(netId) => setSelectedNetworkId(netId)}
                 />
               </div>
 

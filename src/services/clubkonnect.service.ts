@@ -210,6 +210,9 @@ export async function ckGetDataPlans(): Promise<ClubKonnectDataPlan[]> {
               const planId = item.PRODUCT_ID || ""
               const planName = item.PRODUCT_NAME || ""
               const planPrice = parseFloat(item.PRODUCT_AMOUNT || "0")
+              // Add ₦100 profit markup on every data bundle
+              const DATA_PROFIT_MARKUP = 100
+              const customerPrice = planPrice > 0 ? planPrice + DATA_PROFIT_MARKUP : planPrice
 
               if (planId && planName) {
                 plans.push({
@@ -217,7 +220,7 @@ export async function ckGetDataPlans(): Promise<ClubKonnectDataPlan[]> {
                   network: networkId.toString(),
                   networkName: NETWORK_MAP[networkId.toString()] || networkName,
                   name: planName,
-                  price: planPrice,
+                  price: customerPrice,
                 })
               }
             }

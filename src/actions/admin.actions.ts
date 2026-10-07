@@ -162,10 +162,10 @@ export async function seedInitialServers() {
 
   const existingCount = await prisma.provider.count()
   if (existingCount === 0) {
-    // 1. Seed Server 1 (ClubKonnect)
+    // 1. Seed Server 1 (Primary High-Speed Gateway)
     await prisma.provider.create({
       data: {
-        serverName: "Server 1 (ClubKonnect)",
+        serverName: "Server 1 (High-Speed Route)",
         serverCode: "server-1",
         providerName: "ClubKonnect",
         identifier: "CLUBKONNECT",
