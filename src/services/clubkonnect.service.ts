@@ -125,8 +125,10 @@ export async function ckBuyAirtime(
   })
 
   // Check for specific error statuses
-  // ClubKonnect can return 100 (ORDER_RECEIVED) or 200 (ORDER_COMPLETED) if instant
-  if (data.statuscode !== "100" && data.statuscode !== "200") {
+  // ClubKonnect returns 100 (ORDER_RECEIVED) or 200 (ORDER_COMPLETED)
+  const code = String(data.statuscode || "").trim()
+  const statusText = String(data.status || "").toUpperCase()
+  if (code !== "100" && code !== "200" && statusText !== "ORDER_RECEIVED" && statusText !== "ORDER_COMPLETED") {
     throw new Error(`ClubKonnect Error: ${data.status}`)
   }
 
@@ -151,7 +153,9 @@ export async function ckBuyData(
     CallBackURL: callbackUrl,
   })
 
-  if (data.statuscode !== "100" && data.statuscode !== "200") {
+  const code = String(data.statuscode || "").trim()
+  const statusText = String(data.status || "").toUpperCase()
+  if (code !== "100" && code !== "200" && statusText !== "ORDER_RECEIVED" && statusText !== "ORDER_COMPLETED") {
     throw new Error(`ClubKonnect Data Error: ${data.status}`)
   }
 

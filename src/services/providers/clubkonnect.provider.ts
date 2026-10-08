@@ -92,15 +92,21 @@ export class ClubKonnectProvider implements IVtuProvider {
       CallBackURL: callbackUrl,
     })
 
-    if (data.statuscode !== "100" && data.statuscode !== "200") {
-      throw new Error(`Provider Error: ${data.status || "Unknown carrier error"}`)
+    const code = String(data.statuscode || data.statusCode || "").trim()
+    const statusText = String(data.status || "").toUpperCase()
+    const isAccepted =
+      code === "100" ||
+      code === "200" ||
+      statusText === "ORDER_RECEIVED" ||
+      statusText === "ORDER_COMPLETED"
+
+    if (!isAccepted) {
+      throw new Error(`Provider Airtime Error: ${data.status || "Unknown carrier error"}`)
     }
 
-    const isAccepted = data.statuscode === "200" || data.statuscode === "100"
-
     return {
-      isSuccessful: isAccepted,
-      isPending: false,
+      isSuccessful: true,
+      isPending: code === "100" || statusText === "ORDER_RECEIVED",
       providerReference: data.orderid || reference,
       rawResponse: data,
     }
@@ -121,15 +127,21 @@ export class ClubKonnectProvider implements IVtuProvider {
       CallBackURL: callbackUrl,
     })
 
-    if (data.statuscode !== "100" && data.statuscode !== "200") {
+    const code = String(data.statuscode || data.statusCode || "").trim()
+    const statusText = String(data.status || "").toUpperCase()
+    const isAccepted =
+      code === "100" ||
+      code === "200" ||
+      statusText === "ORDER_RECEIVED" ||
+      statusText === "ORDER_COMPLETED"
+
+    if (!isAccepted) {
       throw new Error(`Provider Data Error: ${data.status || "Unknown carrier error"}`)
     }
 
-    const isAccepted = data.statuscode === "200" || data.statuscode === "100"
-
     return {
-      isSuccessful: isAccepted,
-      isPending: false,
+      isSuccessful: true,
+      isPending: code === "100" || statusText === "ORDER_RECEIVED",
       providerReference: data.orderid || reference,
       rawResponse: data,
     }
