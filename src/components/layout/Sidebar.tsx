@@ -13,8 +13,6 @@ export async function Sidebar() {
     { name: "Dashboard", href: "/dashboard", icon: Home },
     { name: "Tracker SIM Station", href: "/trackers", icon: Zap },
     { name: "Fund Wallet", href: "/wallet/fund", icon: CreditCard },
-    { name: "Buy Airtime", href: "/airtime", icon: Smartphone },
-    { name: "Buy Data", href: "/data", icon: Wifi },
     { name: "Transactions", href: "/transactions", icon: History },
   ]
 

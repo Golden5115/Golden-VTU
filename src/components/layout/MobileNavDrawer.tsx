@@ -37,8 +37,6 @@ export function MobileNavDrawer({ user }: MobileNavDrawerProps) {
   const links = [
     { name: "Dashboard", href: "/dashboard", icon: Home },
     { name: "Tracker SIM Station", href: "/trackers", icon: Zap, badge: "GPS Tool" },
-    { name: "Buy Airtime", href: "/airtime", icon: Smartphone },
-    { name: "Buy Data Bundle", href: "/data", icon: Wifi },
     { name: "Fund Wallet", href: "/wallet/fund", icon: CreditCard },
     { name: "Transaction History", href: "/transactions", icon: History },
   ]

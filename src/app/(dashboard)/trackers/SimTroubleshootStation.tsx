@@ -91,6 +91,13 @@ export function SimTroubleshootStation({
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null)
   const [receipt, setReceipt] = useState<TransactionReceipt | null>(null)
   const [copiedRef, setCopiedRef] = useState(false)
+  const [copiedReport, setCopiedReport] = useState<string | null>(null)
+
+  const copyReportText = (text: string) => {
+    navigator.clipboard.writeText(text)
+    setCopiedReport(text)
+    setTimeout(() => setCopiedReport(null), 2500)
+  }
 
   // ==========================================
   // 2. BULK MULTI-SIM STATE
@@ -703,6 +710,32 @@ export function SimTroubleshootStation({
                         <span className="font-mono text-xs font-semibold text-gray-600">
                           SIM: {historyData.phone}
                         </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const dataDesc = historyData.lastData
+                              ? `Data: Last loaded ${historyData.lastData.daysAgo === 0 ? "today" : `${historyData.lastData.daysAgo} days ago`} (${historyData.lastData.plan})`
+                              : "Data: Never loaded"
+                            const airtimeDesc = historyData.lastAirtime
+                              ? `Airtime: Last loaded ${historyData.lastAirtime.daysAgo === 0 ? "today" : `${historyData.lastAirtime.daysAgo} days ago`} (₦${historyData.lastAirtime.amount})`
+                              : "Airtime: Never loaded"
+                            const fullReport = `${historyData.phone} (${historyData.network?.id && NETWORK_META[historyData.network.id] ? NETWORK_META[historyData.network.id].label : "SIM"})\n• ${dataDesc}\n• ${airtimeDesc}`
+                            copyReportText(fullReport)
+                          }}
+                          className="ml-auto inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1 rounded-md bg-white border shadow-2xs hover:bg-slate-50 transition-colors text-slate-700"
+                        >
+                          {copiedReport && copiedReport.includes(historyData.phone) && copiedReport.includes("•") ? (
+                            <>
+                              <Check className="w-3 h-3 text-emerald-600" />
+                              <span className="text-emerald-700">Copied!</span>
+                            </>
+                          ) : (
+                            <>
+                              <Copy className="w-3 h-3 text-slate-500" />
+                              <span>Copy Report Summary</span>
+                            </>
+                          )}
+                        </button>
                       </div>
                       <p className="text-xs mt-1 opacity-90 leading-relaxed">
                         {historyData.summary.verdictMessage}
@@ -768,6 +801,31 @@ export function SimTroubleshootStation({
                           No data bundle has ever been bought for this SIM.
                         </p>
                       )}
+
+                      <div className="pt-2 border-t">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const line = historyData.lastData
+                              ? `${historyData.phone} - Data: Last loaded ${historyData.lastData.daysAgo === 0 ? "today" : `${historyData.lastData.daysAgo} days ago`} (${historyData.lastData.plan})`
+                              : `${historyData.phone} - Data: Never loaded`
+                            copyReportText(line)
+                          }}
+                          className="w-full inline-flex items-center justify-center gap-1.5 text-xs font-semibold px-2.5 py-1.5 rounded-lg border transition-all bg-blue-50/70 hover:bg-blue-100 text-blue-700 border-blue-200"
+                        >
+                          {copiedReport && copiedReport.startsWith(historyData.phone) && copiedReport.includes("Data:") ? (
+                            <>
+                              <Check className="w-3.5 h-3.5 text-emerald-600" />
+                              <span className="text-emerald-700 font-bold">Copied Data Report!</span>
+                            </>
+                          ) : (
+                            <>
+                              <Copy className="w-3.5 h-3.5 text-blue-600" />
+                              <span>Copy Data Status for Report</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
                     </div>
 
                     {/* Box 2: SMS Airtime History */}
@@ -824,6 +882,31 @@ export function SimTroubleshootStation({
                           No airtime purchase on file for this SIM.
                         </p>
                       )}
+
+                      <div className="pt-2 border-t">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const line = historyData.lastAirtime
+                              ? `${historyData.phone} - Airtime: Last loaded ${historyData.lastAirtime.daysAgo === 0 ? "today" : `${historyData.lastAirtime.daysAgo} days ago`} (₦${historyData.lastAirtime.amount})`
+                              : `${historyData.phone} - Airtime: Never loaded`
+                            copyReportText(line)
+                          }}
+                          className="w-full inline-flex items-center justify-center gap-1.5 text-xs font-semibold px-2.5 py-1.5 rounded-lg border transition-all bg-indigo-50/70 hover:bg-indigo-100 text-indigo-700 border-indigo-200"
+                        >
+                          {copiedReport && copiedReport.startsWith(historyData.phone) && copiedReport.includes("Airtime:") ? (
+                            <>
+                              <Check className="w-3.5 h-3.5 text-emerald-600" />
+                              <span className="text-emerald-700 font-bold">Copied Airtime Report!</span>
+                            </>
+                          ) : (
+                            <>
+                              <Copy className="w-3.5 h-3.5 text-indigo-600" />
+                              <span>Copy Airtime Status for Report</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
                     </div>
                   </div>
 

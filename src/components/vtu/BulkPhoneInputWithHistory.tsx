@@ -18,6 +18,7 @@ import {
   CheckCheck,
   XCircle,
   Copy,
+  Check,
   Info,
   Wifi,
   Smartphone,
@@ -85,10 +86,42 @@ export function BulkPhoneInputWithHistory({
 }: BulkPhoneInputWithHistoryProps) {
   const [historyMap, setHistoryMap] = useState<Record<string, PhoneHistoryItem>>({})
   const [isLoading, setIsLoading] = useState(false)
+  const [copiedPhone, setCopiedPhone] = useState<string | null>(null)
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null)
 
   // Parse all unique numbers from raw text
   const parsedPhones = parseCommaSeparatedPhones(rawInput)
+
+  const copySingleReport = (phone: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation()
+    const history = historyMap[phone]
+    let reportLine = ""
+    if (history?.lastData) {
+      const days = history.lastData.daysAgo === 0 ? "today" : `${history.lastData.daysAgo} days ago`
+      const plan = history.lastData.plan ? ` (${history.lastData.plan})` : ""
+      reportLine = `${phone} - Data: Last loaded ${days}${plan}`
+    } else {
+      reportLine = `${phone} - Data: Never loaded`
+    }
+    navigator.clipboard.writeText(reportLine)
+    setCopiedPhone(phone)
+    setTimeout(() => setCopiedPhone(null), 2000)
+  }
+
+  const copyAllReports = () => {
+    const lines = parsedPhones.map((phone) => {
+      const history = historyMap[phone]
+      if (history?.lastData) {
+        const days = history.lastData.daysAgo === 0 ? "today" : `${history.lastData.daysAgo} days ago`
+        const plan = history.lastData.plan ? ` (${history.lastData.plan})` : ""
+        return `${phone} - Data: Last loaded ${days}${plan}`
+      }
+      return `${phone} - Data: Never loaded`
+    })
+    navigator.clipboard.writeText(lines.join("\n"))
+    setCopiedPhone("ALL")
+    setTimeout(() => setCopiedPhone(null), 2500)
+  }
 
   // Fetch history for phone numbers
   const checkHistory = useCallback(async (phonesToCheck: string[]) => {
@@ -274,7 +307,27 @@ export function BulkPhoneInputWithHistory({
             </div>
 
             {/* Quick Action Buttons */}
-            <div className="flex items-center gap-1.5 text-xs">
+            <div className="flex items-center gap-1.5 text-xs flex-wrap">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={copyAllReports}
+                className="h-7 text-[11px] font-semibold text-blue-700 bg-blue-50/80 hover:bg-blue-100 border-blue-200"
+                title="Copy all SIM numbers and their data status for reporting"
+              >
+                {copiedPhone === "ALL" ? (
+                  <>
+                    <Check className="w-3 h-3 mr-1 text-emerald-600" />
+                    Copied Report!
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-3 h-3 mr-1 text-blue-600" />
+                    Copy Report
+                  </>
+                )}
+              </Button>
               {recentCount > 0 && (
                 <Button
                   type="button"
@@ -348,6 +401,25 @@ export function BulkPhoneInputWithHistory({
                       <span className="font-mono font-bold text-xs tracking-wider text-foreground">
                         {phone}
                       </span>
+
+                      <button
+                        type="button"
+                        onClick={(e) => copySingleReport(phone, e)}
+                        title="Copy status line for report"
+                        className="inline-flex items-center gap-1 text-[10px] text-gray-500 hover:text-blue-600 hover:bg-blue-50 px-1.5 py-0.5 rounded transition-colors border border-gray-200/60 hover:border-blue-300"
+                      >
+                        {copiedPhone === phone ? (
+                          <>
+                            <Check className="w-3 h-3 text-emerald-600" />
+                            <span className="text-emerald-700 font-bold">Copied</span>
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="w-3 h-3 text-gray-400" />
+                            <span>Copy</span>
+                          </>
+                        )}
+                      </button>
 
                       {/* Network Badge */}
                       {net ? (

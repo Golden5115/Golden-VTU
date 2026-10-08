@@ -18,6 +18,7 @@ import {
   Radio,
   Filter,
   Check,
+  Copy,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -76,6 +77,7 @@ export function TrackerFleetView({
   // Loading & Feedback
   const [isLoading, setIsLoading] = useState(false)
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null)
+  const [copiedTrackerId, setCopiedTrackerId] = useState<string | null>(null)
 
   // Filtered Trackers
   const filteredTrackers = trackers.filter((t) => {
@@ -390,10 +392,35 @@ export function TrackerFleetView({
                     {/* GPRS Data Telemetry Box */}
                     <div className="space-y-1">
                       <div className="flex items-center justify-between">
-                        <span className="text-xs font-semibold text-gray-600 flex items-center gap-1">
-                          <Wifi className="w-3.5 h-3.5 text-blue-500" />
-                          GPRS Data Status
-                        </span>
+                        <div className="flex items-center gap-1">
+                          <span className="text-xs font-semibold text-gray-600 flex items-center gap-1">
+                            <Wifi className="w-3.5 h-3.5 text-blue-500" />
+                            GPRS Data
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const daysDesc = tracker.dataStatus === "NEVER_TOPPED_UP"
+                                ? "Never loaded"
+                                : tracker.isDataExpired
+                                ? `Last loaded ${Math.abs(tracker.dataRemainingDays || 0)}d ago (Expired)`
+                                : `Active (${tracker.dataRemainingDays}d left)`
+                              const planDesc = tracker.lastDataPlan ? ` (${tracker.lastDataPlan})` : ""
+                              const line = `${tracker.simNumber} - Data: ${daysDesc}${planDesc}`
+                              navigator.clipboard.writeText(line)
+                              setCopiedTrackerId(tracker.id)
+                              setTimeout(() => setCopiedTrackerId(null), 2000)
+                            }}
+                            title="Copy status for report"
+                            className="p-1 rounded text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                          >
+                            {copiedTrackerId === tracker.id ? (
+                              <Check className="w-3 h-3 text-emerald-600" />
+                            ) : (
+                              <Copy className="w-3 h-3" />
+                            )}
+                          </button>
+                        </div>
 
                         {/* Health Badge */}
                         {tracker.dataStatus === "ACTIVE" && (
