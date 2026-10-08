@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/auth"
 import prisma from "@/lib/prisma"
 import { purchaseAirtime, purchaseData } from "@/services/vtu.service"
-import { normalizePhoneNumber } from "@/lib/phone-utils"
+import { normalizePhoneNumber, detectNetwork, NETWORKS } from "@/lib/phone-utils"
 
 export async function POST(request: NextRequest) {
   try {
@@ -67,6 +67,18 @@ export async function POST(request: NextRequest) {
     }> = []
 
     for (const phone of cleanPhones) {
+      // Validate that carrier matches the selected network
+      const detected = detectNetwork(phone)
+      if (detected && detected.id !== networkId) {
+        const expectedName = NETWORKS[networkId]?.name || "selected network"
+        results.push({
+          phone,
+          success: false,
+          error: `Carrier mismatch: This number belongs to ${detected.name}, not ${expectedName}. Please use an ${expectedName} plan.`,
+        })
+        continue
+      }
+
       try {
         if (type === "data") {
           const res = await purchaseData(userId, networkId, planId, phone, unitAmount, serverId)

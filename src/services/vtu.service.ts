@@ -1,5 +1,6 @@
 import prisma from "@/lib/prisma"
 import { resolveServerAndProvider } from "./providers/provider.factory"
+import { detectNetwork, NETWORKS } from "@/lib/phone-utils"
 
 // Determine the callback URL dynamically based on the active provider
 function getCallbackUrl(providerIdentifier: string): string {
@@ -35,6 +36,13 @@ export async function purchaseAirtime(
       select: { id: true },
     })
     if (matched) trackerId = matched.id
+  }
+
+  // Validate carrier network prefix to prevent cross-carrier delivery failures
+  const detectedNet = detectNetwork(phone)
+  if (detectedNet && detectedNet.id !== networkId) {
+    const expectedName = NETWORKS[networkId]?.name || "the selected network"
+    throw new Error(`Carrier Mismatch: Phone ${phone} is on ${detectedNet.name}, but you selected ${expectedName}. Please select ${expectedName} SIM.`)
   }
 
   // 1. Resolve server and provider engine first
@@ -199,6 +207,13 @@ export async function purchaseData(
       select: { id: true },
     })
     if (matched) trackerId = matched.id
+  }
+
+  // Validate carrier network prefix to prevent cross-carrier delivery failures
+  const detectedNet = detectNetwork(phone)
+  if (detectedNet && detectedNet.id !== networkId) {
+    const expectedName = NETWORKS[networkId]?.name || "the selected network"
+    throw new Error(`Carrier Mismatch: Phone ${phone} is on ${detectedNet.name}, but you selected ${expectedName}. Please select ${expectedName} SIM.`)
   }
 
   // 1. Resolve server and provider engine first

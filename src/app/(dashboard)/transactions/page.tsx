@@ -4,6 +4,7 @@ import prisma from "@/lib/prisma"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { ArrowDownLeft, Wifi, Smartphone, CreditCard } from "lucide-react"
+import { LiveStatusButton } from "@/components/vtu/LiveStatusButton"
 
 export default async function TransactionsPage() {
   const session = await auth()
@@ -141,17 +142,24 @@ export default async function TransactionsPage() {
                         >
                           {tx.type === "WALLET_CREDIT" ? "+" : "-"}₦{tx.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                         </div>
-                        <span
-                          className={`inline-block text-[10px] font-bold px-1.5 py-0.2 rounded ${
-                            tx.status === "SUCCESS"
-                              ? "bg-green-100 text-green-800"
-                              : tx.status === "FAILED"
-                              ? "bg-red-100 text-red-800"
-                              : "bg-amber-100 text-amber-800"
-                          }`}
-                        >
-                          {tx.status}
-                        </span>
+                        <div className="flex items-center gap-1.5 justify-end">
+                          <span
+                            className={`inline-block text-[10px] font-bold px-1.5 py-0.2 rounded ${
+                              tx.status === "SUCCESS"
+                                ? "bg-green-100 text-green-800"
+                                : tx.status === "FAILED"
+                                ? "bg-red-100 text-red-800"
+                                : "bg-amber-100 text-amber-800"
+                            }`}
+                          >
+                            {tx.status}
+                          </span>
+                          <LiveStatusButton
+                            reference={tx.reference}
+                            currentStatus={tx.status}
+                            isVtuPurchase={tx.type === "DATA" || tx.type === "AIRTIME"}
+                          />
+                        </div>
                       </div>
                     </div>
                     <div className="flex items-center justify-between text-[11px] text-gray-400 pt-1 border-t border-gray-100">
@@ -204,17 +212,24 @@ export default async function TransactionsPage() {
                           {tx.type === "WALLET_CREDIT" ? "+" : "-"}₦{tx.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                         </TableCell>
                         <TableCell>
-                          <span
-                            className={`px-2 py-0.5 rounded text-xs font-bold ${
-                              tx.status === "SUCCESS"
-                                ? "bg-green-100 text-green-800"
-                                : tx.status === "FAILED"
-                                ? "bg-red-100 text-red-800"
-                                : "bg-amber-100 text-amber-800"
-                            }`}
-                          >
-                            {tx.status}
-                          </span>
+                          <div className="flex items-center gap-1.5">
+                            <span
+                              className={`px-2 py-0.5 rounded text-xs font-bold ${
+                                tx.status === "SUCCESS"
+                                  ? "bg-green-100 text-green-800"
+                                  : tx.status === "FAILED"
+                                  ? "bg-red-100 text-red-800"
+                                  : "bg-amber-100 text-amber-800"
+                              }`}
+                            >
+                              {tx.status}
+                            </span>
+                            <LiveStatusButton
+                              reference={tx.reference}
+                              currentStatus={tx.status}
+                              isVtuPurchase={tx.type === "DATA" || tx.type === "AIRTIME"}
+                            />
+                          </div>
                         </TableCell>
                         <TableCell className="text-right text-xs text-gray-500">
                           {new Date(tx.date).toLocaleDateString()}

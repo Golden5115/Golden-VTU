@@ -93,23 +93,45 @@ export class ClubKonnectProvider implements IVtuProvider {
     })
 
     const code = String(data.statuscode || data.statusCode || "").trim()
+    const remark = String(data.remark || "").trim().toLowerCase()
     const statusText = String(data.status || "").toUpperCase()
-    const isAccepted =
-      code === "100" ||
-      code === "200" ||
-      statusText === "ORDER_RECEIVED" ||
-      statusText === "ORDER_COMPLETED"
 
-    if (!isAccepted) {
-      throw new Error(`Provider Airtime Error: ${data.status || "Unknown carrier error"}`)
+    // 1. Confirmed Success: Code 200 with success remark
+    if (code === "200" || (statusText === "ORDER_COMPLETED" && (remark === "success" || !remark) && code !== "201")) {
+      return {
+        isSuccessful: true,
+        isPending: false,
+        providerReference: data.orderid || reference,
+        rawResponse: data,
+      }
     }
 
-    return {
-      isSuccessful: true,
-      isPending: code === "100" || statusText === "ORDER_RECEIVED",
-      providerReference: data.orderid || reference,
-      rawResponse: data,
+    // 2. Pending / Queued by carrier: Code 100 (ORDER_RECEIVED), Code 300 (ORDER_PROCESSING)
+    if (code === "100" || code === "300" || statusText === "ORDER_RECEIVED") {
+      return {
+        isSuccessful: true,
+        isPending: true,
+        providerReference: data.orderid || reference,
+        rawResponse: data,
+      }
     }
+
+    // 3. Known Carrier Network Unresponsive: Code 201
+    if (code === "201" || remark.includes("network unresponsive")) {
+      throw new Error(`Carrier Rejected: Network Unresponsive (Code 201). Please verify the recipient network.`)
+    }
+
+    // 4. Known Carrier Cancellation: 500-599
+    if (code.startsWith("5") || statusText === "ORDER_CANCELLED") {
+      throw new Error(`Carrier Cancelled: ${data.remark || data.description || "Order cancelled by network"}`)
+    }
+
+    // 5. Carrier Error: 400-499
+    if (code.startsWith("4") || statusText === "ORDER_ERROR") {
+      throw new Error(`Carrier Error: ${data.remark || data.description || "Invalid carrier request"}`)
+    }
+
+    throw new Error(`Provider Airtime Error: ${data.remark || data.status || "Unknown carrier error"}`)
   }
 
   async buyData(
@@ -128,21 +150,96 @@ export class ClubKonnectProvider implements IVtuProvider {
     })
 
     const code = String(data.statuscode || data.statusCode || "").trim()
+    const remark = String(data.remark || "").trim().toLowerCase()
     const statusText = String(data.status || "").toUpperCase()
-    const isAccepted =
-      code === "100" ||
-      code === "200" ||
-      statusText === "ORDER_RECEIVED" ||
-      statusText === "ORDER_COMPLETED"
 
-    if (!isAccepted) {
-      throw new Error(`Provider Data Error: ${data.status || "Unknown carrier error"}`)
+    // 1. Confirmed Success: Code 200 with success remark
+    if (code === "200" || (statusText === "ORDER_COMPLETED" && (remark === "success" || !remark) && code !== "201")) {
+      return {
+        isSuccessful: true,
+        isPending: false,
+        providerReference: data.orderid || reference,
+        rawResponse: data,
+      }
     }
 
+    // 2. Pending / Queued by carrier: Code 100 (ORDER_RECEIVED), Code 300 (ORDER_PROCESSING)
+    if (code === "100" || code === "300" || statusText === "ORDER_RECEIVED") {
+      return {
+        isSuccessful: true,
+        isPending: true,
+        providerReference: data.orderid || reference,
+        rawResponse: data,
+      }
+    }
+
+    // 3. Known Carrier Network Unresponsive: Code 201 (e.g. wrong telco network)
+    if (code === "201" || remark.includes("network unresponsive")) {
+      throw new Error(`Carrier Rejected: Network Unresponsive (Code 201). Please verify the recipient network.`)
+    }
+
+    // 4. Known Carrier Cancellation: 500-599 (e.g. 520: Invalid network user)
+    if (code.startsWith("5") || statusText === "ORDER_CANCELLED") {
+      throw new Error(`Carrier Cancelled: ${data.remark || data.description || "Order cancelled by network"}`)
+    }
+
+    // 5. Carrier Error: 400-499
+    if (code.startsWith("4") || statusText === "ORDER_ERROR") {
+      throw new Error(`Carrier Error: ${data.remark || data.description || "Invalid carrier request"}`)
+    }
+
+    throw new Error(`Provider Data Error: ${data.remark || data.status || "Unknown carrier error"}`)
+  }
+
+  /**
+   * Query transaction status live directly from ClubKonnect APIQueryV1.asp
+   */
+  async queryTransaction(orderIdOrReference: string): Promise<{
+    orderId: string
+    statusCode: string
+    status: string
+    remark: string
+    network?: string
+    mobileNumber?: string
+    amountCharged?: number
+    walletBalance?: number
+    isSuccessful: boolean
+    isPending: boolean
+    isFailed: boolean
+    rawResponse: any
+  }> {
+    const isNumeric = /^\d+$/.test(orderIdOrReference)
+    const params: Record<string, string> = isNumeric ? { OrderID: orderIdOrReference } : { RequestID: orderIdOrReference }
+    const data = await this.clubKonnectFetch<any>("APIQueryV1.asp", params)
+
+    const code = String(data.statuscode || data.statusCode || "").trim()
+    const remark = String(data.remark || "").trim()
+    const status = String(data.status || "").toUpperCase()
+
+    const isSuccessful = code === "200" || (status === "ORDER_COMPLETED" && remark.toLowerCase() === "success")
+    const isPending =
+      code === "100" ||
+      code === "300" ||
+      status === "ORDER_RECEIVED" ||
+      status === "ORDER_PROCESSING" ||
+      (code.startsWith("6") && code.length === 3)
+    const isFailed =
+      code === "201" ||
+      (code.startsWith("4") && code.length === 3) ||
+      (code.startsWith("5") && code.length === 3)
+
     return {
-      isSuccessful: true,
-      isPending: code === "100" || statusText === "ORDER_RECEIVED",
-      providerReference: data.orderid || reference,
+      orderId: data.orderid || "",
+      statusCode: code,
+      status,
+      remark,
+      network: data.mobilenetwork,
+      mobileNumber: data.mobilenumber,
+      amountCharged: parseFloat(String(data.amountcharged || "0").replace(/,/g, "")),
+      walletBalance: parseFloat(String(data.walletbalance || "0").replace(/,/g, "")),
+      isSuccessful,
+      isPending,
+      isFailed,
       rawResponse: data,
     }
   }

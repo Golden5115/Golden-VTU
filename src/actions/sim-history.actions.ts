@@ -232,3 +232,65 @@ export async function checkSimHistory(rawPhone: string): Promise<SimDiagnosticHi
     recentTransactions: combinedRecent,
   }
 }
+
+/**
+ * Direct real-time Carrier Query via ClubKonnect APIQueryV1.asp
+ * Reconciles status and auto-refunds if carrier terminal status is cancelled.
+ */
+export async function queryDirectCarrierStatus(referenceOrOrderId: string) {
+  const session = await auth()
+  if (!session?.user?.id) throw new Error("Unauthorized")
+
+  const { resolveServerAndProvider } = await import("@/services/providers/provider.factory")
+  const { provider } = await resolveServerAndProvider()
+
+  if (typeof (provider as any).queryTransaction === "function") {
+    const live = await (provider as any).queryTransaction(referenceOrOrderId)
+
+    // If carrier confirms failed / unresponsive and DB had it marked otherwise, auto-reconcile
+    if (live.isFailed) {
+      const dataP = await prisma.dataPurchase.findFirst({
+        where: {
+          OR: [{ reference: referenceOrOrderId }, { providerReference: referenceOrOrderId }],
+        },
+      })
+      if (dataP && dataP.status !== "FAILED") {
+        await prisma.dataPurchase.update({
+          where: { id: dataP.id },
+          data: { status: "FAILED" },
+        })
+        await prisma.walletTransaction.updateMany({
+          where: { reference: dataP.reference },
+          data: { status: "FAILED" },
+        })
+        await prisma.user.update({
+          where: { id: dataP.userId },
+          data: { walletBalance: { increment: dataP.amount } },
+        })
+      }
+    } else if (live.isSuccessful) {
+      await prisma.dataPurchase.updateMany({
+        where: {
+          OR: [{ reference: referenceOrOrderId }, { providerReference: referenceOrOrderId }],
+          status: { not: "SUCCESS" },
+        },
+        data: { status: "SUCCESS", providerReference: live.orderId },
+      })
+      await prisma.walletTransaction.updateMany({
+        where: {
+          OR: [{ reference: referenceOrOrderId }, { reference: live.orderId }],
+          status: { not: "SUCCESS" },
+        },
+        data: { status: "SUCCESS" },
+      })
+    }
+
+    return {
+      success: true,
+      data: live,
+    }
+  }
+
+  throw new Error("Direct carrier query is not supported on this active server engine.")
+}
+

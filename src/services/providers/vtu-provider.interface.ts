@@ -64,4 +64,19 @@ export interface IVtuProvider {
     currency?: string
     message?: string
   }>
+
+  queryTransaction?(orderIdOrReference: string): Promise<{
+    orderId: string
+    statusCode: string
+    status: string
+    remark: string
+    network?: string
+    mobileNumber?: string
+    amountCharged?: number
+    walletBalance?: number
+    isSuccessful: boolean
+    isPending: boolean
+    isFailed: boolean
+    rawResponse: any
+  }>
 }
