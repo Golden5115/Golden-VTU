@@ -1,7 +1,12 @@
 import Link from "next/link"
-import { Home, CreditCard, Wifi, Smartphone, History, Settings, Zap } from "lucide-react"
+import { Home, CreditCard, Wifi, Smartphone, History, Settings, Zap, Shield } from "lucide-react"
+import { auth } from "@/auth"
 
-export function Sidebar() {
+export async function Sidebar() {
+  const session = await auth()
+  // @ts-ignore
+  const isAdmin = session?.user?.role === "ADMIN"
+
   const links = [
     { name: "Dashboard", href: "/dashboard", icon: Home },
     { name: "Tracker SIM Station", href: "/trackers", icon: Zap },
@@ -9,25 +14,52 @@ export function Sidebar() {
     { name: "Buy Airtime", href: "/airtime", icon: Smartphone },
     { name: "Buy Data", href: "/data", icon: Wifi },
     { name: "Transactions", href: "/transactions", icon: History },
-    { name: "Settings", href: "/settings", icon: Settings },
   ]
+
+  if (isAdmin) {
+    links.push({
+      name: "Admin Control Panel",
+      href: "/admin/dashboard",
+      icon: Shield,
+    })
+  }
+
+  links.push({ name: "Settings", href: "/settings", icon: Settings })
 
   return (
     <div className="hidden md:flex flex-col w-64 bg-white border-r h-full">
-      <div className="p-6 border-b">
-        <h1 className="text-xl font-bold text-blue-600">VTU Pay</h1>
+      <div className="p-6 border-b flex items-center gap-2">
+        <div className="w-8 h-8 rounded-lg bg-blue-600 text-white flex items-center justify-center font-black shadow-xs">
+          <Zap className="w-4 h-4" />
+        </div>
+        <div>
+          <h1 className="text-base font-bold text-gray-900 leading-tight">Golden VTU</h1>
+          <span className="text-[10px] text-gray-500 font-medium">GPS SIM Management</span>
+        </div>
       </div>
       <nav className="flex-1 p-4 space-y-1">
-        {links.map((link) => (
-          <Link
-            key={link.name}
-            href={link.href}
-            className="flex items-center px-4 py-3 text-sm font-medium text-gray-700 rounded-lg hover:bg-gray-100 hover:text-blue-600"
-          >
-            <link.icon className="w-5 h-5 mr-3" />
-            {link.name}
-          </Link>
-        ))}
+        {links.map((link) => {
+          const isSpecialAdmin = link.name === "Admin Control Panel"
+          return (
+            <Link
+              key={link.name}
+              href={link.href}
+              className={`flex items-center px-4 py-3 text-sm font-medium rounded-lg transition-colors ${
+                isSpecialAdmin
+                  ? "text-blue-700 bg-blue-50/80 hover:bg-blue-100 font-bold border border-blue-200/60 my-1.5"
+                  : "text-gray-700 hover:bg-gray-100 hover:text-blue-600"
+              }`}
+            >
+              <link.icon className={`w-5 h-5 mr-3 ${isSpecialAdmin ? "text-blue-600" : ""}`} />
+              <span className="flex-1">{link.name}</span>
+              {isSpecialAdmin && (
+                <span className="text-[10px] uppercase font-extrabold px-1.5 py-0.2 rounded bg-blue-600 text-white">
+                  Admin
+                </span>
+              )}
+            </Link>
+          )
+        })}
       </nav>
     </div>
   )

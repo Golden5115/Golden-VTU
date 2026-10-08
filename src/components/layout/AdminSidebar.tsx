@@ -13,7 +13,7 @@ export function AdminSidebar() {
   return (
     <div className="hidden md:flex flex-col w-64 bg-slate-900 text-white border-r border-slate-800 h-full">
       <div className="p-6 border-b border-slate-800">
-        <h1 className="text-xl font-bold text-blue-400">VTU Admin</h1>
+        <h1 className="text-xl font-bold text-blue-400">Golden VTU Admin</h1>
       </div>
       <nav className="flex-1 p-4 space-y-1">
         {links.map((link) => (
