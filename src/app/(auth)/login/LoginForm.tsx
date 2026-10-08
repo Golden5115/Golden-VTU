@@ -62,7 +62,10 @@ export function LoginForm() {
     setIsGoogleLoading(true)
     setError(null)
     try {
-      await signIn("google", { callbackUrl: "/dashboard" })
+      const callbackUrl = typeof window !== "undefined" && window.location.origin 
+        ? `${window.location.origin}/dashboard` 
+        : "/dashboard"
+      await signIn("google", { callbackUrl })
     } catch (err: any) {
       setError("Google sign-in failed. Please try again.")
       setIsGoogleLoading(false)

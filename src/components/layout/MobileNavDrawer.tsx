@@ -156,9 +156,12 @@ export function MobileNavDrawer({ user }: MobileNavDrawerProps) {
         <div className="p-3 border-t bg-slate-50">
           <button
             type="button"
-            onClick={() => {
+            onClick={async () => {
               setIsOpen(false)
-              signOut({ callbackUrl: "/login" })
+              try {
+                await signOut({ redirect: false })
+              } catch {}
+              window.location.href = "/login"
             }}
             className="w-full flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl text-xs font-bold text-red-600 hover:bg-red-50 transition-colors"
           >
