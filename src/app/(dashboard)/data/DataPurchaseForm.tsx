@@ -385,9 +385,11 @@ export function DataPurchaseForm({
                         >
                           <div className="space-y-0.5">
                             <p className="font-semibold text-foreground leading-tight">{plan.name}</p>
-                            <span className="text-[11px] text-muted-foreground">
-                              {plan.validity || "30 Days Validity"}
-                            </span>
+                            {plan.validity && (
+                              <span className="text-[11px] text-muted-foreground">
+                                {plan.validity.toLowerCase().includes("validity") ? plan.validity : `${plan.validity} Validity`}
+                              </span>
+                            )}
                           </div>
                           <div className="text-right font-bold text-primary text-base">
                             ₦{plan.price.toLocaleString()}

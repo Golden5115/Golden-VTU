@@ -790,20 +790,24 @@ export function TrackerFleetView({
                   {/* Filter plans for this network */}
                   {availablePlans
                     .filter((p) => p.network === activeTracker.network)
-                    .map((p) => (
-                      <option
-                        key={p.id}
-                        value={`${p.id}::${p.price}::${p.name}::${p.validity?.includes("30") ? "30" : "30"}`}
-                      >
-                        {p.name} — ₦{p.price.toLocaleString()} ({p.validity || "30 Days"})
-                      </option>
-                    ))}
+                    .map((p) => {
+                      const hasDuration = /day|month|week|daily|weekly|monthly|\(\d+/i.test(p.name)
+                      const validityLabel = !hasDuration && p.validity ? ` (${p.validity})` : ""
+                      return (
+                        <option
+                          key={p.id}
+                          value={`${p.id}::${p.price}::${p.name}::${p.validity?.includes("30") ? "30" : "30"}`}
+                        >
+                          {p.name} — ₦{p.price.toLocaleString()}{validityLabel}
+                        </option>
+                      )
+                    })}
                   {/* If no specific plans returned, render standard tracker options */}
                   {availablePlans.filter((p) => p.network === activeTracker.network).length === 0 && (
                     <>
-                      <option value={`8::280::1.0GB SME (30 Days)::30`}>1.0GB (30 Days) — ₦280 (Recommended)</option>
-                      <option value={`7::145::500MB SME (30 Days)::30`}>500MB (30 Days) — ₦145 (Budget)</option>
-                      <option value={`9::560::2.0GB SME (30 Days)::30`}>2.0GB (30 Days) — ₦560</option>
+                      <option value={`8::280::1.0GB SME (30 Days)::30`}>1.0GB — ₦280 (Recommended for Trackers, 30 Days)</option>
+                      <option value={`7::145::500MB SME (30 Days)::30`}>500MB — ₦145 (Budget, 30 Days)</option>
+                      <option value={`9::560::2.0GB SME (30 Days)::30`}>2.0GB — ₦560 (30 Days)</option>
                     </>
                   )}
                 </select>

@@ -890,16 +890,20 @@ export function SimTroubleshootStation({
                               className="w-full border rounded-lg px-3 py-2.5 text-base sm:text-sm mt-1 bg-white font-medium min-h-[44px]"
                             >
                               <option value="">-- Choose Data Bundle --</option>
-                              {networkPlans.map((p) => (
-                                <option key={p.id} value={`${p.id}::${p.price}::${p.name}`}>
-                                  {p.name} — ₦{p.price.toLocaleString()} ({p.validity || "30 Days"})
-                                </option>
-                              ))}
+                              {networkPlans.map((p) => {
+                                const hasDuration = /day|month|week|daily|weekly|monthly|\(\d+/i.test(p.name)
+                                const validityLabel = !hasDuration && p.validity ? ` (${p.validity})` : ""
+                                return (
+                                  <option key={p.id} value={`${p.id}::${p.price}::${p.name}`}>
+                                    {p.name} — ₦{p.price.toLocaleString()}{validityLabel}
+                                  </option>
+                                )
+                              })}
                               {networkPlans.length === 0 && (
                                 <>
-                                  <option value="8::380::1.0GB SME (30 Days)">1.0GB SME (30 Days) — ₦380 (Recommended)</option>
-                                  <option value="7::245::500MB SME (30 Days)">500MB SME (30 Days) — ₦245 (Budget Plan)</option>
-                                  <option value="9::660::2.0GB SME (30 Days)">2.0GB SME (30 Days) — ₦660</option>
+                                  <option value="8::380::1.0GB SME (30 Days)">1.0GB — ₦380 (Recommended for Trackers, 30 Days)</option>
+                                  <option value="7::245::500MB SME (30 Days)">500MB — ₦245 (Budget Plan, 30 Days)</option>
+                                  <option value="9::660::2.0GB SME (30 Days)">2.0GB — ₦660 (30 Days)</option>
                                 </>
                               )}
                             </select>
@@ -1321,16 +1325,20 @@ export function SimTroubleshootStation({
                         className="w-full border rounded-lg px-3 py-2.5 text-base sm:text-sm mt-1 bg-white font-medium min-h-[44px]"
                       >
                         <option value="">-- Choose Data Bundle --</option>
-                        {bulkNetworkPlans.map((p) => (
-                          <option key={p.id} value={`${p.id}::${p.price}::${p.name}`}>
-                            {p.name} — ₦{p.price.toLocaleString()} ({p.validity || "30 Days"})
-                          </option>
-                        ))}
+                        {bulkNetworkPlans.map((p) => {
+                          const hasDuration = /day|month|week|daily|weekly|monthly|\(\d+/i.test(p.name)
+                          const validityLabel = !hasDuration && p.validity ? ` (${p.validity})` : ""
+                          return (
+                            <option key={p.id} value={`${p.id}::${p.price}::${p.name}`}>
+                              {p.name} — ₦{p.price.toLocaleString()}{validityLabel}
+                            </option>
+                          )
+                        })}
                         {bulkNetworkPlans.length === 0 && (
                           <>
-                            <option value="8::380::1.0GB SME (30 Days)">1.0GB SME (30 Days) — ₦380 (Recommended)</option>
-                            <option value="7::245::500MB SME (30 Days)">500MB SME (30 Days) — ₦245 (Budget Plan)</option>
-                            <option value="9::660::2.0GB SME (30 Days)">2.0GB SME (30 Days) — ₦660</option>
+                            <option value="8::380::1.0GB SME (30 Days)">1.0GB — ₦380 (Recommended for Trackers, 30 Days)</option>
+                            <option value="7::245::500MB SME (30 Days)">500MB — ₦245 (Budget Plan, 30 Days)</option>
+                            <option value="9::660::2.0GB SME (30 Days)">2.0GB — ₦660 (30 Days)</option>
                           </>
                         )}
                       </select>

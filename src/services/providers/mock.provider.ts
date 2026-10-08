@@ -8,18 +8,18 @@ import {
 
 const MOCK_DATA_PLANS: VtuDataPlan[] = [
   // MTN Budget Server
-  { id: "mock-mtn-500mb", network: "01", networkName: "MTN", name: "500MB (30 Days) - Budget Server", price: 135 },
-  { id: "mock-mtn-1gb", network: "01", networkName: "MTN", name: "1.0GB (30 Days) - Budget Server", price: 255 },
-  { id: "mock-mtn-2gb", network: "01", networkName: "MTN", name: "2.0GB (30 Days) - Budget Server", price: 510 },
-  { id: "mock-mtn-5gb", network: "01", networkName: "MTN", name: "5.0GB (30 Days) - Budget Server", price: 1275 },
+  { id: "mock-mtn-500mb", network: "01", networkName: "MTN", name: "500MB - Budget Server", price: 135, validity: "30 Days" },
+  { id: "mock-mtn-1gb", network: "01", networkName: "MTN", name: "1.0GB - Budget Server", price: 255, validity: "30 Days" },
+  { id: "mock-mtn-2gb", network: "01", networkName: "MTN", name: "2.0GB - Budget Server", price: 510, validity: "30 Days" },
+  { id: "mock-mtn-5gb", network: "01", networkName: "MTN", name: "5.0GB - Budget Server", price: 1275, validity: "30 Days" },
   // Airtel Budget Server
-  { id: "mock-airtel-1gb", network: "04", networkName: "Airtel", name: "1.0GB (30 Days) - Budget Server", price: 260 },
-  { id: "mock-airtel-2gb", network: "04", networkName: "Airtel", name: "2.0GB (30 Days) - Budget Server", price: 520 },
+  { id: "mock-airtel-1gb", network: "04", networkName: "Airtel", name: "1.0GB - Budget Server", price: 260, validity: "30 Days" },
+  { id: "mock-airtel-2gb", network: "04", networkName: "Airtel", name: "2.0GB - Budget Server", price: 520, validity: "30 Days" },
   // Glo Budget Server
-  { id: "mock-glo-1gb", network: "02", networkName: "Glo", name: "1.0GB (30 Days) - Budget Server", price: 250 },
-  { id: "mock-glo-2gb", network: "02", networkName: "Glo", name: "2.0GB (30 Days) - Budget Server", price: 500 },
+  { id: "mock-glo-1gb", network: "02", networkName: "Glo", name: "1.0GB - Budget Server", price: 250, validity: "30 Days" },
+  { id: "mock-glo-2gb", network: "02", networkName: "Glo", name: "2.0GB - Budget Server", price: 500, validity: "30 Days" },
   // 9mobile Budget Server
-  { id: "mock-9mobile-1gb", network: "03", networkName: "9mobile", name: "1.0GB (30 Days) - Budget Server", price: 230 },
+  { id: "mock-9mobile-1gb", network: "03", networkName: "9mobile", name: "1.0GB - Budget Server", price: 230, validity: "30 Days" },
 ]
 
 export class MockProvider implements IVtuProvider {

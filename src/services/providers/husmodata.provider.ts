@@ -18,30 +18,30 @@ const NETWORK_INT_MAP: Record<string, number> = {
 // Standard SME data plans catalogue commonly used across Nigerian MSorg / SME portals
 const STANDARD_SME_PLANS: VtuDataPlan[] = [
   // MTN SME
-  { id: "7", network: "01", networkName: "MTN", name: "500MB SME (30 Days)", price: 145, validity: "30 Days" },
-  { id: "8", network: "01", networkName: "MTN", name: "1.0GB SME (30 Days)", price: 280, validity: "30 Days" },
-  { id: "9", network: "01", networkName: "MTN", name: "2.0GB SME (30 Days)", price: 560, validity: "30 Days" },
-  { id: "10", network: "01", networkName: "MTN", name: "3.0GB SME (30 Days)", price: 840, validity: "30 Days" },
-  { id: "11", network: "01", networkName: "MTN", name: "5.0GB SME (30 Days)", price: 1400, validity: "30 Days" },
-  { id: "12", network: "01", networkName: "MTN", name: "10.0GB SME (30 Days)", price: 2800, validity: "30 Days" },
+  { id: "7", network: "01", networkName: "MTN", name: "500MB SME", price: 145, validity: "30 Days" },
+  { id: "8", network: "01", networkName: "MTN", name: "1.0GB SME", price: 280, validity: "30 Days" },
+  { id: "9", network: "01", networkName: "MTN", name: "2.0GB SME", price: 560, validity: "30 Days" },
+  { id: "10", network: "01", networkName: "MTN", name: "3.0GB SME", price: 840, validity: "30 Days" },
+  { id: "11", network: "01", networkName: "MTN", name: "5.0GB SME", price: 1400, validity: "30 Days" },
+  { id: "12", network: "01", networkName: "MTN", name: "10.0GB SME", price: 2800, validity: "30 Days" },
 
   // Airtel SME / Corporate
-  { id: "20", network: "04", networkName: "Airtel", name: "500MB Corporate (30 Days)", price: 220, validity: "30 Days" },
-  { id: "21", network: "04", networkName: "Airtel", name: "1.0GB Corporate (30 Days)", price: 440, validity: "30 Days" },
-  { id: "22", network: "04", networkName: "Airtel", name: "2.0GB Corporate (30 Days)", price: 880, validity: "30 Days" },
-  { id: "23", network: "04", networkName: "Airtel", name: "5.0GB Corporate (30 Days)", price: 2200, validity: "30 Days" },
+  { id: "20", network: "04", networkName: "Airtel", name: "500MB Corporate", price: 220, validity: "30 Days" },
+  { id: "21", network: "04", networkName: "Airtel", name: "1.0GB Corporate", price: 440, validity: "30 Days" },
+  { id: "22", network: "04", networkName: "Airtel", name: "2.0GB Corporate", price: 880, validity: "30 Days" },
+  { id: "23", network: "04", networkName: "Airtel", name: "5.0GB Corporate", price: 2200, validity: "30 Days" },
 
   // GLO Corporate / Data
-  { id: "30", network: "02", networkName: "Glo", name: "500MB Corporate (30 Days)", price: 220, validity: "30 Days" },
-  { id: "31", network: "02", networkName: "Glo", name: "1.0GB Corporate (30 Days)", price: 440, validity: "30 Days" },
-  { id: "32", network: "02", networkName: "Glo", name: "2.0GB Corporate (30 Days)", price: 880, validity: "30 Days" },
-  { id: "33", network: "02", networkName: "Glo", name: "5.0GB Corporate (30 Days)", price: 2200, validity: "30 Days" },
+  { id: "30", network: "02", networkName: "Glo", name: "500MB Corporate", price: 220, validity: "30 Days" },
+  { id: "31", network: "02", networkName: "Glo", name: "1.0GB Corporate", price: 440, validity: "30 Days" },
+  { id: "32", network: "02", networkName: "Glo", name: "2.0GB Corporate", price: 880, validity: "30 Days" },
+  { id: "33", network: "02", networkName: "Glo", name: "5.0GB Corporate", price: 2200, validity: "30 Days" },
 
   // 9mobile Corporate (Budget)
-  { id: "40", network: "03", networkName: "9mobile", name: "500MB Corporate (30 Days)", price: 100, validity: "30 Days" },
-  { id: "41", network: "03", networkName: "9mobile", name: "1.0GB Corporate (30 Days)", price: 190, validity: "30 Days" },
-  { id: "42", network: "03", networkName: "9mobile", name: "2.0GB Corporate (30 Days)", price: 370, validity: "30 Days" },
-  { id: "43", network: "03", networkName: "9mobile", name: "5.0GB Corporate (30 Days)", price: 920, validity: "30 Days" },
+  { id: "40", network: "03", networkName: "9mobile", name: "500MB Corporate", price: 100, validity: "30 Days" },
+  { id: "41", network: "03", networkName: "9mobile", name: "1.0GB Corporate", price: 190, validity: "30 Days" },
+  { id: "42", network: "03", networkName: "9mobile", name: "2.0GB Corporate", price: 370, validity: "30 Days" },
+  { id: "43", network: "03", networkName: "9mobile", name: "5.0GB Corporate", price: 920, validity: "30 Days" },
 ]
 
 export class HusmodataProvider implements IVtuProvider {

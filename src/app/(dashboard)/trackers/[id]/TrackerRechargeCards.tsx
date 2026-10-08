@@ -118,16 +118,20 @@ export function TrackerRechargeCards({
                   className="w-full border rounded-md px-3 py-2 text-sm mt-1 bg-white"
                 >
                   <option value="">-- Select Data Plan --</option>
-                  {networkPlans.map((p) => (
-                    <option key={p.id} value={`${p.id}::${p.price}::${p.name}::30`}>
-                      {p.name} — ₦{p.price.toLocaleString()} (30 Days)
-                    </option>
-                  ))}
+                  {networkPlans.map((p) => {
+                    const hasDuration = /day|month|week|daily|weekly|monthly|\(\d+/i.test(p.name)
+                    const validityLabel = !hasDuration && p.validity ? ` (${p.validity})` : ""
+                    return (
+                      <option key={p.id} value={`${p.id}::${p.price}::${p.name}::30`}>
+                        {p.name} — ₦{p.price.toLocaleString()}{validityLabel}
+                      </option>
+                    )
+                  })}
                   {networkPlans.length === 0 && (
                     <>
-                      <option value="8::280::1.0GB SME (30 Days)::30">1.0GB (30 Days) — ₦280 (Recommended for Trackers)</option>
-                      <option value="7::145::500MB SME (30 Days)::30">500MB (30 Days) — ₦145 (Budget Plan)</option>
-                      <option value="9::560::2.0GB SME (30 Days)::30">2.0GB (30 Days) — ₦560</option>
+                      <option value="8::280::1.0GB SME (30 Days)::30">1.0GB — ₦280 (Recommended for Trackers, 30 Days)</option>
+                      <option value="7::145::500MB SME (30 Days)::30">500MB — ₦145 (Budget Plan, 30 Days)</option>
+                      <option value="9::560::2.0GB SME (30 Days)::30">2.0GB — ₦560 (30 Days)</option>
                     </>
                   )}
                 </select>

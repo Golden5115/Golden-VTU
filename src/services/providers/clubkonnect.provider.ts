@@ -282,12 +282,33 @@ export class ClubKonnectProvider implements IVtuProvider {
                 const customerPrice = planPrice > 0 ? planPrice + DATA_PROFIT_MARKUP : planPrice
 
                 if (planId && planName) {
+                  const lowerName = planName.toLowerCase()
+                  let extractedValidity = "30 Days"
+                  if (lowerName.includes("1 day") || lowerName.includes("daily") || lowerName.includes("24 hrs")) {
+                    extractedValidity = "1 Day"
+                  } else if (lowerName.includes("2 day") || lowerName.includes("2days")) {
+                    extractedValidity = "2 Days"
+                  } else if (lowerName.includes("3 day") || lowerName.includes("3days")) {
+                    extractedValidity = "3 Days"
+                  } else if (lowerName.includes("7 day") || lowerName.includes("weekly") || lowerName.includes("1 week")) {
+                    extractedValidity = "7 Days"
+                  } else if (lowerName.includes("14 day") || lowerName.includes("2 week")) {
+                    extractedValidity = "14 Days"
+                  } else if (lowerName.includes("60 day") || lowerName.includes("2 month")) {
+                    extractedValidity = "60 Days"
+                  } else if (lowerName.includes("90 day") || lowerName.includes("3 month")) {
+                    extractedValidity = "90 Days"
+                  } else if (lowerName.includes("365 day") || lowerName.includes("yearly") || lowerName.includes("1 year")) {
+                    extractedValidity = "1 Year"
+                  }
+
                   plans.push({
                     id: planId.toString(),
                     network: networkId.toString(),
                     networkName: NETWORK_MAP[networkId.toString()] || networkName,
                     name: planName,
                     price: customerPrice,
+                    validity: extractedValidity,
                   })
                 }
               }
