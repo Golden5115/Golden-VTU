@@ -3,6 +3,8 @@ import { Sidebar } from "@/components/layout/Sidebar"
 import { Header } from "@/components/layout/Header"
 import { MobileBottomNav } from "@/components/layout/MobileBottomNav"
 
+export const dynamic = "force-dynamic"
+
 export default function DashboardLayout({ children }: { children: ReactNode }) {
   return (
     <div className="flex h-screen overflow-hidden bg-slate-50/50">

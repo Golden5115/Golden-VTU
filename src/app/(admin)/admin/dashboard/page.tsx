@@ -5,6 +5,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Users, CreditCard, Activity, Wallet } from "lucide-react"
 import { resolveServerAndProvider } from "@/services/providers/provider.factory"
 
+export const dynamic = "force-dynamic"
+
 export default async function AdminDashboardPage() {
   // Fetch High-level Metrics
   const totalUsers = await prisma.user.count()

@@ -4,6 +4,8 @@ import { AdminProviderActions } from "./AdminProviderActions"
 import { AddProviderModal } from "./AddProviderModal"
 import { Server, Zap, Shield, Key } from "lucide-react"
 
+export const dynamic = "force-dynamic"
+
 export default async function AdminProvidersPage() {
   const providers = await prisma.provider.findMany({
     orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],

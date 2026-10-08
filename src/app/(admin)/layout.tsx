@@ -6,6 +6,8 @@ import { auth } from "@/auth"
 import prisma from "@/lib/prisma"
 import { redirect } from "next/navigation"
 
+export const dynamic = "force-dynamic"
+
 export default async function AdminLayout({ children }: { children: ReactNode }) {
   const session = await auth()
 
