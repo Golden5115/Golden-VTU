@@ -166,7 +166,8 @@ export class ClubKonnectProvider implements IVtuProvider {
               for (const item of networkEntry.PRODUCT) {
                 const planId = item.PRODUCT_ID || ""
                 const planName = item.PRODUCT_NAME || ""
-                const planPrice = parseFloat(item.PRODUCT_AMOUNT || "0")
+                const rawPrice = item.PRODUCT_AMOUNT || "0"
+                const planPrice = parseFloat(String(rawPrice).replace(/,/g, "").trim()) || 0
                 // Add ₦100 profit markup on every data bundle
                 const DATA_PROFIT_MARKUP = 100
                 const customerPrice = planPrice > 0 ? planPrice + DATA_PROFIT_MARKUP : planPrice
@@ -192,8 +193,11 @@ export class ClubKonnectProvider implements IVtuProvider {
 
   async getWalletBalance(): Promise<VtuBalanceResponse> {
     const data = await this.clubKonnectFetch<any>("APIWalletBalanceV1.asp", {})
+    const rawBal = data.Balance || data.balance || data.walletbalance || "0"
+    const cleaned = String(rawBal).replace(/,/g, "").trim()
+    const balanceNum = parseFloat(cleaned) || 0
     return {
-      balance: parseFloat(data.Balance || data.balance || "0"),
+      balance: balanceNum,
       currency: "NGN",
     }
   }

@@ -114,7 +114,7 @@ export async function purchaseAirtime(
           })
 
           if (server?.id && server.id !== "default-mock") {
-            const currentBaseline = parseFloat(server.publicKey || "0")
+            const currentBaseline = parseFloat(String(server.publicKey || "0").replace(/,/g, "").trim()) || 0
             if (currentBaseline > 0) {
               const updatedBaseline = Math.max(0, currentBaseline - amount)
               await tx.provider.update({
@@ -280,7 +280,7 @@ export async function purchaseData(
 
           if (server?.id && server.id !== "default-mock") {
             const wholesaleCost = Math.max(0, amount - 100)
-            const currentBaseline = parseFloat(server.publicKey || "0")
+            const currentBaseline = parseFloat(String(server.publicKey || "0").replace(/,/g, "").trim()) || 0
             if (currentBaseline > 0) {
               const updatedBaseline = Math.max(0, currentBaseline - wholesaleCost)
               await tx.provider.update({

@@ -207,9 +207,8 @@ export class HusmodataProvider implements IVtuProvider {
     }
 
     const data = await response.json()
-    const bal = parseFloat(
-      data.user?.wallet_balance || data.wallet_balance || data.user_wallet || "0"
-    )
+    const rawBal = data.user?.wallet_balance || data.wallet_balance || data.user_wallet || "0"
+    const bal = parseFloat(String(rawBal).replace(/,/g, "").trim()) || 0
 
     return {
       balance: bal,

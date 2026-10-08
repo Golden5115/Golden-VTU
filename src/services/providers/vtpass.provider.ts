@@ -206,9 +206,8 @@ export class VtpassProvider implements IVtuProvider {
     }
 
     const data = await response.json()
-    const balanceNum = parseFloat(
-      data.contents?.balance || data.content?.balance || data.balance || "0"
-    )
+    const rawBal = data.contents?.balance || data.content?.balance || data.balance || "0"
+    const balanceNum = parseFloat(String(rawBal).replace(/,/g, "").trim()) || 0
 
     return {
       balance: balanceNum,

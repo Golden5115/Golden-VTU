@@ -209,7 +209,8 @@ export class PairgateProvider implements IVtuProvider {
       throw new Error(data.message || `Failed to fetch Pairgate wallet balance (${response.status})`)
     }
 
-    const bal = parseFloat(data.data?.balance || "0")
+    const rawBal = data.data?.balance || data.balance || "0"
+    const bal = parseFloat(String(rawBal).replace(/,/g, "").trim()) || 0
 
     return {
       balance: bal,

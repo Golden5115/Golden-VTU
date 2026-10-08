@@ -107,7 +107,7 @@ export async function verifyAutomatedDeposit(forceFullSync?: boolean) {
     }
 
     // Read stored previous provider balance from publicKey (persists reliably without schema restarts)
-    const previousBalance = parseFloat(server?.publicKey || "0")
+    const previousBalance = parseFloat(String(server?.publicKey || "0").replace(/,/g, "").trim()) || 0
 
     // If baseline hasn't been set yet in the database:
     if (!previousBalance || previousBalance <= 0) {
