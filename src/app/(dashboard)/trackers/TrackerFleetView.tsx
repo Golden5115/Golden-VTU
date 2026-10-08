@@ -929,8 +929,8 @@ export function TrackerFleetView({
                   required
                   className="mt-1"
                 />
-                <div className="flex gap-2 mt-2">
-                  {[100, 200, 500, 1000].map((quickAmt) => (
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {[50, 100, 200, 500, 1000].map((quickAmt) => (
                     <button
                       key={quickAmt}
                       type="button"

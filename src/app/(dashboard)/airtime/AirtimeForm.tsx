@@ -327,13 +327,17 @@ export function AirtimeForm({
                     required
                   />
                 </div>
-                <div className="flex gap-2">
-                  {[100, 200, 500, 1000, 2000, 5000].map((quick) => (
+                <div className="flex flex-wrap gap-2">
+                  {[50, 100, 200, 500, 1000, 2000, 5000].map((quick) => (
                     <button
                       key={quick}
                       type="button"
                       onClick={() => setAmount(quick.toString())}
-                      className="text-[11px] py-1 px-2.5 rounded-lg border bg-muted/30 hover:bg-muted font-medium text-foreground transition-all"
+                      className={`text-xs py-1 px-2.5 rounded-lg border font-medium transition-all ${
+                        amount === quick.toString()
+                          ? "bg-primary text-primary-foreground border-primary shadow-xs"
+                          : "bg-muted/30 hover:bg-muted text-foreground"
+                      }`}
                     >
                       ₦{quick.toLocaleString()}
                     </button>

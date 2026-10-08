@@ -981,7 +981,7 @@ export function SimTroubleshootStation({
                               className="mt-1 font-mono font-semibold text-base sm:text-sm min-h-[44px]"
                             />
                             <div className="flex flex-wrap gap-2 mt-2">
-                              {[100, 200, 500, 1000].map((quickAmt) => (
+                              {[50, 100, 200, 500, 1000].map((quickAmt) => (
                                 <button
                                   key={quickAmt}
                                   type="button"
@@ -1355,7 +1355,7 @@ export function SimTroubleshootStation({
                         className="mt-1 font-mono font-semibold text-base sm:text-sm min-h-[44px]"
                       />
                       <div className="flex flex-wrap gap-2 mt-2">
-                        {[100, 200, 500, 1000].map((quickAmt) => (
+                        {[50, 100, 200, 500, 1000].map((quickAmt) => (
                           <button
                             key={quickAmt}
                             type="button"
