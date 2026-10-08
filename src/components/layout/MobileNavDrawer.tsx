@@ -19,6 +19,7 @@ import {
   ChevronRight,
 } from "lucide-react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { CtnLogo } from "@/components/ui/CtnLogo"
 
 interface MobileNavDrawerProps {
   user: {
@@ -81,15 +82,7 @@ export function MobileNavDrawer({ user }: MobileNavDrawerProps) {
       >
         {/* Drawer Header */}
         <div className="p-4 border-b flex items-center justify-between bg-slate-50">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-blue-600 text-white flex items-center justify-center font-black text-sm shadow-xs">
-              <Zap className="w-4 h-4" />
-            </div>
-            <div>
-              <h2 className="font-bold text-sm text-gray-900 leading-tight">Golden VTU</h2>
-              <span className="text-[10px] text-gray-500 font-medium">GPS SIM Management</span>
-            </div>
-          </div>
+          <CtnLogo size="sm" subtitle="GPS SIM Station" />
           <button
             type="button"
             onClick={() => setIsOpen(false)}

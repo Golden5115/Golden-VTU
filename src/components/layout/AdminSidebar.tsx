@@ -1,5 +1,6 @@
 import Link from "next/link"
 import { Home, Users, History, Settings, LogOut, ArrowLeft, Zap } from "lucide-react"
+import { CtnLogo } from "@/components/ui/CtnLogo"
 
 export function AdminSidebar() {
   const links = [
@@ -12,8 +13,8 @@ export function AdminSidebar() {
 
   return (
     <div className="hidden md:flex flex-col w-64 bg-slate-900 text-white border-r border-slate-800 h-full">
-      <div className="p-6 border-b border-slate-800">
-        <h1 className="text-xl font-bold text-blue-400">Golden VTU Admin</h1>
+      <div className="p-5 border-b border-slate-800">
+        <CtnLogo size="sm" theme="dark" subtitle="Admin Control Center" />
       </div>
       <nav className="flex-1 p-4 space-y-1">
         {links.map((link) => (

@@ -3,6 +3,7 @@ import { SignOutButton } from "@/components/auth/SignOutButton"
 import { auth } from "@/auth"
 import { Zap } from "lucide-react"
 import { MobileNavDrawer } from "./MobileNavDrawer"
+import { CtnLogo } from "@/components/ui/CtnLogo"
 
 export async function Header() {
   const session = await auth()
@@ -20,12 +21,7 @@ export async function Header() {
             role: session?.user?.role,
           }}
         />
-        <div className="flex items-center gap-1.5 font-black text-base text-gray-900 tracking-tight">
-          <div className="w-6 h-6 rounded-md bg-blue-600 text-white flex items-center justify-center">
-            <Zap className="w-3.5 h-3.5" />
-          </div>
-          <span>Golden VTU</span>
-        </div>
+        <CtnLogo size="xs" subtitle="" />
       </div>
 
       <div className="hidden md:flex flex-1" />

@@ -1,0 +1,22 @@
+{
+  "name": "CTN Wallet App",
+  "short_name": "CTN Wallet",
+  "description": "Smart Telecom & Tracker SIM Portal - Instant Airtime, Cheap Data bundles",
+  "start_url": "/dashboard",
+  "display": "standalone",
+  "background_color": "#0B132B",
+  "theme_color": "#2563EB",
+  "icons": [
+    {
+      "src": "/icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png"
+    }
+  ]
+}

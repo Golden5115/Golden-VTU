@@ -2,6 +2,8 @@ import Link from "next/link"
 import { Home, CreditCard, Wifi, Smartphone, History, Settings, Zap, Shield } from "lucide-react"
 import { auth } from "@/auth"
 
+import { CtnLogo } from "@/components/ui/CtnLogo"
+
 export async function Sidebar() {
   const session = await auth()
   // @ts-ignore
@@ -28,14 +30,8 @@ export async function Sidebar() {
 
   return (
     <div className="hidden md:flex flex-col w-64 bg-white border-r h-full">
-      <div className="p-6 border-b flex items-center gap-2">
-        <div className="w-8 h-8 rounded-lg bg-blue-600 text-white flex items-center justify-center font-black shadow-xs">
-          <Zap className="w-4 h-4" />
-        </div>
-        <div>
-          <h1 className="text-base font-bold text-gray-900 leading-tight">Golden VTU</h1>
-          <span className="text-[10px] text-gray-500 font-medium">GPS SIM Management</span>
-        </div>
+      <div className="p-5 border-b flex items-center">
+        <CtnLogo size="sm" subtitle="GPS SIM Station" />
       </div>
       <nav className="flex-1 p-4 space-y-1">
         {links.map((link) => {

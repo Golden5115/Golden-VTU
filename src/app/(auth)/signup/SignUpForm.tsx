@@ -22,6 +22,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { signUpUser } from "@/actions/auth.actions"
+import { CtnLogo } from "@/components/ui/CtnLogo"
 
 export function SignUpForm() {
   const router = useRouter()
@@ -101,14 +102,12 @@ export function SignUpForm() {
     <div className="w-full max-w-md mx-auto px-4 py-8">
       <Card className="border shadow-lg rounded-2xl overflow-hidden bg-white">
         <CardHeader className="text-center pb-4 pt-6">
-          <div className="w-12 h-12 bg-blue-600 rounded-2xl mx-auto mb-3 flex items-center justify-center text-white shadow-md">
-            <Zap className="w-6 h-6" />
-          </div>
+          <CtnLogo size="lg" showText={false} className="justify-center mx-auto mb-3" />
           <CardTitle className="text-2xl font-black text-gray-900 tracking-tight">
             Create an Account
           </CardTitle>
           <CardDescription className="text-xs text-gray-500 mt-1">
-            Join Golden VTU to recharge and troubleshoot tracker SIMs
+            Join CTN Wallet to recharge and manage tracker SIMs, airtime, and data
           </CardDescription>
         </CardHeader>
 
