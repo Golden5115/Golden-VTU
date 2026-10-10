@@ -4,6 +4,8 @@ import prisma from "@/lib/prisma"
 import { purchaseAirtime, purchaseData } from "@/services/vtu.service"
 import { normalizePhoneNumber, detectNetwork, NETWORKS } from "@/lib/phone-utils"
 
+export const maxDuration = 60
+
 export async function POST(request: NextRequest) {
   try {
     const session = await auth()
@@ -19,7 +21,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "At least one recipient phone number is required" }, { status: 400 })
     }
 
-    const unitAmount = parseFloat(amount)
+    const unitAmount = Math.round((parseFloat(amount) || 0) * 100) / 100
     if (!unitAmount || unitAmount <= 0) {
       return NextResponse.json({ error: "Invalid purchase amount" }, { status: 400 })
     }
@@ -42,7 +44,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Pre-check total wallet balance
-    const totalRequired = unitAmount * cleanPhones.length
+    const totalRequired = Math.round(unitAmount * cleanPhones.length * 100) / 100
     const user = await prisma.user.findUnique({
       where: { id: userId },
       select: { walletBalance: true },

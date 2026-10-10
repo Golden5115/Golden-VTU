@@ -7,7 +7,11 @@ if (typeof dns.setDefaultResultOrder === "function") {
 }
 
 const prismaClientSingleton = () => {
-  const adapter = new PrismaPg(process.env.DATABASE_URL!)
+  let dbUrl = process.env.DATABASE_URL || ""
+  if (dbUrl.includes("sslmode=require") && !dbUrl.includes("uselibpqcompat")) {
+    dbUrl = dbUrl.replace("sslmode=require", "sslmode=verify-full")
+  }
+  const adapter = new PrismaPg(dbUrl)
   return new PrismaClient({ adapter })
 }
 

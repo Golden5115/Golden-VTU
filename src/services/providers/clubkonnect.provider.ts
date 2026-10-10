@@ -43,7 +43,7 @@ export class ClubKonnectProvider implements IVtuProvider {
     }
   }
 
-  private async clubKonnectFetch<T>(endpoint: string, params: Record<string, string>): Promise<T> {
+  private async clubKonnectFetch<T>(endpoint: string, params: Record<string, string>, timeoutMs = 35000): Promise<T> {
     const cleanBaseUrl = this.baseUrl.replace(/\/+$/, "")
     const url = new URL(`${cleanBaseUrl}/${endpoint}`)
     url.searchParams.set("UserID", this.userId)
@@ -59,7 +59,7 @@ export class ClubKonnectProvider implements IVtuProvider {
       method: "GET",
       headers: { Accept: "application/json" },
       cache: "no-store",
-      signal: AbortSignal.timeout(10000),
+      signal: AbortSignal.timeout(timeoutMs),
     })
 
     if (!response.ok) {
@@ -225,7 +225,7 @@ export class ClubKonnectProvider implements IVtuProvider {
   }> {
     const isNumeric = /^\d+$/.test(orderIdOrReference)
     const params: Record<string, string> = isNumeric ? { OrderID: orderIdOrReference } : { RequestID: orderIdOrReference }
-    const data = await this.clubKonnectFetch<any>("APIQueryV1.asp", params)
+    const data = await this.clubKonnectFetch<any>("APIQueryV1.asp", params, 15000)
 
     const code = String(data.statuscode || data.statusCode || "").trim()
     const remark = String(data.remark || "").trim()
@@ -298,7 +298,7 @@ export class ClubKonnectProvider implements IVtuProvider {
                 const planPrice = parseFloat(String(rawPrice).replace(/,/g, "").trim()) || 0
                 // Add ₦100 profit markup on every data bundle
                 const DATA_PROFIT_MARKUP = 100
-                const customerPrice = planPrice > 0 ? planPrice + DATA_PROFIT_MARKUP : planPrice
+                const customerPrice = planPrice > 0 ? Math.ceil(planPrice + DATA_PROFIT_MARKUP) : planPrice
 
                 if (planId && planName) {
                   const lowerName = planName.toLowerCase()

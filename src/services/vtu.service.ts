@@ -96,6 +96,7 @@ export async function purchaseAirtime(
   }).then(async ({ purchase, reference }) => {
     // 7. Call Provider API OUTSIDE the transaction
     try {
+      const startMs = Date.now()
       const response = await provider.buyAirtime(
         networkId,
         amount,
@@ -103,15 +104,19 @@ export async function purchaseAirtime(
         reference,
         getCallbackUrl(provider.identifier)
       )
+      const elapsedMs = Date.now() - startMs
 
       let isCompleted = Boolean(response.isSuccessful && !response.isPending)
       let providerReference = response.providerReference
 
       // If carrier queued it as pending (e.g. ClubKonnect code 100 / ORDER_RECEIVED),
-      // perform a fast-poll after 2.5s since telecom delivery is usually completed in 2-3s
+      // perform a fast-poll: if buyAirtime took < 3s, pause briefly (1.5s) for gateway delivery;
+      // if buyAirtime already took 3+ seconds, query immediately without added delay!
       if (!isCompleted && typeof (provider as any).queryTransaction === "function") {
         try {
-          await new Promise((r) => setTimeout(r, 2500))
+          if (elapsedMs < 3000) {
+            await new Promise((r) => setTimeout(r, 1500))
+          }
           const check = await (provider as any).queryTransaction(providerReference || reference)
           if (check.isSuccessful) {
             isCompleted = true
@@ -295,6 +300,7 @@ export async function purchaseData(
   }).then(async ({ purchase, reference }) => {
     // 7. Call Provider API OUTSIDE the transaction
     try {
+      const startMs = Date.now()
       const response = await provider.buyData(
         networkId,
         dataPlanId,
@@ -302,15 +308,19 @@ export async function purchaseData(
         reference,
         getCallbackUrl(provider.identifier)
       )
+      const elapsedMs = Date.now() - startMs
 
       let isCompleted = Boolean(response.isSuccessful && !response.isPending)
       let providerReference = response.providerReference
 
       // If carrier queued it as pending (e.g. ClubKonnect code 100 / ORDER_RECEIVED),
-      // perform a fast-poll after 2.5s since telecom delivery is usually completed in 2-3s
+      // perform a fast-poll: if buyData took < 3s, pause briefly (1.5s) for gateway delivery;
+      // if buyData already took 3+ seconds, query immediately without added delay!
       if (!isCompleted && typeof (provider as any).queryTransaction === "function") {
         try {
-          await new Promise((r) => setTimeout(r, 2500))
+          if (elapsedMs < 3000) {
+            await new Promise((r) => setTimeout(r, 1500))
+          }
           const check = await (provider as any).queryTransaction(providerReference || reference)
           if (check.isSuccessful) {
             isCompleted = true

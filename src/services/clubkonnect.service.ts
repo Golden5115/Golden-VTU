@@ -217,7 +217,7 @@ export async function ckGetDataPlans(): Promise<ClubKonnectDataPlan[]> {
               const planPrice = parseFloat(item.PRODUCT_AMOUNT || "0")
               // Add ₦100 profit markup on every data bundle
               const DATA_PROFIT_MARKUP = 100
-              const customerPrice = planPrice > 0 ? planPrice + DATA_PROFIT_MARKUP : planPrice
+              const customerPrice = planPrice > 0 ? Math.ceil(planPrice + DATA_PROFIT_MARKUP) : planPrice
 
               if (planId && planName) {
                 const lowerName = planName.toLowerCase()
