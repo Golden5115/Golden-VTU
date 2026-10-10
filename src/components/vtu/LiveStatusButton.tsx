@@ -41,7 +41,7 @@ export function LiveStatusButton({ reference, currentStatus, isVtuPurchase = tru
         type="button"
         onClick={handleQuery}
         disabled={loading}
-        title="Check direct carrier delivery status on ClubKonnect API"
+        title="Query network delivery status"
         className="inline-flex items-center gap-1 text-[10px] font-bold py-0.5 px-1.5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors"
       >
         {loading ? (
@@ -49,7 +49,7 @@ export function LiveStatusButton({ reference, currentStatus, isVtuPurchase = tru
         ) : (
           <RefreshCw className="w-2.5 h-2.5 text-slate-500" />
         )}
-        <span>Query Live</span>
+        <span>Query Status</span>
       </button>
 
       {isOpen && (
@@ -64,7 +64,7 @@ export function LiveStatusButton({ reference, currentStatus, isVtuPurchase = tru
             <div className="flex items-center justify-between pb-3 border-b">
               <div className="flex items-center gap-2">
                 <RefreshCw className="w-4 h-4 text-primary" />
-                <h3 className="font-bold text-sm text-gray-900">Direct Carrier Query</h3>
+                <h3 className="font-bold text-sm text-gray-900">Network Delivery Verification</h3>
               </div>
               <button
                 type="button"
@@ -78,7 +78,7 @@ export function LiveStatusButton({ reference, currentStatus, isVtuPurchase = tru
             {loading && (
               <div className="py-6 text-center space-y-2">
                 <Loader2 className="w-6 h-6 animate-spin mx-auto text-primary" />
-                <p className="text-xs text-gray-500 font-medium">Checking ClubKonnect API live status...</p>
+                <p className="text-xs text-gray-500 font-medium">Verifying delivery status with network gateway...</p>
               </div>
             )}
 
@@ -86,7 +86,7 @@ export function LiveStatusButton({ reference, currentStatus, isVtuPurchase = tru
               <div className="p-3 rounded-xl bg-red-50 text-red-700 text-xs flex items-start gap-2 border border-red-100">
                 <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
                 <div>
-                  <div className="font-bold">Carrier Query Failed</div>
+                  <div className="font-bold">Verification Failed</div>
                   <div className="mt-0.5 text-red-600 leading-tight">{error}</div>
                 </div>
               </div>
@@ -126,12 +126,12 @@ export function LiveStatusButton({ reference, currentStatus, isVtuPurchase = tru
 
                 <div className="space-y-1.5 text-xs bg-slate-50 p-3 rounded-xl border border-slate-100">
                   <div className="flex justify-between py-1 border-b border-slate-200/60">
-                    <span className="text-gray-500">Carrier Remark:</span>
+                    <span className="text-gray-500">Status Remark:</span>
                     <span className="font-bold text-gray-900">{result.remark || "N/A"}</span>
                   </div>
                   {result.orderId && (
                     <div className="flex justify-between py-1 border-b border-slate-200/60">
-                      <span className="text-gray-500">Carrier Order ID:</span>
+                      <span className="text-gray-500">Network Ref:</span>
                       <span className="font-mono font-bold text-gray-900">{result.orderId}</span>
                     </div>
                   )}
@@ -143,14 +143,8 @@ export function LiveStatusButton({ reference, currentStatus, isVtuPurchase = tru
                   )}
                   {result.network && (
                     <div className="flex justify-between py-1 border-b border-slate-200/60">
-                      <span className="text-gray-500">Carrier Network:</span>
+                      <span className="text-gray-500">Network:</span>
                       <span className="font-bold text-gray-900">{result.network}</span>
-                    </div>
-                  )}
-                  {typeof result.amountCharged === "number" && (
-                    <div className="flex justify-between py-1">
-                      <span className="text-gray-500">Wholesale Debited:</span>
-                      <span className="font-bold text-emerald-700">₦{result.amountCharged.toLocaleString()}</span>
                     </div>
                   )}
                 </div>

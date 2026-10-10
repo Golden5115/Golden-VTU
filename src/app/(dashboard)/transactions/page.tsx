@@ -10,6 +10,8 @@ export default async function TransactionsPage() {
   const session = await auth()
   if (!session?.user?.id) redirect("/login")
 
+  const isAdmin = (session.user as any)?.role === "ADMIN" || session.user?.email?.toLowerCase() === "ayomide.ayoola6866@gmail.com"
+
   const [walletTxs, airtimeTxs, dataTxs] = await Promise.all([
     prisma.walletTransaction.findMany({
       where: { userId: session.user.id },
@@ -154,11 +156,13 @@ export default async function TransactionsPage() {
                           >
                             {tx.status}
                           </span>
-                          <LiveStatusButton
-                            reference={tx.reference}
-                            currentStatus={tx.status}
-                            isVtuPurchase={tx.type === "DATA" || tx.type === "AIRTIME"}
-                          />
+                          {isAdmin && (
+                            <LiveStatusButton
+                              reference={tx.reference}
+                              currentStatus={tx.status}
+                              isVtuPurchase={tx.type === "DATA" || tx.type === "AIRTIME"}
+                            />
+                          )}
                         </div>
                       </div>
                     </div>
@@ -224,11 +228,13 @@ export default async function TransactionsPage() {
                             >
                               {tx.status}
                             </span>
-                            <LiveStatusButton
-                              reference={tx.reference}
-                              currentStatus={tx.status}
-                              isVtuPurchase={tx.type === "DATA" || tx.type === "AIRTIME"}
-                            />
+                            {isAdmin && (
+                              <LiveStatusButton
+                                reference={tx.reference}
+                                currentStatus={tx.status}
+                                isVtuPurchase={tx.type === "DATA" || tx.type === "AIRTIME"}
+                              />
+                            )}
                           </div>
                         </TableCell>
                         <TableCell className="text-right text-xs text-gray-500">

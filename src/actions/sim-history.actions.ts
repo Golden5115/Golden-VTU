@@ -241,6 +241,33 @@ export async function queryDirectCarrierStatus(referenceOrOrderId: string) {
   const session = await auth()
   if (!session?.user?.id) throw new Error("Unauthorized")
 
+  const user = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: { id: true, role: true, email: true },
+  })
+
+  const isAdmin = user?.role === "ADMIN" || user?.email?.toLowerCase() === "ayomide.ayoola6866@gmail.com"
+
+  if (!isAdmin) {
+    const ownsData = await prisma.dataPurchase.findFirst({
+      where: {
+        userId: session.user.id,
+        OR: [{ reference: referenceOrOrderId }, { providerReference: referenceOrOrderId }],
+      },
+    })
+    const ownsAirtime = ownsData
+      ? null
+      : await prisma.airtimePurchase.findFirst({
+          where: {
+            userId: session.user.id,
+            OR: [{ reference: referenceOrOrderId }, { providerReference: referenceOrOrderId }],
+          },
+        })
+    if (!ownsData && !ownsAirtime) {
+      throw new Error("Unauthorized: Transaction not found.")
+    }
+  }
+
   const { resolveServerAndProvider } = await import("@/services/providers/provider.factory")
   const { provider } = await resolveServerAndProvider()
 
@@ -285,12 +312,29 @@ export async function queryDirectCarrierStatus(referenceOrOrderId: string) {
       })
     }
 
+    // Sanitize response: NEVER return wholesale pricing, provider balance, or provider internal names
+    const cleanRemark = String(live.remark || "")
+      .replace(/clubkonnect/gi, "Carrier Gateway")
+      .replace(/nellobyte/gi, "Network Provider")
+
+    const sanitizedData = {
+      orderId: live.orderId,
+      statusCode: live.statusCode,
+      status: live.status,
+      remark: cleanRemark,
+      network: live.network,
+      mobileNumber: live.mobileNumber,
+      isSuccessful: live.isSuccessful,
+      isPending: live.isPending,
+      isFailed: live.isFailed,
+    }
+
     return {
       success: true,
-      data: live,
+      data: sanitizedData,
     }
   }
 
-  throw new Error("Direct carrier query is not supported on this active server engine.")
+  throw new Error("Direct network query is not supported on this active server engine.")
 }
 

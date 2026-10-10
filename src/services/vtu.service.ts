@@ -166,8 +166,12 @@ export async function purchaseAirtime(
         })
       })
 
+      const cleanErrorMsg = String(error?.message || "Carrier processing error")
+        .replace(/clubkonnect/gi, "Telecom Carrier")
+        .replace(/nellobyte/gi, "Network Gateway")
+
       throw new Error(
-        `Transaction failed on ${server.serverName}. Your wallet has been automatically refunded. (${error.message})`
+        `Transaction failed on ${server.serverName}. Your wallet has been automatically refunded. (${cleanErrorMsg})`
       )
     }
   })
@@ -344,8 +348,12 @@ export async function purchaseData(
         })
       })
 
+      const cleanErrorMsg = String(error?.message || "Carrier processing error")
+        .replace(/clubkonnect/gi, "Telecom Carrier")
+        .replace(/nellobyte/gi, "Network Gateway")
+
       throw new Error(
-        `Data purchase failed on ${server.serverName}. Your wallet has been automatically refunded. (${error.message})`
+        `Data purchase failed on ${server.serverName}. Your wallet has been automatically refunded. (${cleanErrorMsg})`
       )
     }
   })

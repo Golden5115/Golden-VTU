@@ -3,6 +3,7 @@ import { redirect } from "next/navigation"
 import prisma from "@/lib/prisma"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { LiveStatusButton } from "@/components/vtu/LiveStatusButton"
 
 export const dynamic = "force-dynamic"
 
@@ -51,7 +52,16 @@ export default async function AdminTransactionsPage() {
                   </TableCell>
                   <TableCell>₦{tx.amount.toFixed(2)}</TableCell>
                   <TableCell className="font-mono text-xs text-muted-foreground">{tx.reference}</TableCell>
-                  <TableCell>{tx.status}</TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-semibold">{tx.status}</span>
+                      <LiveStatusButton
+                        reference={tx.reference}
+                        currentStatus={tx.status}
+                        isVtuPurchase={tx.reference?.startsWith("DAT-") || tx.reference?.startsWith("AIR-")}
+                      />
+                    </div>
+                  </TableCell>
                   <TableCell className="text-right">{tx.createdAt.toLocaleDateString()} {tx.createdAt.toLocaleTimeString()}</TableCell>
                 </TableRow>
               ))}
