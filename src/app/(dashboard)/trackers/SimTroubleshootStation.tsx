@@ -37,7 +37,21 @@ interface SimTroubleshootStationProps {
   walletBalance: number
   servers: any[]
   availablePlans: any[]
-  recentSims: Array<{
+  recentTransactions?: Array<{
+    id: string
+    type: "DATA" | "AIRTIME"
+    label: string
+    planName?: string
+    phone: string
+    networkId: string
+    networkName: string
+    amount: number
+    status: string
+    isRefunded: boolean
+    reference: string
+    date: string
+  }>
+  recentSims?: Array<{
     phone: string
     network: string
     lastDataDate?: string | null
@@ -69,7 +83,8 @@ export function SimTroubleshootStation({
   walletBalance: initialWalletBalance,
   servers,
   availablePlans,
-  recentSims,
+  recentTransactions = [],
+  recentSims = [],
 }: SimTroubleshootStationProps) {
   // Navigation Mode: Single SIM vs Bulk Multi-SIM
   const [activeTab, setActiveTab] = useState<"single" | "bulk">("single")
@@ -1187,44 +1202,246 @@ export function SimTroubleshootStation({
             </Card>
           )}
 
-          {/* Quick Access to Recently Recharged SIMs */}
-          {recentSims && recentSims.length > 0 && (
+          {/* Recent Transactions Section (Last 15 Records) */}
+          {recentTransactions && recentTransactions.length > 0 && (
             <Card className="border shadow-xs">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-bold text-gray-800 flex items-center gap-1.5">
-                  <Clock className="w-4 h-4 text-gray-500" />
-                  Recently Recharged SIM Numbers
-                </CardTitle>
-                <CardDescription className="text-xs">
-                  Click any previously recharged SIM to pull up its live history and recharge it instantly:
-                </CardDescription>
+              <CardHeader className="pb-3 border-b bg-slate-50/50">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div>
+                    <CardTitle className="text-sm sm:text-base font-bold text-gray-900 flex items-center gap-2">
+                      <History className="w-4 h-4 text-blue-600" />
+                      Recent Transactions
+                    </CardTitle>
+                    <CardDescription className="text-xs text-gray-500 mt-0.5">
+                      Last 15 SIM recharge orders. Click any phone number or row to inspect that SIM in the station:
+                    </CardDescription>
+                  </div>
+                  <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200 self-start sm:self-auto">
+                    {recentTransactions.length} recent records
+                  </span>
+                </div>
+
+                {/* Quick 1-click SIM chips if available */}
+                {recentSims && recentSims.length > 0 && (
+                  <div className="pt-3 flex flex-wrap items-center gap-1.5 border-t border-slate-200/60 mt-2">
+                    <span className="text-[11px] font-semibold text-gray-500 mr-1 flex items-center gap-1">
+                      <Zap className="w-3 h-3 text-amber-500" /> Quick SIMs:
+                    </span>
+                    {recentSims.slice(0, 8).map((sim) => {
+                      const net = NETWORK_META[sim.network] || {
+                        label: "NET",
+                        bg: "bg-gray-100",
+                        text: "text-gray-800",
+                        border: "border-gray-200",
+                      }
+                      return (
+                        <button
+                          key={sim.phone}
+                          type="button"
+                          onClick={() => {
+                            if (receipt) setReceipt(null)
+                            handlePhoneLookup(sim.phone)
+                            window.scrollTo({ top: 0, behavior: "smooth" })
+                          }}
+                          className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md border bg-white hover:bg-blue-50 hover:border-blue-300 transition-colors text-[11px]"
+                          title="Click to load this SIM in the diagnostic station"
+                        >
+                          <span className={`px-1 py-0.1 rounded-xs text-[9px] font-bold border ${net.bg} ${net.text} ${net.border}`}>
+                            {net.label}
+                          </span>
+                          <span className="font-mono font-bold text-gray-800">{sim.phone}</span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
               </CardHeader>
-              <CardContent>
-                <div className="flex flex-wrap gap-2">
-                  {recentSims.map((sim) => {
-                    const net = NETWORK_META[sim.network] || {
-                      label: "NET",
-                      bg: "bg-gray-100",
-                      text: "text-gray-800",
-                      border: "border-gray-200",
-                    }
+              <CardContent className="p-0">
+                {/* Mobile View (Cards) */}
+                <div className="divide-y md:hidden">
+                  {recentTransactions.map((tx) => {
+                    const dt = format12HourDateTime(tx.date)
+                    const net = NETWORK_META[tx.networkId]
                     return (
-                      <button
-                        key={sim.phone}
-                        type="button"
+                      <div
+                        key={tx.id}
                         onClick={() => {
                           if (receipt) setReceipt(null)
-                          handlePhoneLookup(sim.phone)
+                          handlePhoneLookup(tx.phone)
+                          window.scrollTo({ top: 0, behavior: "smooth" })
                         }}
-                        className="flex items-center gap-2 px-3 py-1.5 rounded-lg border bg-slate-50 hover:bg-blue-50 hover:border-blue-300 transition-colors text-xs"
+                        className="p-3.5 space-y-2 hover:bg-slate-50 transition-colors cursor-pointer"
                       >
-                        <span className={`px-1.5 py-0.2 rounded-sm text-[10px] font-bold border ${net.bg} ${net.text} ${net.border}`}>
-                          {net.label}
-                        </span>
-                        <span className="font-mono font-bold text-gray-800">{sim.phone}</span>
-                      </button>
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-1.5">
+                              <span
+                                className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                                  tx.type === "DATA"
+                                    ? "bg-blue-100 text-blue-800"
+                                    : "bg-indigo-100 text-indigo-800"
+                                }`}
+                              >
+                                {tx.type}
+                              </span>
+                              {net && (
+                                <span className={`px-1.5 py-0.2 rounded text-[10px] font-bold border ${net.bg} ${net.text} ${net.border}`}>
+                                  {net.label}
+                                </span>
+                              )}
+                              <span className="font-mono font-bold text-xs text-gray-900">
+                                {tx.phone}
+                              </span>
+                            </div>
+                            <div className="text-xs text-gray-600 font-medium truncate max-w-[200px]">
+                              {tx.label}
+                            </div>
+                          </div>
+
+                          <div className="text-right shrink-0">
+                            <div className="font-black text-xs text-gray-900">
+                              ₦{tx.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                            </div>
+                            <div className="mt-1">
+                              {tx.status === "SUCCESS" ? (
+                                <span className="inline-block text-[10px] font-bold px-1.5 py-0.2 rounded bg-green-100 text-green-800">
+                                  SUCCESS
+                                </span>
+                              ) : tx.isRefunded || tx.status === "FAILED" ? (
+                                <span className="inline-block text-[10px] font-bold px-1.5 py-0.2 rounded bg-rose-100 text-rose-800 border border-rose-200">
+                                  REFUNDED
+                                </span>
+                              ) : (
+                                <span className="inline-block text-[10px] font-bold px-1.5 py-0.2 rounded bg-amber-100 text-amber-800 border border-amber-200">
+                                  PROCESSING
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-between text-[11px] text-gray-400 pt-1 border-t border-gray-100">
+                          <span className="font-mono truncate max-w-[150px]">{tx.reference}</span>
+                          <span className="font-medium text-gray-600">{dt.full}</span>
+                        </div>
+                      </div>
                     )
                   })}
+                </div>
+
+                {/* Desktop View (Table matching Transaction History) */}
+                <div className="hidden md:block overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-slate-50 border-b text-gray-500 font-semibold">
+                      <tr>
+                        <th className="py-3 px-4">Type & Plan</th>
+                        <th className="py-3 px-4">Network</th>
+                        <th className="py-3 px-4">Recipient SIM</th>
+                        <th className="py-3 px-4">Reference</th>
+                        <th className="py-3 px-4">Amount</th>
+                        <th className="py-3 px-4">Status</th>
+                        <th className="py-3 px-4">Date & Time (12h)</th>
+                        <th className="py-3 px-4 text-right">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {recentTransactions.map((tx) => {
+                        const dt = format12HourDateTime(tx.date)
+                        const net = NETWORK_META[tx.networkId]
+                        return (
+                          <tr key={tx.id} className="hover:bg-slate-50/80 transition-colors">
+                            <td className="py-3 px-4">
+                              <span
+                                className={`px-2 py-0.5 rounded text-[11px] font-bold ${
+                                  tx.type === "DATA"
+                                    ? "bg-blue-100 text-blue-800"
+                                    : "bg-indigo-100 text-indigo-800"
+                                }`}
+                              >
+                                {tx.type}
+                              </span>
+                              <div className="text-[11px] text-gray-600 font-medium mt-0.5 truncate max-w-[170px]">
+                                {tx.label}
+                              </div>
+                            </td>
+
+                            <td className="py-3 px-4">
+                              {net ? (
+                                <span className={`px-2 py-0.5 rounded text-xs font-bold border ${net.bg} ${net.text} ${net.border}`}>
+                                  {net.label}
+                                </span>
+                              ) : (
+                                <span className="text-gray-400">—</span>
+                              )}
+                            </td>
+
+                            <td className="py-3 px-4">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (receipt) setReceipt(null)
+                                  handlePhoneLookup(tx.phone)
+                                  window.scrollTo({ top: 0, behavior: "smooth" })
+                                }}
+                                className="font-mono font-bold text-blue-600 hover:text-blue-800 hover:underline"
+                                title="Inspect this SIM in station"
+                              >
+                                {tx.phone}
+                              </button>
+                            </td>
+
+                            <td className="py-3 px-4 font-mono text-gray-500 text-[11px]">
+                              {tx.reference}
+                            </td>
+
+                            <td className="py-3 px-4 font-bold text-gray-900">
+                              ₦{tx.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                            </td>
+
+                            <td className="py-3 px-4">
+                              {tx.status === "SUCCESS" ? (
+                                <span className="px-2 py-0.5 rounded text-xs font-bold bg-green-100 text-green-800">
+                                  SUCCESS
+                                </span>
+                              ) : tx.isRefunded || tx.status === "FAILED" ? (
+                                <span
+                                  className="px-2 py-0.5 rounded text-xs font-bold bg-rose-100 text-rose-800 border border-rose-200 inline-flex items-center gap-1"
+                                  title="Transaction failed & funds refunded"
+                                >
+                                  REFUNDED
+                                </span>
+                              ) : (
+                                <span className="px-2 py-0.5 rounded text-xs font-bold bg-amber-100 text-amber-800 border border-amber-200">
+                                  PROCESSING
+                                </span>
+                              )}
+                            </td>
+
+                            <td className="py-3 px-4">
+                              <div className="font-medium text-gray-800">{dt.dateStr}</div>
+                              <div className="text-[11px] font-mono text-gray-500">{dt.timeStr}</div>
+                            </td>
+
+                            <td className="py-3 px-4 text-right">
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                onClick={() => {
+                                  if (receipt) setReceipt(null)
+                                  handlePhoneLookup(tx.phone)
+                                  window.scrollTo({ top: 0, behavior: "smooth" })
+                                }}
+                                className="h-7 text-[11px] font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 border-blue-200"
+                              >
+                                Inspect SIM
+                              </Button>
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
                 </div>
               </CardContent>
             </Card>

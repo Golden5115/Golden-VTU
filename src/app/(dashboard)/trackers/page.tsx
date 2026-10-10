@@ -4,6 +4,8 @@ import prisma from "@/lib/prisma"
 import { getActiveServers, resolveServerAndProvider } from "@/services/providers/provider.factory"
 import { SimTroubleshootStation } from "./SimTroubleshootStation"
 
+import { NETWORKS } from "@/lib/phone-utils"
+
 export default async function TrackersPage() {
   const session = await auth()
   if (!session?.user?.id) redirect("/login")
@@ -23,21 +25,55 @@ export default async function TrackersPage() {
     console.error("[TrackersPage] Failed to fetch data plans for quick top-up:", err)
   }
 
-  // Fetch recent distinct SIMs from transactions for instant 1-click access
+  // Fetch recent 15 transactions for the user
   const [recentData, recentAirtime] = await Promise.all([
     prisma.dataPurchase.findMany({
-      where: { status: "SUCCESS" },
-      select: { phone: true, network: true, createdAt: true },
+      where: { userId: session.user.id },
       orderBy: { createdAt: "desc" },
-      take: 25,
+      take: 20,
     }),
     prisma.airtimePurchase.findMany({
-      where: { status: "SUCCESS" },
-      select: { phone: true, network: true, createdAt: true },
+      where: { userId: session.user.id },
       orderBy: { createdAt: "desc" },
-      take: 25,
+      take: 20,
     }),
   ])
+
+  const recentTransactions = [
+    ...recentData.map((d) => ({
+      id: d.id,
+      type: "DATA" as const,
+      label: `Data Bundle (${d.plan})`,
+      planName: d.plan,
+      phone: d.phone,
+      networkId: d.network,
+      networkName: NETWORKS[d.network]?.name || d.network,
+      amount: d.amount,
+      status: d.status,
+      isRefunded: d.status === "FAILED",
+      reference: d.reference,
+      date: d.createdAt.toISOString(),
+      rawDate: d.createdAt.getTime(),
+    })),
+    ...recentAirtime.map((a) => ({
+      id: a.id,
+      type: "AIRTIME" as const,
+      label: "Airtime Top-up",
+      planName: `₦${a.amount} Airtime`,
+      phone: a.phone,
+      networkId: a.network,
+      networkName: NETWORKS[a.network]?.name || a.network,
+      amount: a.amount,
+      status: a.status,
+      isRefunded: a.status === "FAILED",
+      reference: a.reference,
+      date: a.createdAt.toISOString(),
+      rawDate: a.createdAt.getTime(),
+    })),
+  ]
+    .sort((a, b) => b.rawDate - a.rawDate)
+    .slice(0, 15)
+    .map(({ rawDate, ...rest }) => rest)
 
   // Aggregate distinct phone numbers
   const simMap = new Map<string, { phone: string; network: string; lastDate: Date }>()
@@ -66,6 +102,7 @@ export default async function TrackersPage() {
       walletBalance={walletBalance}
       servers={servers}
       availablePlans={availablePlans}
+      recentTransactions={recentTransactions}
       recentSims={recentSims}
     />
   )

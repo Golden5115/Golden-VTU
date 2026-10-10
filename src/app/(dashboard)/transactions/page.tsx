@@ -15,7 +15,7 @@ export default async function TransactionsPage() {
 
   const [walletTxs, airtimeTxs, dataTxs] = await Promise.all([
     prisma.walletTransaction.findMany({
-      where: { userId: session.user.id },
+      where: { userId: session.user.id, type: "CREDIT" },
       orderBy: { createdAt: "desc" },
       take: 60,
     }),
@@ -34,7 +34,7 @@ export default async function TransactionsPage() {
   type UnifiedTx = {
     id: string
     reference: string
-    type: "WALLET_CREDIT" | "WALLET_DEBIT" | "AIRTIME" | "DATA"
+    type: "WALLET_CREDIT" | "AIRTIME" | "DATA"
     label: string
     phone?: string
     networkId?: string
@@ -49,14 +49,14 @@ export default async function TransactionsPage() {
     ...walletTxs.map((tx) => ({
       id: tx.id,
       reference: tx.reference,
-      type: (tx.type === "CREDIT" ? "WALLET_CREDIT" : "WALLET_DEBIT") as UnifiedTx["type"],
-      label: tx.type === "CREDIT" ? "Wallet Deposit / Credit" : "Wallet Debit",
+      type: "WALLET_CREDIT" as const,
+      label: "Wallet Deposit",
       phone: undefined,
       networkId: undefined,
       networkName: undefined,
       amount: tx.amount,
       status: tx.status,
-      isRefunded: tx.status === "FAILED",
+      isRefunded: false,
       date: tx.createdAt,
     })),
     ...airtimeTxs.map((tx) => ({

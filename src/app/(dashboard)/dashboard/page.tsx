@@ -79,7 +79,7 @@ export default async function DashboardPage({
       take: 6,
     }),
     prisma.walletTransaction.findMany({
-      where: { userId: session.user.id },
+      where: { userId: session.user.id, type: "CREDIT" },
       orderBy: { createdAt: "desc" },
       take: 6,
     }),
