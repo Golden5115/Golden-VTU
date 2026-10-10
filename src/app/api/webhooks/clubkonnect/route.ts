@@ -113,12 +113,8 @@ export async function POST(request: NextRequest) {
 // ─── Handlers ───────────────────────────────────────────────────────────────────
 
 async function handleAirtimeCallback(purchase: any, isSuccess: boolean) {
-  if (purchase.status !== "PENDING") {
-    console.log(`[ClubKonnect] Airtime purchase ${purchase.id} already processed (${purchase.status}). Skipping.`)
-    return
-  }
-
   if (isSuccess) {
+    if (purchase.status === "SUCCESS") return
     // Mark as SUCCESS
     await prisma.$transaction(async (tx: any) => {
       await tx.airtimePurchase.update({
@@ -132,7 +128,8 @@ async function handleAirtimeCallback(purchase: any, isSuccess: boolean) {
     })
     console.log(`[ClubKonnect] Airtime purchase ${purchase.id} marked SUCCESS`)
   } else {
-    // Mark as FAILED and refund
+    // If not successful and not yet marked FAILED, refund the user!
+    if (purchase.status === "FAILED") return
     await prisma.$transaction(async (tx: any) => {
       await tx.airtimePurchase.update({
         where: { id: purchase.id },
@@ -142,23 +139,19 @@ async function handleAirtimeCallback(purchase: any, isSuccess: boolean) {
         where: { reference: purchase.reference },
         data: { status: "FAILED" },
       })
-      // Refund user
+      // Refund user wallet
       await tx.user.update({
         where: { id: purchase.userId },
         data: { walletBalance: { increment: purchase.amount } },
       })
     })
-    console.log(`[ClubKonnect] Airtime purchase ${purchase.id} FAILED. User refunded ₦${purchase.amount}`)
+    console.log(`[ClubKonnect] Airtime purchase ${purchase.id} marked FAILED. User refunded ₦${purchase.amount}`)
   }
 }
 
 async function handleDataCallback(purchase: any, isSuccess: boolean) {
-  if (purchase.status !== "PENDING") {
-    console.log(`[ClubKonnect] Data purchase ${purchase.id} already processed (${purchase.status}). Skipping.`)
-    return
-  }
-
   if (isSuccess) {
+    if (purchase.status === "SUCCESS") return
     await prisma.$transaction(async (tx: any) => {
       await tx.dataPurchase.update({
         where: { id: purchase.id },
@@ -171,6 +164,7 @@ async function handleDataCallback(purchase: any, isSuccess: boolean) {
     })
     console.log(`[ClubKonnect] Data purchase ${purchase.id} marked SUCCESS`)
   } else {
+    if (purchase.status === "FAILED") return
     await prisma.$transaction(async (tx: any) => {
       await tx.dataPurchase.update({
         where: { id: purchase.id },
@@ -185,6 +179,6 @@ async function handleDataCallback(purchase: any, isSuccess: boolean) {
         data: { walletBalance: { increment: purchase.amount } },
       })
     })
-    console.log(`[ClubKonnect] Data purchase ${purchase.id} FAILED. User refunded ₦${purchase.amount}`)
+    console.log(`[ClubKonnect] Data purchase ${purchase.id} marked FAILED. User refunded ₦${purchase.amount}`)
   }
 }

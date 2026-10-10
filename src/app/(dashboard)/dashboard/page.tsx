@@ -8,6 +8,7 @@ import { CreditCard, Car, Wifi, ShieldAlert, Clock, ArrowRight, Plus } from "luc
 import { verifyPayment } from "@/services/paystack.service"
 import { getTrackers } from "@/actions/tracker.actions"
 import { Button } from "@/components/ui/button"
+import { NETWORKS, format12HourDateTime } from "@/lib/phone-utils"
 
 export default async function DashboardPage({
   searchParams,
@@ -66,11 +67,64 @@ export default async function DashboardPage({
 
   const { trackers, metrics } = await getTrackers()
 
-  const transactions = await prisma.walletTransaction.findMany({
-    where: { userId: session.user.id },
-    orderBy: { createdAt: "desc" },
-    take: 5,
-  })
+  const [airtimeList, dataList, walletList] = await Promise.all([
+    prisma.airtimePurchase.findMany({
+      where: { userId: session.user.id },
+      orderBy: { createdAt: "desc" },
+      take: 6,
+    }),
+    prisma.dataPurchase.findMany({
+      where: { userId: session.user.id },
+      orderBy: { createdAt: "desc" },
+      take: 6,
+    }),
+    prisma.walletTransaction.findMany({
+      where: { userId: session.user.id },
+      orderBy: { createdAt: "desc" },
+      take: 6,
+    }),
+  ])
+
+  const recentUnified = [
+    ...walletList.map((tx) => ({
+      id: tx.id,
+      type: tx.type === "CREDIT" ? "TOP-UP" : "DEBIT",
+      label: tx.type === "CREDIT" ? "Wallet Deposit" : "Wallet Debit",
+      phone: null as string | null,
+      network: null as string | null,
+      networkId: null as string | null,
+      amount: tx.amount,
+      status: tx.status,
+      isRefunded: tx.status === "FAILED",
+      date: tx.createdAt,
+    })),
+    ...airtimeList.map((tx) => ({
+      id: tx.id,
+      type: "AIRTIME",
+      label: "Airtime Recharge",
+      phone: tx.phone,
+      network: NETWORKS[tx.network]?.name || tx.network,
+      networkId: tx.network,
+      amount: tx.amount,
+      status: tx.status,
+      isRefunded: tx.status === "FAILED",
+      date: tx.createdAt,
+    })),
+    ...dataList.map((tx) => ({
+      id: tx.id,
+      type: "DATA",
+      label: `Data (${tx.plan})`,
+      phone: tx.phone,
+      network: NETWORKS[tx.network]?.name || tx.network,
+      networkId: tx.network,
+      amount: tx.amount,
+      status: tx.status,
+      isRefunded: tx.status === "FAILED",
+      date: tx.createdAt,
+    })),
+  ]
+    .sort((a, b) => b.date.getTime() - a.date.getTime())
+    .slice(0, 6)
 
   // Critical trackers needing immediate attention
   const urgentTrackers = trackers.filter((t) => t.isDataExpired || t.isExpiringSoon)
@@ -253,42 +307,90 @@ export default async function DashboardPage({
 
         {/* Recent Transactions Card */}
         <Card className="col-span-1 lg:col-span-3 shadow-xs">
-          <CardHeader className="flex flex-row items-center justify-between">
+          <CardHeader className="flex flex-row items-center justify-between pb-3">
             <div>
               <CardTitle className="text-base text-gray-900">Recent Transactions</CardTitle>
-              <CardDescription>Wallet funding & VTU recharges</CardDescription>
+              <CardDescription>Latest data, airtime & wallet activity</CardDescription>
             </div>
-            <Link href="/transactions" className="text-xs font-semibold text-blue-600 hover:underline">
-              All
+            <Link href="/transactions" className="text-xs font-semibold text-blue-600 hover:underline flex items-center">
+              View All
+              <ArrowRight className="w-3.5 h-3.5 ml-1" />
             </Link>
           </CardHeader>
           <CardContent>
-            {transactions.length === 0 ? (
+            {recentUnified.length === 0 ? (
               <div className="text-center py-8 text-xs text-muted-foreground">
                 No recent transactions
               </div>
             ) : (
               <div className="space-y-3">
-                {transactions.map((tx: any) => (
-                  <div key={tx.id} className="flex items-center justify-between text-xs py-1.5 border-b last:border-0">
-                    <div>
-                      <span
-                        className={`px-2 py-0.5 rounded-full font-semibold mr-2 ${
-                          tx.type === "CREDIT" ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"
-                        }`}
-                      >
-                        {tx.type}
-                      </span>
-                      <span className="font-mono text-gray-500 truncate max-w-[100px] inline-block align-middle">
-                        {tx.reference.slice(0, 12)}...
-                      </span>
+                {recentUnified.map((tx) => {
+                  const dt = format12HourDateTime(tx.date)
+                  return (
+                    <div key={tx.id} className="p-2.5 rounded-lg border bg-slate-50/60 hover:bg-slate-50 transition-colors space-y-1.5 text-xs">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5">
+                          <span
+                            className={`px-1.5 py-0.2 rounded text-[10px] font-bold ${
+                              tx.type === "TOP-UP"
+                                ? "bg-emerald-100 text-emerald-800"
+                                : tx.type === "DATA"
+                                ? "bg-blue-100 text-blue-800"
+                                : tx.type === "AIRTIME"
+                                ? "bg-indigo-100 text-indigo-800"
+                                : "bg-gray-100 text-gray-800"
+                            }`}
+                          >
+                            {tx.type}
+                          </span>
+                          {tx.network && (
+                            <span
+                              className={`px-1.5 py-0.2 rounded text-[10px] font-bold ${
+                                tx.networkId === "01"
+                                  ? "bg-amber-100 text-amber-900"
+                                  : tx.networkId === "04"
+                                  ? "bg-red-100 text-red-900"
+                                  : tx.networkId === "02"
+                                  ? "bg-emerald-100 text-emerald-900"
+                                  : "bg-teal-100 text-teal-900"
+                              }`}
+                            >
+                              {tx.network}
+                            </span>
+                          )}
+                          {tx.phone && (
+                            <span className="font-mono text-xs font-bold text-gray-800">
+                              {tx.phone}
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="font-bold text-gray-900">
+                          ₦{tx.amount.toFixed(2)}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between text-[11px] text-gray-500 pt-1 border-t border-gray-200/50">
+                        <span className="font-medium text-gray-600">{dt.full}</span>
+                        <div>
+                          {tx.status === "SUCCESS" ? (
+                            <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
+                              SUCCESS
+                            </span>
+                          ) : tx.isRefunded || tx.status === "FAILED" ? (
+                            <span className="text-[10px] font-bold text-rose-700 bg-rose-50 px-1.5 py-0.5 rounded border border-rose-200">
+                              REFUNDED
+                            </span>
+                          ) : (
+                            <span className="text-[10px] font-bold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
+                              PROCESSING
+                            </span>
+                          )}
+                        </div>
+                      </div>
                     </div>
-                    <div className="text-right">
-                      <div className="font-bold text-gray-900">₦{tx.amount.toFixed(2)}</div>
-                      <div className="text-[10px] text-gray-400">{new Date(tx.createdAt).toLocaleDateString()}</div>
-                    </div>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             )}
           </CardContent>

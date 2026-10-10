@@ -107,18 +107,25 @@ export class ClubKonnectProvider implements IVtuProvider {
     }
 
     // 2. Pending / Queued by carrier: Code 100 (ORDER_RECEIVED), Code 300 (ORDER_PROCESSING)
-    if (code === "100" || code === "300" || statusText === "ORDER_RECEIVED") {
+    if (code === "100" || code === "300" || statusText === "ORDER_RECEIVED" || statusText === "ORDER_PROCESSING") {
       return {
-        isSuccessful: true,
+        isSuccessful: false,
         isPending: true,
         providerReference: data.orderid || reference,
         rawResponse: data,
       }
     }
 
-    // 3. Known Carrier Network Unresponsive: Code 201
-    if (code === "201" || remark.includes("network unresponsive")) {
-      throw new Error(`Carrier Rejected: Network Unresponsive (Code 201). Please verify the recipient network.`)
+    // 3. Known Carrier Cancellation / Refund / Network Unresponsive
+    if (
+      code === "201" ||
+      remark.includes("network unresponsive") ||
+      remark.includes("refund") ||
+      statusText.includes("REFUND") ||
+      statusText.includes("CANCEL") ||
+      remark.includes("cancel")
+    ) {
+      throw new Error(`Carrier Rejected: Network Unresponsive or Cancelled/Refunded (Code ${code || "201"}).`)
     }
 
     // 4. Known Carrier Cancellation: 500-599
@@ -164,18 +171,25 @@ export class ClubKonnectProvider implements IVtuProvider {
     }
 
     // 2. Pending / Queued by carrier: Code 100 (ORDER_RECEIVED), Code 300 (ORDER_PROCESSING)
-    if (code === "100" || code === "300" || statusText === "ORDER_RECEIVED") {
+    if (code === "100" || code === "300" || statusText === "ORDER_RECEIVED" || statusText === "ORDER_PROCESSING") {
       return {
-        isSuccessful: true,
+        isSuccessful: false,
         isPending: true,
         providerReference: data.orderid || reference,
         rawResponse: data,
       }
     }
 
-    // 3. Known Carrier Network Unresponsive: Code 201 (e.g. wrong telco network)
-    if (code === "201" || remark.includes("network unresponsive")) {
-      throw new Error(`Carrier Rejected: Network Unresponsive (Code 201). Please verify the recipient network.`)
+    // 3. Known Carrier Cancellation / Refund / Network Unresponsive
+    if (
+      code === "201" ||
+      remark.includes("network unresponsive") ||
+      remark.includes("refund") ||
+      statusText.includes("REFUND") ||
+      statusText.includes("CANCEL") ||
+      remark.includes("cancel")
+    ) {
+      throw new Error(`Carrier Rejected: Network Unresponsive or Cancelled/Refunded (Code ${code || "201"}).`)
     }
 
     // 4. Known Carrier Cancellation: 500-599 (e.g. 520: Invalid network user)
@@ -225,6 +239,10 @@ export class ClubKonnectProvider implements IVtuProvider {
       (code.startsWith("6") && code.length === 3)
     const isFailed =
       code === "201" ||
+      status.includes("REFUND") ||
+      status.includes("CANCEL") ||
+      remark.toLowerCase().includes("refund") ||
+      remark.toLowerCase().includes("cancel") ||
       (code.startsWith("4") && code.length === 3) ||
       (code.startsWith("5") && code.length === 3)
 

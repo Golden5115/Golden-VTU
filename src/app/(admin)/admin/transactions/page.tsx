@@ -4,6 +4,7 @@ import prisma from "@/lib/prisma"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { LiveStatusButton } from "@/components/vtu/LiveStatusButton"
+import { format12HourDateTime } from "@/lib/phone-utils"
 
 export const dynamic = "force-dynamic"
 
@@ -54,7 +55,19 @@ export default async function AdminTransactionsPage() {
                   <TableCell className="font-mono text-xs text-muted-foreground">{tx.reference}</TableCell>
                   <TableCell>
                     <div className="flex items-center gap-1.5">
-                      <span className="font-semibold">{tx.status}</span>
+                      {tx.status === "SUCCESS" ? (
+                        <span className="font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 text-xs">
+                          SUCCESS
+                        </span>
+                      ) : tx.status === "FAILED" ? (
+                        <span className="font-semibold text-rose-700 bg-rose-50 px-2 py-0.5 rounded border border-rose-200 text-xs">
+                          REFUNDED
+                        </span>
+                      ) : (
+                        <span className="font-semibold text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200 text-xs">
+                          {tx.status}
+                        </span>
+                      )}
                       <LiveStatusButton
                         reference={tx.reference}
                         currentStatus={tx.status}
@@ -62,7 +75,9 @@ export default async function AdminTransactionsPage() {
                       />
                     </div>
                   </TableCell>
-                  <TableCell className="text-right">{tx.createdAt.toLocaleDateString()} {tx.createdAt.toLocaleTimeString()}</TableCell>
+                  <TableCell className="text-right text-xs">
+                    <span className="font-medium text-gray-800">{format12HourDateTime(tx.createdAt).full}</span>
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>

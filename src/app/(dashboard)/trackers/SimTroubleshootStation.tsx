@@ -31,6 +31,7 @@ import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { checkSimHistory, SimDiagnosticHistory } from "@/actions/sim-history.actions"
 import { BulkPhoneInputWithHistory } from "@/components/vtu/BulkPhoneInputWithHistory"
+import { format12HourDateTime } from "@/lib/phone-utils"
 
 interface SimTroubleshootStationProps {
   walletBalance: number
@@ -583,9 +584,9 @@ export function SimTroubleshootStation({
                   </div>
 
                   <div className="flex items-center justify-between pt-1">
-                    <span className="text-gray-500 font-medium">Date & Time</span>
-                    <span className="text-gray-700 text-xs font-medium">
-                      {receipt.date.toLocaleString()}
+                    <span className="text-gray-500 font-medium">Date & Time (12h)</span>
+                    <span className="text-gray-900 text-xs font-semibold">
+                      {format12HourDateTime(receipt.date).full}
                     </span>
                   </div>
                 </div>
@@ -947,6 +948,14 @@ export function SimTroubleshootStation({
                     {/* ACTION A: BUY DATA FORM */}
                     {selectedAction === "data" && (
                       <div className="space-y-4 pt-1">
+                        {!historyData?.network && (
+                          <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-center gap-2.5">
+                            <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                            <span>
+                              <strong>Network not detected:</strong> Please select the correct mobile network below for <span className="font-mono font-bold">{phone}</span> to avoid cross-carrier delivery failure.
+                            </span>
+                          </div>
+                        )}
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                           <div>
                             <label className="text-xs font-semibold text-gray-700">Mobile Network</label>
@@ -1158,15 +1167,15 @@ export function SimTroubleshootStation({
                                 {tx.status === "SUCCESS"
                                   ? "✓ Success"
                                   : tx.status === "PENDING"
-                                  ? "⏳ Pending"
-                                  : "✗ Failed"}
+                                  ? "⏳ Processing"
+                                  : "↩ Refunded"}
                               </span>
                             </div>
                             <div className="text-right">
                               <span className={`font-bold mr-2 ${tx.status === "FAILED" ? "line-through text-gray-400" : "text-gray-900"}`}>
                                 ₦{tx.amount.toLocaleString()}
                               </span>
-                              <span className="text-gray-400 text-[11px]">{new Date(tx.date).toLocaleDateString()}</span>
+                              <span className="text-gray-500 text-[11px] font-medium">{format12HourDateTime(tx.date).full}</span>
                             </div>
                           </div>
                         ))}

@@ -104,7 +104,7 @@ export async function purchaseAirtime(
         getCallbackUrl(provider.identifier)
       )
 
-      const isCompleted = response.isSuccessful
+      const isCompleted = Boolean(response.isSuccessful && !response.isPending)
 
       await prisma.$transaction(async (tx: any) => {
         await tx.airtimePurchase.update({
@@ -280,7 +280,7 @@ export async function purchaseData(
         getCallbackUrl(provider.identifier)
       )
 
-      const isCompleted = response.isSuccessful
+      const isCompleted = Boolean(response.isSuccessful && !response.isPending)
 
       await prisma.$transaction(async (tx: any) => {
         await tx.dataPurchase.update({
