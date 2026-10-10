@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import {
   Wifi,
   Smartphone,
@@ -86,12 +87,28 @@ export function SimTroubleshootStation({
   recentTransactions = [],
   recentSims = [],
 }: SimTroubleshootStationProps) {
+  const router = useRouter()
+  const [isReconciling, setIsReconciling] = useState(false)
+
   // Navigation Mode: Single SIM vs Bulk Multi-SIM
   const [activeTab, setActiveTab] = useState<"single" | "bulk">("single")
 
   // Shared Wallet Balance
   const [walletBalance, setWalletBalance] = useState(initialWalletBalance)
   const [selectedServerId, setSelectedServerId] = useState(servers[0]?.id || "")
+
+  // Reconcile pending orders live with telecom carrier
+  async function handleSyncStatus() {
+    setIsReconciling(true)
+    try {
+      await fetch("/api/vtu/reconcile-pending", { method: "POST" })
+      router.refresh()
+    } catch (err) {
+      console.warn("[SimStation] Sync status error:", err)
+    } finally {
+      setIsReconciling(false)
+    }
+  }
 
   // ==========================================
   // 1. SINGLE SIM STATE
@@ -244,6 +261,12 @@ export function SimTroubleshootStation({
         walletBalanceBefore: walletBalance,
         walletBalanceAfter: newBal,
       })
+
+      // Auto-sync status and update SIM diagnostic telemetry after 3s
+      setTimeout(() => {
+        handleSyncStatus()
+        handlePhoneLookup(phone)
+      }, 3000)
     } catch (e: any) {
       setFeedback({ type: "error", message: e.message || "Failed to load airtime." })
     } finally {
@@ -315,6 +338,12 @@ export function SimTroubleshootStation({
       })
 
       setSelectedPlanValue("")
+
+      // Auto-sync status and update SIM diagnostic telemetry after 3s
+      setTimeout(() => {
+        handleSyncStatus()
+        handlePhoneLookup(phone)
+      }, 3000)
     } catch (e: any) {
       setFeedback({ type: "error", message: e.message || "Failed to purchase data." })
     } finally {
@@ -399,6 +428,11 @@ export function SimTroubleshootStation({
 
       setBulkBatchResults(data)
       setWalletBalance((prev) => Math.max(0, prev - unitCost * (data.successCount || 0)))
+
+      // Auto-sync status for all batch numbers after 3s
+      setTimeout(() => {
+        handleSyncStatus()
+      }, 3000)
     } catch (err: any) {
       setBulkFeedback({ type: "error", message: err.message || "Failed to process bulk recharge." })
     } finally {
@@ -1216,9 +1250,23 @@ export function SimTroubleshootStation({
                       Last 15 SIM recharge orders. Click any phone number or row to inspect that SIM in the station:
                     </CardDescription>
                   </div>
-                  <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200 self-start sm:self-auto">
-                    {recentTransactions.length} recent records
-                  </span>
+                  <div className="flex items-center gap-2 self-start sm:self-auto">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={handleSyncStatus}
+                      disabled={isReconciling}
+                      className="h-7 text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 border-blue-200 flex items-center gap-1.5"
+                      title="Sync live status with carrier network"
+                    >
+                      <RefreshCw className={`w-3 h-3 ${isReconciling ? "animate-spin" : ""}`} />
+                      {isReconciling ? "Syncing..." : "Sync Live Status"}
+                    </Button>
+                    <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
+                      {recentTransactions.length} recent records
+                    </span>
+                  </div>
                 </div>
 
                 {/* Quick 1-click SIM chips if available */}
@@ -1312,9 +1360,19 @@ export function SimTroubleshootStation({
                                   REFUNDED
                                 </span>
                               ) : (
-                                <span className="inline-block text-[10px] font-bold px-1.5 py-0.2 rounded bg-amber-100 text-amber-800 border border-amber-200">
-                                  PROCESSING
-                                </span>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    handleSyncStatus()
+                                  }}
+                                  disabled={isReconciling}
+                                  title="Click to check live carrier status"
+                                  className="inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.2 rounded bg-amber-100 text-amber-800 border border-amber-200 hover:bg-amber-200"
+                                >
+                                  <RefreshCw className={`w-2.5 h-2.5 ${isReconciling ? "animate-spin" : ""}`} />
+                                  <span>PROCESSING</span>
+                                </button>
                               )}
                             </div>
                           </div>
@@ -1411,9 +1469,16 @@ export function SimTroubleshootStation({
                                   REFUNDED
                                 </span>
                               ) : (
-                                <span className="px-2 py-0.5 rounded text-xs font-bold bg-amber-100 text-amber-800 border border-amber-200">
-                                  PROCESSING
-                                </span>
+                                <button
+                                  type="button"
+                                  onClick={handleSyncStatus}
+                                  disabled={isReconciling}
+                                  title="Click to check live carrier status"
+                                  className="px-2 py-0.5 rounded text-xs font-bold bg-amber-100 text-amber-800 border border-amber-200 hover:bg-amber-200 transition-colors inline-flex items-center gap-1"
+                                >
+                                  <RefreshCw className={`w-3 h-3 ${isReconciling ? "animate-spin" : ""}`} />
+                                  <span>PROCESSING</span>
+                                </button>
                               )}
                             </td>
 

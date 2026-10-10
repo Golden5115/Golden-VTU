@@ -5,10 +5,14 @@ import { getActiveServers, resolveServerAndProvider } from "@/services/providers
 import { SimTroubleshootStation } from "./SimTroubleshootStation"
 
 import { NETWORKS } from "@/lib/phone-utils"
+import { reconcilePendingTransactions } from "@/services/vtu.service"
 
 export default async function TrackersPage() {
   const session = await auth()
   if (!session?.user?.id) redirect("/login")
+
+  // Auto-reconcile pending transactions with carrier
+  await reconcilePendingTransactions(session.user.id)
 
   const user = await prisma.user.findUnique({
     where: { id: session.user.id },

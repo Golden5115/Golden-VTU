@@ -9,6 +9,7 @@ import { verifyPayment } from "@/services/paystack.service"
 import { getTrackers } from "@/actions/tracker.actions"
 import { Button } from "@/components/ui/button"
 import { NETWORKS, format12HourDateTime } from "@/lib/phone-utils"
+import { reconcilePendingTransactions } from "@/services/vtu.service"
 
 export default async function DashboardPage({
   searchParams,
@@ -59,6 +60,9 @@ export default async function DashboardPage({
       console.error("Verification error:", error)
     }
   }
+
+  // Auto-reconcile any pending orders with telecom carrier
+  await reconcilePendingTransactions(userId)
 
   const user = await prisma.user.findUnique({
     where: { id: session.user.id },

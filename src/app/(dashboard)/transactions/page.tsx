@@ -6,12 +6,16 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { ArrowDownLeft, Wifi, Smartphone, CreditCard, AlertCircle } from "lucide-react"
 import { LiveStatusButton } from "@/components/vtu/LiveStatusButton"
 import { NETWORKS, format12HourDateTime } from "@/lib/phone-utils"
+import { reconcilePendingTransactions } from "@/services/vtu.service"
 
 export default async function TransactionsPage() {
   const session = await auth()
   if (!session?.user?.id) redirect("/login")
 
   const isAdmin = (session.user as any)?.role === "ADMIN" || session.user?.email?.toLowerCase() === "ayomide.ayoola6866@gmail.com"
+
+  // Automatically reconcile any pending carrier transactions before rendering
+  await reconcilePendingTransactions(session.user.id)
 
   const [walletTxs, airtimeTxs, dataTxs] = await Promise.all([
     prisma.walletTransaction.findMany({

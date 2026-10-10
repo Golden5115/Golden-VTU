@@ -104,13 +104,32 @@ export async function purchaseAirtime(
         getCallbackUrl(provider.identifier)
       )
 
-      const isCompleted = Boolean(response.isSuccessful && !response.isPending)
+      let isCompleted = Boolean(response.isSuccessful && !response.isPending)
+      let providerReference = response.providerReference
+
+      // If carrier queued it as pending (e.g. ClubKonnect code 100 / ORDER_RECEIVED),
+      // perform a fast-poll after 2.5s since telecom delivery is usually completed in 2-3s
+      if (!isCompleted && typeof (provider as any).queryTransaction === "function") {
+        try {
+          await new Promise((r) => setTimeout(r, 2500))
+          const check = await (provider as any).queryTransaction(providerReference || reference)
+          if (check.isSuccessful) {
+            isCompleted = true
+            providerReference = check.orderId || providerReference
+          } else if (check.isFailed) {
+            throw new Error(`Carrier Rejected: ${check.remark || "Failed to process airtime"}`)
+          }
+        } catch (pollErr: any) {
+          if (pollErr.message?.includes("Carrier Rejected")) throw pollErr
+          console.warn("[VTU Airtime FastPoll] Pending check inconclusive:", pollErr.message)
+        }
+      }
 
       await prisma.$transaction(async (tx: any) => {
         await tx.airtimePurchase.update({
           where: { id: purchase.id },
           data: {
-            providerReference: response.providerReference,
+            providerReference,
             status: isCompleted ? "SUCCESS" : "PENDING",
           },
         })
@@ -146,7 +165,11 @@ export async function purchaseAirtime(
         }
       })
 
-      return purchase
+      return {
+        ...purchase,
+        status: isCompleted ? "SUCCESS" : "PENDING",
+        providerReference,
+      }
     } catch (error: any) {
       console.error(`[VTU] ${provider.identifier} airtime API call failed:`, error.message)
 
@@ -280,13 +303,32 @@ export async function purchaseData(
         getCallbackUrl(provider.identifier)
       )
 
-      const isCompleted = Boolean(response.isSuccessful && !response.isPending)
+      let isCompleted = Boolean(response.isSuccessful && !response.isPending)
+      let providerReference = response.providerReference
+
+      // If carrier queued it as pending (e.g. ClubKonnect code 100 / ORDER_RECEIVED),
+      // perform a fast-poll after 2.5s since telecom delivery is usually completed in 2-3s
+      if (!isCompleted && typeof (provider as any).queryTransaction === "function") {
+        try {
+          await new Promise((r) => setTimeout(r, 2500))
+          const check = await (provider as any).queryTransaction(providerReference || reference)
+          if (check.isSuccessful) {
+            isCompleted = true
+            providerReference = check.orderId || providerReference
+          } else if (check.isFailed) {
+            throw new Error(`Carrier Rejected: ${check.remark || "Failed to process data bundle"}`)
+          }
+        } catch (pollErr: any) {
+          if (pollErr.message?.includes("Carrier Rejected")) throw pollErr
+          console.warn("[VTU Data FastPoll] Pending check inconclusive:", pollErr.message)
+        }
+      }
 
       await prisma.$transaction(async (tx: any) => {
         await tx.dataPurchase.update({
           where: { id: purchase.id },
           data: {
-            providerReference: response.providerReference,
+            providerReference,
             status: isCompleted ? "SUCCESS" : "PENDING",
           },
         })
@@ -328,7 +370,11 @@ export async function purchaseData(
         }
       })
 
-      return purchase
+      return {
+        ...purchase,
+        status: isCompleted ? "SUCCESS" : "PENDING",
+        providerReference,
+      }
     } catch (error: any) {
       console.error(`[VTU] ${provider.identifier} data API call failed:`, error.message)
 
@@ -357,4 +403,182 @@ export async function purchaseData(
       )
     }
   })
+}
+
+/**
+ * Automatically reconcile all PENDING transactions for a user (or globally) by querying
+ * the telecom provider directly. If carrier marked it completed, updates DB to SUCCESS
+ * and activates vehicle tracker telemetry. If carrier cancelled/refunded, refunds wallet.
+ */
+export async function reconcilePendingTransactions(userId?: string) {
+  try {
+    const whereClause: any = { status: "PENDING" }
+    if (userId) whereClause.userId = userId
+
+    // Only inspect orders from the last 48 hours to avoid stale checks
+    const recentWindow = new Date(Date.now() - 48 * 60 * 60 * 1000)
+    whereClause.createdAt = { gte: recentWindow }
+
+    const [pendingData, pendingAirtime] = await Promise.all([
+      prisma.dataPurchase.findMany({
+        where: whereClause,
+        orderBy: { createdAt: "desc" },
+        take: 20,
+      }),
+      prisma.airtimePurchase.findMany({
+        where: whereClause,
+        orderBy: { createdAt: "desc" },
+        take: 20,
+      }),
+    ])
+
+    if (pendingData.length === 0 && pendingAirtime.length === 0) {
+      return { reconciled: 0 }
+    }
+
+    const { provider } = await resolveServerAndProvider()
+    if (typeof (provider as any).queryTransaction !== "function") {
+      return { reconciled: 0 }
+    }
+
+    let reconciledCount = 0
+
+    // 1. Reconcile Data Purchases
+    for (const d of pendingData) {
+      const orderId = d.providerReference || d.reference
+      if (!orderId) continue
+      try {
+        const queryRes = await (provider as any).queryTransaction(orderId)
+        if (queryRes.isSuccessful) {
+          await prisma.$transaction(async (tx: any) => {
+            await tx.dataPurchase.update({
+              where: { id: d.id },
+              data: {
+                status: "SUCCESS",
+                providerReference: queryRes.orderId || d.providerReference,
+              },
+            })
+            await tx.walletTransaction.updateMany({
+              where: { reference: d.reference },
+              data: { status: "SUCCESS" },
+            })
+
+            // Update associated tracker SIM if exists
+            const cleanPhone = d.phone.replace(/[^0-9]/g, "")
+            const localPhone = cleanPhone.startsWith("234") ? "0" + cleanPhone.slice(3) : cleanPhone
+            const tracker = await tx.vehicleTracker.findFirst({
+              where: {
+                userId: d.userId,
+                OR: [{ id: d.trackerId || "" }, { simNumber: localPhone }, { simNumber: cleanPhone }],
+              },
+            })
+
+            if (tracker) {
+              const validityDays = 30
+              const expiryDate = new Date(Date.now() + validityDays * 24 * 60 * 60 * 1000)
+              await tx.vehicleTracker.update({
+                where: { id: tracker.id },
+                data: {
+                  lastDataDate: d.createdAt,
+                  lastDataPlan: d.plan,
+                  lastDataAmount: d.amount,
+                  lastDataRef: d.reference,
+                  dataValidityDays: validityDays,
+                  dataExpiryDate: expiryDate,
+                  status: "ACTIVE",
+                },
+              })
+            }
+          })
+          reconciledCount++
+        } else if (queryRes.isFailed) {
+          await prisma.$transaction(async (tx: any) => {
+            await tx.dataPurchase.update({
+              where: { id: d.id },
+              data: { status: "FAILED" },
+            })
+            await tx.walletTransaction.updateMany({
+              where: { reference: d.reference },
+              data: { status: "FAILED" },
+            })
+            await tx.user.update({
+              where: { id: d.userId },
+              data: { walletBalance: { increment: d.amount } },
+            })
+          })
+          reconciledCount++
+        }
+      } catch (err: any) {
+        console.warn(`[Reconcile] Error checking data order ${orderId}:`, err.message)
+      }
+    }
+
+    // 2. Reconcile Airtime Purchases
+    for (const a of pendingAirtime) {
+      const orderId = a.providerReference || a.reference
+      if (!orderId) continue
+      try {
+        const queryRes = await (provider as any).queryTransaction(orderId)
+        if (queryRes.isSuccessful) {
+          await prisma.$transaction(async (tx: any) => {
+            await tx.airtimePurchase.update({
+              where: { id: a.id },
+              data: {
+                status: "SUCCESS",
+                providerReference: queryRes.orderId || a.providerReference,
+              },
+            })
+            await tx.walletTransaction.updateMany({
+              where: { reference: a.reference },
+              data: { status: "SUCCESS" },
+            })
+
+            const cleanPhone = a.phone.replace(/[^0-9]/g, "")
+            const localPhone = cleanPhone.startsWith("234") ? "0" + cleanPhone.slice(3) : cleanPhone
+            const tracker = await tx.vehicleTracker.findFirst({
+              where: {
+                userId: a.userId,
+                OR: [{ id: a.trackerId || "" }, { simNumber: localPhone }, { simNumber: cleanPhone }],
+              },
+            })
+
+            if (tracker) {
+              await tx.vehicleTracker.update({
+                where: { id: tracker.id },
+                data: {
+                  lastAirtimeDate: a.createdAt,
+                  lastAirtimeAmount: a.amount,
+                  lastAirtimeRef: a.reference,
+                },
+              })
+            }
+          })
+          reconciledCount++
+        } else if (queryRes.isFailed) {
+          await prisma.$transaction(async (tx: any) => {
+            await tx.airtimePurchase.update({
+              where: { id: a.id },
+              data: { status: "FAILED" },
+            })
+            await tx.walletTransaction.updateMany({
+              where: { reference: a.reference },
+              data: { status: "FAILED" },
+            })
+            await tx.user.update({
+              where: { id: a.userId },
+              data: { walletBalance: { increment: a.amount } },
+            })
+          })
+          reconciledCount++
+        }
+      } catch (err: any) {
+        console.warn(`[Reconcile] Error checking airtime order ${orderId}:`, err.message)
+      }
+    }
+
+    return { reconciled: reconciledCount }
+  } catch (err: any) {
+    console.error("[ReconcilePending] Global error:", err.message)
+    return { reconciled: 0 }
+  }
 }

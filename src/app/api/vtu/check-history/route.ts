@@ -9,6 +9,7 @@ import {
   formatDisplayDate,
   detectNetwork,
 } from "@/lib/phone-utils"
+import { reconcilePendingTransactions } from "@/services/vtu.service"
 
 export interface PhoneHistoryItem {
   phone: string
@@ -56,6 +57,9 @@ export async function POST(request: NextRequest) {
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
+
+    // Reconcile pending telecom orders so telemetry history is accurate
+    await reconcilePendingTransactions(session.user.id)
 
     const body = await request.json()
     const rawPhones = Array.isArray(body.phones) ? body.phones : []
@@ -246,6 +250,9 @@ export async function GET(request: NextRequest) {
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
+
+    // Reconcile pending orders so SIM lookup gets live telemetry
+    await reconcilePendingTransactions(session.user.id)
 
     const { searchParams } = new URL(request.url)
     const rawPhone = searchParams.get("phone") || ""

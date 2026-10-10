@@ -59,6 +59,7 @@ export class ClubKonnectProvider implements IVtuProvider {
       method: "GET",
       headers: { Accept: "application/json" },
       cache: "no-store",
+      signal: AbortSignal.timeout(10000),
     })
 
     if (!response.ok) {
