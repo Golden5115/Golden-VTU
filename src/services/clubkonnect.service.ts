@@ -117,13 +117,17 @@ export async function ckBuyAirtime(
   requestId: string,
   callbackUrl: string
 ): Promise<ClubKonnectAirtimeResponse> {
-  const data = await clubKonnectFetch<ClubKonnectAirtimeResponse>("APIAirtimeV1.asp", {
+  const params: Record<string, string> = {
     MobileNetwork: networkId,
     Amount: amount.toString(),
     MobileNumber: mobileNumber,
     RequestID: requestId,
-    CallBackURL: callbackUrl,
-  })
+  }
+  if (callbackUrl && process.env.CLUBKONNECT_ENABLE_CALLBACK === "true") {
+    params.CallBackURL = callbackUrl
+  }
+
+  const data = await clubKonnectFetch<ClubKonnectAirtimeResponse>("APIAirtimeV1.asp", params)
 
   // Check for specific error statuses
   // ClubKonnect returns 100 (ORDER_RECEIVED) or 200 (ORDER_COMPLETED)
@@ -146,13 +150,17 @@ export async function ckBuyData(
   requestId: string,
   callbackUrl: string
 ): Promise<ClubKonnectAirtimeResponse> {
-  const data = await clubKonnectFetch<ClubKonnectAirtimeResponse>("APIDatabundleV1.asp", {
+  const dataParams: Record<string, string> = {
     MobileNetwork: networkId,
     DataPlan: dataPlanId,
     MobileNumber: mobileNumber,
     RequestID: requestId,
-    CallBackURL: callbackUrl,
-  })
+  }
+  if (callbackUrl && process.env.CLUBKONNECT_ENABLE_CALLBACK === "true") {
+    dataParams.CallBackURL = callbackUrl
+  }
+
+  const data = await clubKonnectFetch<ClubKonnectAirtimeResponse>("APIDatabundleV1.asp", dataParams)
 
   const code = String(data.statuscode || "").trim()
   const statusText = String(data.status || "").toUpperCase()

@@ -85,13 +85,18 @@ export class ClubKonnectProvider implements IVtuProvider {
     reference: string,
     callbackUrl: string
   ): Promise<VtuTransactionResponse> {
-    const data = await this.clubKonnectFetch<any>("APIAirtimeV1.asp", {
+    const params: Record<string, string> = {
       MobileNetwork: networkId,
       Amount: amount.toString(),
       MobileNumber: mobileNumber,
       RequestID: reference,
-      CallBackURL: callbackUrl,
-    })
+    }
+
+    if (callbackUrl && process.env.CLUBKONNECT_ENABLE_CALLBACK === "true") {
+      params.CallBackURL = callbackUrl
+    }
+
+    const data = await this.clubKonnectFetch<any>("APIAirtimeV1.asp", params)
 
     const code = String(data.statuscode || data.statusCode || "").trim()
     const remark = String(data.remark || "").trim().toLowerCase()
@@ -149,13 +154,18 @@ export class ClubKonnectProvider implements IVtuProvider {
     reference: string,
     callbackUrl: string
   ): Promise<VtuTransactionResponse> {
-    const data = await this.clubKonnectFetch<any>("APIDatabundleV1.asp", {
+    const params: Record<string, string> = {
       MobileNetwork: networkId,
       DataPlan: dataPlanId,
       MobileNumber: mobileNumber,
       RequestID: reference,
-      CallBackURL: callbackUrl,
-    })
+    }
+
+    if (callbackUrl && process.env.CLUBKONNECT_ENABLE_CALLBACK === "true") {
+      params.CallBackURL = callbackUrl
+    }
+
+    const data = await this.clubKonnectFetch<any>("APIDatabundleV1.asp", params)
 
     const code = String(data.statuscode || data.statusCode || "").trim()
     const remark = String(data.remark || "").trim().toLowerCase()
