@@ -63,7 +63,7 @@ export async function startPaystackFunding(amount: number) {
  * Uses provider.publicKey to persist baseline balance safely across runtime reloads.
  * Calculates delta (newly transferred funds) so existing provider balance & profit remain intact.
  */
-export async function verifyAutomatedDeposit(forceFullSync?: boolean, expectedAmount?: number) {
+export async function verifyAutomatedDeposit(forceFullSync?: boolean, expectedInput?: number | string) {
   const session = await auth()
   if (!session?.user?.id) throw new Error("Unauthorized")
   const userId = session.user.id
@@ -113,7 +113,86 @@ export async function verifyAutomatedDeposit(forceFullSync?: boolean, expectedAm
     // Read stored previous provider balance from publicKey
     const storedBaseline = parseFloat(String(server?.publicKey || "0").replace(/,/g, "").trim()) || 0
 
-    // CASE 1: User specified exact transferred amount (e.g. ₦15,000)
+    // Parse input: check if user provided an Order ID (string with 8+ digits) or a monetary amount
+    const rawInputStr = String(expectedInput || "").trim()
+    const isOrderId = rawInputStr.length >= 8 && /^\d+$/.test(rawInputStr) && parseFloat(rawInputStr) > 1000000
+    const parsedAmount = parseFloat(rawInputStr)
+
+    // CASE 1: User provided ClubKonnect Order ID (e.g. 6721245675)
+    if (isOrderId && typeof (provider as any).queryTransaction === "function") {
+      try {
+        const orderCheck = await (provider as any).queryTransaction(rawInputStr)
+        const rawResp = orderCheck?.rawResponse || {}
+        const orderType = String(rawResp.ordertype || "").toLowerCase()
+        const chargedAmt = parseFloat(String(rawResp.amountcharged || orderCheck.amountCharged || "0").replace(/,/g, ""))
+
+        if (orderType.includes("deposit") || rawResp.orderid === rawInputStr) {
+          // Check if this Order ID was already credited
+          const alreadyCredited = await prisma.walletTransaction.findFirst({
+            where: {
+              userId,
+              reference: { contains: rawInputStr },
+            },
+          })
+
+          if (alreadyCredited) {
+            return {
+              success: false,
+              error: `Deposit with Order ID ${rawInputStr} has already been credited (₦${alreadyCredited.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}).`,
+            }
+          }
+
+          const creditAmount = chargedAmt > 0 ? chargedAmt : parsedAmount
+          if (creditAmount > 0) {
+            const updatedUser = await prisma.$transaction(async (tx) => {
+              const u = await tx.user.update({
+                where: { id: userId },
+                data: { walletBalance: { increment: creditAmount } },
+              })
+
+              await tx.walletTransaction.create({
+                data: {
+                  userId,
+                  amount: creditAmount,
+                  type: "CREDIT",
+                  status: "SUCCESS",
+                  reference: `DEP_CK_${rawInputStr}_${Date.now()}`,
+                },
+              })
+
+              if (server?.id && server.id !== "default-mock") {
+                await tx.provider.update({
+                  where: { id: server.id },
+                  data: { 
+                    publicKey: liveBal.toString(),
+                    lastKnownBalance: liveBal,
+                  },
+                })
+              }
+
+              return u
+            })
+
+            revalidatePath("/wallet/fund")
+            revalidatePath("/dashboard")
+            revalidatePath("/trackers")
+            revalidatePath("/transactions")
+
+            return {
+              success: true,
+              credited: creditAmount,
+              balance: updatedUser.walletBalance,
+              message: `ClubKonnect Deposit (Order #${rawInputStr}) of ₦${creditAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })} successfully verified and credited!`,
+            }
+          }
+        }
+      } catch (err: any) {
+        console.warn("[VerifyAutomatedDeposit] Order ID query check warning:", err.message)
+      }
+    }
+
+    // CASE 2: User specified exact transferred amount (e.g. ₦5,000 or ₦4,973.12)
+    const expectedAmount = parsedAmount > 0 && !isOrderId ? parsedAmount : undefined
     if (expectedAmount && expectedAmount > 0) {
       if (liveBal < expectedAmount && liveBal < 100) {
         return {

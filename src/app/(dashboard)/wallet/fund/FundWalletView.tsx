@@ -116,8 +116,8 @@ export function FundWalletView({
     setIsVerifying(true)
     setVerifyFeedback(null)
     try {
-      const amt = depositAmount ? parseFloat(depositAmount) : undefined
-      const res = await verifyAutomatedDeposit(forceFullSync, amt)
+      const input = depositAmount.trim() || undefined
+      const res = await verifyAutomatedDeposit(forceFullSync, input)
       if (res?.success) {
         if (typeof res.balance === "number") {
           setBalance(res.balance)
@@ -293,24 +293,21 @@ export function FundWalletView({
             <div className="bg-emerald-50/60 border border-emerald-200 rounded-xl p-3.5 space-y-3 text-xs text-emerald-950">
               <div>
                 <label className="font-bold flex items-center justify-between text-xs text-emerald-900">
-                  <span>Amount Transferred (₦) <span className="font-normal text-gray-500">(Optional)</span></span>
+                  <span>Amount Transferred (₦) or ClubKonnect Order ID <span className="font-normal text-gray-500">(Optional)</span></span>
                   <span className="text-[10px] text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full font-bold border border-emerald-200">
-                    Exact Amount Guarantee
+                    100% Exact Credit
                   </span>
                 </label>
                 <p className="text-[11px] text-gray-600 mt-0.5">
-                  Enter the exact amount you sent (e.g. 15000) so that 100% of your deposit is credited immediately. Or leave blank to auto-detect.
+                  Enter the exact amount sent (e.g. 5000) or your ClubKonnect deposit Order ID (e.g. 6721245675) to credit 100% immediately. Or leave blank to auto-detect.
                 </p>
                 <div className="relative mt-2">
-                  <span className="absolute left-3 top-2.5 text-xs font-bold text-gray-400">₦</span>
                   <input
-                    type="number"
-                    min="100"
-                    step="any"
-                    placeholder="e.g. 15000 (or leave blank to auto-detect)"
+                    type="text"
+                    placeholder="e.g. 5000 or Order ID 6721245675 (or leave blank to auto-detect)"
                     value={depositAmount}
                     onChange={(e) => setDepositAmount(e.target.value)}
-                    className="w-full pl-7 pr-3 py-2 text-xs font-semibold bg-white border border-emerald-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-gray-900"
+                    className="w-full px-3 py-2 text-xs font-semibold bg-white border border-emerald-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-gray-900 font-mono"
                   />
                 </div>
               </div>
