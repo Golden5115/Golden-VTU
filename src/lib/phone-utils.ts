@@ -149,17 +149,20 @@ export function formatDisplayDate(date: Date | string): string {
     month: "short",
     day: "numeric",
     year: "numeric",
+    timeZone: "Africa/Lagos",
   })
   const timeStr = d.toLocaleTimeString("en-US", {
     hour: "numeric",
     minute: "2-digit",
     hour12: true,
+    timeZone: "Africa/Lagos",
   })
   return `${dateStr} • ${timeStr}`
 }
 
 /**
  * Split 12-hour date and time for flexible UI rendering.
+ * Strictly uses Nigerian Timezone (Africa/Lagos, UTC+1).
  */
 export function format12HourDateTime(date: Date | string): {
   dateStr: string
@@ -171,11 +174,13 @@ export function format12HourDateTime(date: Date | string): {
     month: "short",
     day: "numeric",
     year: "numeric",
+    timeZone: "Africa/Lagos",
   })
   const timeStr = d.toLocaleTimeString("en-US", {
     hour: "numeric",
     minute: "2-digit",
     hour12: true,
+    timeZone: "Africa/Lagos",
   })
   return {
     dateStr,

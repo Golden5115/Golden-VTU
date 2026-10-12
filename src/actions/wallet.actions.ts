@@ -63,7 +63,7 @@ export async function startPaystackFunding(amount: number) {
  * Uses provider.publicKey to persist baseline balance safely across runtime reloads.
  * Calculates delta (newly transferred funds) so existing provider balance & profit remain intact.
  */
-export async function verifyAutomatedDeposit(forceFullSync?: boolean) {
+export async function verifyAutomatedDeposit(forceFullSync?: boolean, expectedAmount?: number) {
   const session = await auth()
   if (!session?.user?.id) throw new Error("Unauthorized")
   const userId = session.user.id
@@ -89,7 +89,10 @@ export async function verifyAutomatedDeposit(forceFullSync?: boolean) {
         if (server?.id && server.id !== "default-mock") {
           await tx.provider.update({
             where: { id: server.id },
-            data: { publicKey: liveBal.toString() },
+            data: { 
+              publicKey: liveBal.toString(),
+              lastKnownBalance: liveBal,
+            },
           })
         }
       })
@@ -97,6 +100,7 @@ export async function verifyAutomatedDeposit(forceFullSync?: boolean) {
       revalidatePath("/wallet/fund")
       revalidatePath("/dashboard")
       revalidatePath("/trackers")
+      revalidatePath("/transactions")
 
       return {
         success: true,
@@ -106,15 +110,70 @@ export async function verifyAutomatedDeposit(forceFullSync?: boolean) {
       }
     }
 
-    // Read stored previous provider balance from publicKey (persists reliably without schema restarts)
-    const previousBalance = parseFloat(String(server?.publicKey || "0").replace(/,/g, "").trim()) || 0
+    // Read stored previous provider balance from publicKey
+    const storedBaseline = parseFloat(String(server?.publicKey || "0").replace(/,/g, "").trim()) || 0
 
+    // CASE 1: User specified exact transferred amount (e.g. ₦15,000)
+    if (expectedAmount && expectedAmount > 0) {
+      if (liveBal < expectedAmount && liveBal < 100) {
+        return {
+          success: false,
+          error: `Carrier balance is currently ₦${liveBal.toLocaleString(undefined, { minimumFractionDigits: 2 })}, which is less than the transferred ₦${expectedAmount.toLocaleString()}. Please wait 1-2 minutes for your bank transfer to reflect on your virtual account and try again.`,
+        }
+      }
+
+      const updatedUser = await prisma.$transaction(async (tx) => {
+        const u = await tx.user.update({
+          where: { id: userId },
+          data: { walletBalance: { increment: expectedAmount } },
+        })
+
+        await tx.walletTransaction.create({
+          data: {
+            userId,
+            amount: expectedAmount,
+            type: "CREDIT",
+            status: "SUCCESS",
+            reference: `DEP_${Date.now()}_${Math.random().toString(36).substring(7)}`,
+          },
+        })
+
+        if (server?.id && server.id !== "default-mock") {
+          await tx.provider.update({
+            where: { id: server.id },
+            data: { 
+              publicKey: liveBal.toString(),
+              lastKnownBalance: liveBal,
+            },
+          })
+        }
+
+        return u
+      })
+
+      revalidatePath("/wallet/fund")
+      revalidatePath("/dashboard")
+      revalidatePath("/trackers")
+      revalidatePath("/transactions")
+
+      return {
+        success: true,
+        credited: expectedAmount,
+        balance: updatedUser.walletBalance,
+        message: `Full transfer of ₦${expectedAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })} confirmed and credited to your wallet!`,
+      }
+    }
+
+    // CASE 2: Auto-detect deposit delta
     // If baseline hasn't been set yet in the database:
-    if (!previousBalance || previousBalance <= 0) {
+    if (!storedBaseline || storedBaseline <= 0) {
       if (server?.id && server.id !== "default-mock") {
         await prisma.provider.update({
           where: { id: server.id },
-          data: { publicKey: liveBal.toString() },
+          data: { 
+            publicKey: liveBal.toString(),
+            lastKnownBalance: liveBal,
+          },
         })
       }
 
@@ -138,6 +197,22 @@ export async function verifyAutomatedDeposit(forceFullSync?: boolean) {
         credited: 0,
         balance: user?.walletBalance || 0,
         message: `Baseline set to ₦${liveBal.toLocaleString(undefined, { minimumFractionDigits: 2 })}. When you make a transfer to your dedicated virtual account, click verify again to confirm and credit your wallet.`,
+      }
+    }
+
+    // Guard against stale elevated baseline: if previous baseline was higher than live balance,
+    // sync it down so previous purchases don't reduce future incoming deposits!
+    let previousBalance = storedBaseline
+    if (previousBalance > liveBal) {
+      previousBalance = liveBal
+      if (server?.id && server.id !== "default-mock") {
+        await prisma.provider.update({
+          where: { id: server.id },
+          data: { 
+            publicKey: liveBal.toString(),
+            lastKnownBalance: liveBal,
+          },
+        })
       }
     }
 
@@ -165,7 +240,10 @@ export async function verifyAutomatedDeposit(forceFullSync?: boolean) {
         if (server?.id && server.id !== "default-mock") {
           await tx.provider.update({
             where: { id: server.id },
-            data: { publicKey: liveBal.toString() },
+            data: { 
+              publicKey: liveBal.toString(),
+              lastKnownBalance: liveBal,
+            },
           })
         }
 
@@ -184,11 +262,14 @@ export async function verifyAutomatedDeposit(forceFullSync?: boolean) {
         message: `New transfer of ₦${delta.toLocaleString(undefined, { minimumFractionDigits: 2 })} confirmed and credited to your wallet!`,
       }
     } else {
-      // If balance decreased because of airtime/data purchases, update baseline
-      if (delta < 0 && server?.id && server.id !== "default-mock") {
+      // Sync baseline to live balance if out of sync
+      if (server?.id && server.id !== "default-mock" && storedBaseline !== liveBal) {
         await prisma.provider.update({
           where: { id: server.id },
-          data: { publicKey: liveBal.toString() },
+          data: { 
+            publicKey: liveBal.toString(),
+            lastKnownBalance: liveBal,
+          },
         })
       }
 

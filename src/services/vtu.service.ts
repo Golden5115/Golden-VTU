@@ -139,22 +139,26 @@ export async function purchaseAirtime(
           },
         })
 
+        // Decrement provider baseline immediately because carrier charges on order submission
+        if (server?.id && server.id !== "default-mock") {
+          const currentBaseline = parseFloat(String(server.publicKey || "0").replace(/,/g, "").trim()) || 0
+          if (currentBaseline > 0) {
+            const updatedBaseline = Math.max(0, currentBaseline - amount)
+            await tx.provider.update({
+              where: { id: server.id },
+              data: { 
+                publicKey: updatedBaseline.toString(),
+                lastKnownBalance: updatedBaseline,
+              },
+            })
+          }
+        }
+
         if (isCompleted) {
           await tx.walletTransaction.updateMany({
             where: { reference },
             data: { status: "SUCCESS" },
           })
-
-          if (server?.id && server.id !== "default-mock") {
-            const currentBaseline = parseFloat(String(server.publicKey || "0").replace(/,/g, "").trim()) || 0
-            if (currentBaseline > 0) {
-              const updatedBaseline = Math.max(0, currentBaseline - amount)
-              await tx.provider.update({
-                where: { id: server.id },
-                data: { publicKey: updatedBaseline.toString() },
-              })
-            }
-          }
 
           // Update Vehicle Tracker last airtime top-up details
           if (trackerId) {
@@ -343,23 +347,27 @@ export async function purchaseData(
           },
         })
 
+        // Decrement provider baseline immediately because carrier charges on order submission
+        if (server?.id && server.id !== "default-mock") {
+          const wholesaleCost = Math.max(0, amount - 100)
+          const currentBaseline = parseFloat(String(server.publicKey || "0").replace(/,/g, "").trim()) || 0
+          if (currentBaseline > 0) {
+            const updatedBaseline = Math.max(0, currentBaseline - wholesaleCost)
+            await tx.provider.update({
+              where: { id: server.id },
+              data: { 
+                publicKey: updatedBaseline.toString(),
+                lastKnownBalance: updatedBaseline,
+              },
+            })
+          }
+        }
+
         if (isCompleted) {
           await tx.walletTransaction.updateMany({
             where: { reference },
             data: { status: "SUCCESS" },
           })
-
-          if (server?.id && server.id !== "default-mock") {
-            const wholesaleCost = Math.max(0, amount - 100)
-            const currentBaseline = parseFloat(String(server.publicKey || "0").replace(/,/g, "").trim()) || 0
-            if (currentBaseline > 0) {
-              const updatedBaseline = Math.max(0, currentBaseline - wholesaleCost)
-              await tx.provider.update({
-                where: { id: server.id },
-                data: { publicKey: updatedBaseline.toString() },
-              })
-            }
-          }
 
           // Update Vehicle Tracker last data top-up details and calculate expiry
           if (trackerId) {

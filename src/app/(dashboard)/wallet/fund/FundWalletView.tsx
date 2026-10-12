@@ -45,6 +45,7 @@ export function FundWalletView({
   )
 
   // Automated Deposit Verification state
+  const [depositAmount, setDepositAmount] = useState("")
   const [isVerifying, setIsVerifying] = useState(false)
   const [verifyFeedback, setVerifyFeedback] = useState<string | null>(null)
 
@@ -115,12 +116,14 @@ export function FundWalletView({
     setIsVerifying(true)
     setVerifyFeedback(null)
     try {
-      const res = await verifyAutomatedDeposit(forceFullSync)
+      const amt = depositAmount ? parseFloat(depositAmount) : undefined
+      const res = await verifyAutomatedDeposit(forceFullSync, amt)
       if (res?.success) {
         if (typeof res.balance === "number") {
           setBalance(res.balance)
         }
         setVerifyFeedback(res.message || "Deposit verified successfully!")
+        setDepositAmount("")
         router.refresh()
       } else {
         setVerifyFeedback(res?.error || "Failed to verify deposit.")
@@ -287,22 +290,48 @@ export function FundWalletView({
               </div>
             </div>
 
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between p-3.5 bg-emerald-50/70 border border-emerald-200 rounded-xl text-xs text-emerald-900 gap-3">
-              <div className="space-y-0.5">
-                <span className="font-bold block">Transferred Already?</span>
-                <span className="text-[11px] opacity-90">
-                  Click the button to confirm your incoming transfer and credit your wallet balance immediately.
-                </span>
+            <div className="bg-emerald-50/60 border border-emerald-200 rounded-xl p-3.5 space-y-3 text-xs text-emerald-950">
+              <div>
+                <label className="font-bold flex items-center justify-between text-xs text-emerald-900">
+                  <span>Amount Transferred (₦) <span className="font-normal text-gray-500">(Optional)</span></span>
+                  <span className="text-[10px] text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full font-bold border border-emerald-200">
+                    Exact Amount Guarantee
+                  </span>
+                </label>
+                <p className="text-[11px] text-gray-600 mt-0.5">
+                  Enter the exact amount you sent (e.g. 15000) so that 100% of your deposit is credited immediately. Or leave blank to auto-detect.
+                </p>
+                <div className="relative mt-2">
+                  <span className="absolute left-3 top-2.5 text-xs font-bold text-gray-400">₦</span>
+                  <input
+                    type="number"
+                    min="100"
+                    step="any"
+                    placeholder="e.g. 15000 (or leave blank to auto-detect)"
+                    value={depositAmount}
+                    onChange={(e) => setDepositAmount(e.target.value)}
+                    className="w-full pl-7 pr-3 py-2 text-xs font-semibold bg-white border border-emerald-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-gray-900"
+                  />
+                </div>
               </div>
-              <Button
-                type="button"
-                onClick={() => handleVerifyDeposit(false)}
-                disabled={isVerifying}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shrink-0"
-              >
-                <RefreshCw className={`w-3.5 h-3.5 mr-1.5 ${isVerifying ? "animate-spin" : ""}`} />
-                {isVerifying ? "Verifying..." : "Verify Bank Deposit Now"}
-              </Button>
+
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between pt-2.5 border-t border-emerald-200/70 gap-3">
+                <div className="space-y-0.5">
+                  <span className="font-bold block">Transferred Already?</span>
+                  <span className="text-[11px] text-gray-600">
+                    Click to confirm your incoming transfer and credit your wallet immediately.
+                  </span>
+                </div>
+                <Button
+                  type="button"
+                  onClick={() => handleVerifyDeposit(false)}
+                  disabled={isVerifying}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shrink-0"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 mr-1.5 ${isVerifying ? "animate-spin" : ""}`} />
+                  {isVerifying ? "Verifying..." : "Verify Bank Deposit Now"}
+                </Button>
+              </div>
             </div>
 
             {/* Admin Baseline Tools */}
