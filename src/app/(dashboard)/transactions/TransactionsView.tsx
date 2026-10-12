@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useMemo } from "react"
+import React, { useState, useMemo, useTransition } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import {
@@ -14,6 +14,7 @@ import {
   Filter,
   X,
   RotateCcw,
+  Loader2,
 } from "lucide-react"
 import { LiveStatusButton } from "@/components/vtu/LiveStatusButton"
 import { format12HourDateTime } from "@/lib/phone-utils"
@@ -124,23 +125,23 @@ export function TransactionsView({ initialTransactions, isAdmin }: TransactionsV
     })
   }, [initialTransactions, typeFilter, searchQuery, datePreset, customStartDate, customEndDate, todayLagos, yesterdayLagos])
 
-  // Summary statistics for matching results
-  const totalAmount = useMemo(() => {
-    return filteredTransactions.reduce((acc, tx) => acc + tx.amount, 0)
-  }, [filteredTransactions])
-
-  const depositCount = useMemo(() => {
-    return initialTransactions.filter((tx) => tx.type === "WALLET_CREDIT").length
-  }, [initialTransactions])
-
+  const [isPending, startTransition] = useTransition()
   const isAnyFilterActive = typeFilter !== "ALL" || Boolean(searchQuery.trim()) || datePreset !== "ALL"
 
+  const handleTabClick = (type: TypeFilter) => {
+    startTransition(() => {
+      setTypeFilter(type)
+    })
+  }
+
   const handleResetFilters = () => {
-    setTypeFilter("ALL")
-    setSearchQuery("")
-    setDatePreset("ALL")
-    setCustomStartDate("")
-    setCustomEndDate("")
+    startTransition(() => {
+      setTypeFilter("ALL")
+      setSearchQuery("")
+      setDatePreset("ALL")
+      setCustomStartDate("")
+      setCustomEndDate("")
+    })
   }
 
   return (
@@ -152,57 +153,67 @@ export function TransactionsView({ initialTransactions, isAdmin }: TransactionsV
           <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 scrollbar-none border-b border-gray-100 pb-3">
             <button
               type="button"
-              onClick={() => setTypeFilter("ALL")}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all shrink-0 ${
+              onClick={() => handleTabClick("ALL")}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all shrink-0 flex items-center gap-1.5 ${
                 typeFilter === "ALL"
                   ? "bg-gray-900 text-white shadow-xs"
                   : "bg-gray-100 text-gray-600 hover:bg-gray-200"
               }`}
             >
-              All Records ({initialTransactions.length})
+              {isPending && typeFilter === "ALL" && (
+                <Loader2 className="w-3.5 h-3.5 animate-spin text-white" />
+              )}
+              <span>All Records</span>
             </button>
 
             <button
               type="button"
-              onClick={() => setTypeFilter("DEPOSIT")}
+              onClick={() => handleTabClick("DEPOSIT")}
               className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all shrink-0 ${
                 typeFilter === "DEPOSIT"
                   ? "bg-emerald-600 text-white shadow-xs ring-2 ring-emerald-600/20"
                   : "bg-emerald-50 text-emerald-800 hover:bg-emerald-100 border border-emerald-200"
               }`}
             >
-              <ArrowDownLeft className="w-3.5 h-3.5" />
+              {isPending && typeFilter === "DEPOSIT" ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin text-white" />
+              ) : (
+                <ArrowDownLeft className="w-3.5 h-3.5" />
+              )}
               <span>Deposits Only</span>
-              <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
-                typeFilter === "DEPOSIT" ? "bg-white/20 text-white" : "bg-emerald-200/60 text-emerald-900"
-              }`}>
-                {depositCount}
-              </span>
             </button>
 
             <button
               type="button"
-              onClick={() => setTypeFilter("DATA")}
+              onClick={() => handleTabClick("DATA")}
               className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all shrink-0 ${
                 typeFilter === "DATA"
                   ? "bg-blue-600 text-white shadow-xs"
                   : "bg-blue-50 text-blue-800 hover:bg-blue-100 border border-blue-200"
               }`}
             >
-              <Wifi className="w-3.5 h-3.5" />
+              {isPending && typeFilter === "DATA" ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin text-white" />
+              ) : (
+                <Wifi className="w-3.5 h-3.5" />
+              )}
               <span>Data Only</span>
             </button>
 
             <button
               type="button"
-              onClick={() => setTypeFilter("AIRTIME")}
+              onClick={() => handleTabClick("AIRTIME")}
               className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all shrink-0 ${
                 typeFilter === "AIRTIME"
                   ? "bg-indigo-600 text-white shadow-xs"
                   : "bg-indigo-50 text-indigo-800 hover:bg-indigo-100 border border-indigo-200"
               }`}
             >
-              <Smartphone className="w-3.5 h-3.5" />
+              {isPending && typeFilter === "AIRTIME" ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin text-white" />
+              ) : (
+                <Smartphone className="w-3.5 h-3.5" />
+              )}
               <span>Airtime Only</span>
             </button>
 
@@ -303,27 +314,6 @@ export function TransactionsView({ initialTransactions, isAdmin }: TransactionsV
               )}
             </div>
           )}
-
-          {/* Row 4: Results Count and Summary Bar */}
-          <div className="flex flex-wrap items-center justify-between text-xs text-gray-500 pt-1">
-            <div className="flex items-center gap-2">
-              <span className="font-semibold text-gray-800">
-                {filteredTransactions.length} transaction{filteredTransactions.length === 1 ? "" : "s"}
-              </span>
-              {isAnyFilterActive && (
-                <span className="text-[11px] px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 font-medium border border-indigo-200">
-                  Filtered
-                </span>
-              )}
-            </div>
-
-            <div className="flex items-center gap-3">
-              <span className="text-[11px] text-gray-400">Timezone: WAT (Africa/Lagos)</span>
-              <span className="font-bold text-gray-900">
-                Total: ₦{totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-              </span>
-            </div>
-          </div>
         </CardContent>
       </Card>
 
@@ -343,9 +333,12 @@ export function TransactionsView({ initialTransactions, isAdmin }: TransactionsV
                   : "All Transaction History"}
               </span>
             </CardTitle>
-            <span className="text-xs font-semibold text-gray-500">
-              {filteredTransactions.length} of {initialTransactions.length}
-            </span>
+            {isPending && (
+              <span className="text-xs font-semibold text-blue-600 flex items-center gap-1.5 animate-pulse">
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                <span>Updating...</span>
+              </span>
+            )}
           </div>
         </CardHeader>
         <CardContent className="pt-4">

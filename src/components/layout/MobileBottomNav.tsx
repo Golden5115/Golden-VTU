@@ -1,11 +1,18 @@
 "use client"
 
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Home, Zap, Wifi, CreditCard, History, Smartphone } from "lucide-react"
+import { Home, Zap, CreditCard, History, Loader2 } from "lucide-react"
 
 export function MobileBottomNav() {
   const pathname = usePathname()
+  const [pendingHref, setPendingHref] = useState<string | null>(null)
+
+  // Reset pending state when destination screen loads and pathname updates
+  useEffect(() => {
+    setPendingHref(null)
+  }, [pathname])
 
   const navItems = [
     {
@@ -36,10 +43,17 @@ export function MobileBottomNav() {
       <div className="grid grid-cols-4 h-16 items-center px-2">
         {navItems.map((item) => {
           const isActive = pathname === item.href || (item.href !== "/dashboard" && pathname.startsWith(item.href))
+          const isPending = pendingHref === item.href
+
           return (
             <Link
               key={item.name}
               href={item.href}
+              onClick={() => {
+                if (!isActive) {
+                  setPendingHref(item.href)
+                }
+              }}
               className={`flex flex-col items-center justify-center py-1 transition-all relative ${
                 isActive ? "text-blue-600 font-bold" : "text-gray-500 hover:text-gray-800"
               }`}
@@ -52,19 +66,27 @@ export function MobileBottomNav() {
                       : "bg-blue-50 text-blue-600"
                   }`}
                 >
-                  <item.icon className="w-5 h-5" />
+                  {isPending ? (
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                  ) : (
+                    <item.icon className="w-5 h-5" />
+                  )}
                 </div>
               ) : (
                 <div className={`p-1 rounded-lg ${isActive ? "bg-blue-50" : ""}`}>
-                  <item.icon className={`w-5 h-5 ${isActive ? "text-blue-600" : "text-gray-500"}`} />
+                  {isPending ? (
+                    <Loader2 className="w-5 h-5 animate-spin text-blue-600" />
+                  ) : (
+                    <item.icon className={`w-5 h-5 ${isActive ? "text-blue-600" : "text-gray-500"}`} />
+                  )}
                 </div>
               )}
               <span
-                className={`text-[10px] tracking-tight mt-0.5 truncate max-w-[64px] ${
+                className={`text-[10px] tracking-tight mt-0.5 truncate max-w-[64px] flex items-center gap-0.5 ${
                   isActive ? "font-bold text-blue-600" : "font-medium"
                 }`}
               >
-                {item.name}
+                {isPending ? "Loading..." : item.name}
               </span>
             </Link>
           )
