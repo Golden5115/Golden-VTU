@@ -39,11 +39,15 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         const isMatch = await bcrypt.compare(password, user.password)
         if (!isMatch) {
           return null
+
+
         }
 
         if (user.isSuspended) {
           throw new Error("This account has been suspended.")
         }
+
+
 
         return user
       },
