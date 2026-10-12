@@ -16,6 +16,8 @@ import {
   XCircle,
   ArrowRight,
   RefreshCw,
+  ShieldAlert,
+  ShieldCheck,
 } from "lucide-react"
 
 export interface ServerOption {
@@ -68,6 +70,7 @@ export function DataPurchaseForm({
   // Bulk / Comma-separated Phone Input State
   const [rawPhones, setRawPhones] = useState("")
   const [selectedPhones, setSelectedPhones] = useState<string[]>([])
+  const [bypassSimCheck, setBypassSimCheck] = useState(false)
 
   const [isProcessing, setIsProcessing] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -146,6 +149,7 @@ export function DataPurchaseForm({
           amount: selectedPlan.price,
           serverId: selectedServerId,
           phones: selectedPhones,
+          bypassSimCheck,
         }),
       })
 
@@ -168,6 +172,7 @@ export function DataPurchaseForm({
     setRawPhones("")
     setSelectedPhones([])
     setSelectedPlan(null)
+    setBypassSimCheck(false)
     setError(null)
     router.refresh()
   }
@@ -414,13 +419,101 @@ export function DataPurchaseForm({
                   onSelectedPhonesChange={setSelectedPhones}
                   targetNetworkId={selectedNetworkId}
                   onNetworkChange={(netId) => setSelectedNetworkId(netId)}
+                  bypassSimCheck={bypassSimCheck}
+                  onBypassSimCheckChange={setBypassSimCheck}
                 />
+              </div>
+
+              {/* 4. Bypass number validator (ClubKonnect Ported SIM Support) */}
+              <div
+                className={`p-3.5 rounded-xl border transition-all duration-200 ${
+                  bypassSimCheck
+                    ? "bg-amber-500/10 border-amber-500/40 shadow-sm"
+                    : "bg-muted/30 border-border hover:bg-muted/50"
+                }`}
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-start gap-2.5">
+                    <div
+                      className={`p-2 rounded-xl shrink-0 mt-0.5 transition-colors ${
+                        bypassSimCheck
+                          ? "bg-amber-500 text-white shadow-xs"
+                          : "bg-muted text-muted-foreground"
+                      }`}
+                    >
+                      <ShieldAlert className="w-4 h-4" />
+                    </div>
+                    <div className="space-y-0.5">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-xs font-bold text-foreground">
+                          Bypass number validator
+                        </span>
+                        <span
+                          className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider transition-colors ${
+                            bypassSimCheck
+                              ? "bg-amber-500 text-white"
+                              : "bg-muted text-muted-foreground"
+                          }`}
+                        >
+                          {bypassSimCheck ? "Validator Bypassed" : "Off"}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-muted-foreground leading-snug">
+                        Enable this if any recipient number was ported to{" "}
+                        <strong className="text-foreground font-semibold">
+                          {NETWORK_OPTIONS.find((n) => n.id === selectedNetworkId)?.name || "Selected Network"}
+                        </strong>{" "}
+                        from another carrier (e.g. Glo <span className="font-mono">0805</span> line ported to MTN). This bypasses automated prefix validation so the order will go through irrespective of the network.
+                      </p>
+                    </div>
+                  </div>
+
+                  <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                    <input
+                      type="checkbox"
+                      checked={bypassSimCheck}
+                      onChange={(e) => setBypassSimCheck(e.target.checked)}
+                      className="sr-only peer"
+                    />
+                    <div className="w-11 h-6 bg-muted-foreground/20 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-500 shadow-inner"></div>
+                  </label>
+                </div>
+
+                {bypassSimCheck && (
+                  <div className="mt-2.5 pt-2.5 border-t border-amber-500/20 flex items-center gap-1.5 text-[11px] text-amber-700 dark:text-amber-300 font-medium">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
+                    <span>
+                      Number validator bypassed: Order will go through as{" "}
+                      <strong>
+                        {NETWORK_OPTIONS.find((n) => n.id === selectedNetworkId)?.name}
+                      </strong>{" "}
+                      irrespective of network prefix.
+                    </span>
+                  </div>
+                )}
               </div>
 
               {/* Error Message */}
               {error && (
-                <div className="p-3 bg-red-500/10 text-red-600 dark:text-red-400 text-xs rounded-xl border border-red-500/20">
-                  {error}
+                <div className="p-3.5 bg-red-500/10 text-red-600 dark:text-red-400 text-xs rounded-xl border border-red-500/20 space-y-2">
+                  <div className="flex items-start gap-2">
+                    <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                    <span className="leading-snug">{error}</span>
+                  </div>
+                  {error.includes("Bypass number validator") && !bypassSimCheck && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={() => {
+                        setBypassSimCheck(true)
+                        setError(null)
+                      }}
+                      className="bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs h-8 px-3 rounded-lg flex items-center gap-1.5 shadow-sm"
+                    >
+                      <ShieldCheck className="w-3.5 h-3.5" />
+                      Click 'Bypass number validator' & Continue
+                    </Button>
+                  )}
                 </div>
               )}
 

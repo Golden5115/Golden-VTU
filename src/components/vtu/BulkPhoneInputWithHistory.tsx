@@ -73,6 +73,8 @@ interface BulkPhoneInputWithHistoryProps {
   onSelectedPhonesChange: (phones: string[]) => void
   targetNetworkId?: string
   onNetworkChange?: (networkId: string) => void
+  bypassSimCheck?: boolean
+  onBypassSimCheckChange?: (bypass: boolean) => void
 }
 
 export function BulkPhoneInputWithHistory({
@@ -83,6 +85,8 @@ export function BulkPhoneInputWithHistory({
   onSelectedPhonesChange,
   targetNetworkId,
   onNetworkChange,
+  bypassSimCheck = false,
+  onBypassSimCheckChange,
 }: BulkPhoneInputWithHistoryProps) {
   const [historyMap, setHistoryMap] = useState<Record<string, PhoneHistoryItem>>({})
   const [isLoading, setIsLoading] = useState(false)
@@ -361,6 +365,36 @@ export function BulkPhoneInputWithHistory({
             </div>
           </div>
 
+          {/* Smart Ported SIM Prompt */}
+          {targetNetworkId && !bypassSimCheck && onBypassSimCheckChange && (() => {
+            const mismatchPhones = parsedPhones.filter((phone) => {
+              const net = detectNetwork(phone)
+              return net && net.id !== targetNetworkId
+            })
+            if (mismatchPhones.length === 0) return null
+            const mismatchNet = detectNetwork(mismatchPhones[0])
+            const targetNetName = targetNetworkId === "01" ? "MTN" : targetNetworkId === "02" ? "Glo" : targetNetworkId === "04" ? "Airtel" : "9Mobile"
+            return (
+              <div className="flex items-center justify-between p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs gap-2">
+                <div className="flex items-center gap-2 text-amber-800 dark:text-amber-300">
+                  <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                  <span>
+                    You have selected {targetNetName} instead of {mismatchNet?.name || "detected network"}. Phone number verification failed. If correct, click <strong>'Bypass number validator'</strong>.
+                  </span>
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => onBypassSimCheckChange(true)}
+                  className="h-7 text-xs font-bold border-amber-500/40 text-amber-700 dark:text-amber-300 hover:bg-amber-500/20 shrink-0"
+                >
+                  Bypass number validator
+                </Button>
+              </div>
+            )
+          })()}
+
           {/* Number Breakdown List */}
           <div className="max-h-64 overflow-y-auto space-y-1.5 pr-1 divide-y divide-border/40">
             {parsedPhones.map((phone) => {
@@ -442,11 +476,25 @@ export function BulkPhoneInputWithHistory({
                         </span>
                       )}
 
-                      {/* Network mismatch alert */}
+                      {/* Network mismatch alert / Ported SIM badge */}
                       {isNetworkMismatch && (
-                        <span className="text-[10px] font-semibold text-amber-600 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">
-                          Mismatch ({net?.name})
-                        </span>
+                        bypassSimCheck ? (
+                          <span className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20 flex items-center gap-1">
+                            <Check className="w-2.5 h-2.5" /> Ported SIM
+                          </span>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              onBypassSimCheckChange?.(true)
+                            }}
+                            title="Click to bypass number validator for this ported number"
+                            className="text-[10px] font-semibold text-amber-600 dark:text-amber-400 bg-amber-500/10 hover:bg-amber-500/20 px-1.5 py-0.5 rounded border border-amber-500/20 transition-colors"
+                          >
+                            Mismatch ({net?.name}) • Bypass validator
+                          </button>
+                        )
                       )}
                     </div>
 

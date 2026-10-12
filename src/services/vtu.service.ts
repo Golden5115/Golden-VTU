@@ -13,16 +13,20 @@ function getCallbackUrl(providerIdentifier: string): string {
   return `${baseUrl}/api/webhooks/${endpoint}`
 }
 
+// Resilient transaction timeout configuration for remote DB connections
+const TX_OPTIONS = { maxWait: 15000, timeout: 30000 }
+
 export async function purchaseAirtime(
   userId: string,
   networkId: string,
   phone: string,
   amount: number,
-  serverIdOrOptions?: string | { serverId?: string; trackerId?: string }
+  serverIdOrOptions?: string | { serverId?: string; trackerId?: string; bypassSimCheck?: boolean }
 ) {
   const options = typeof serverIdOrOptions === "object" ? serverIdOrOptions : { serverId: serverIdOrOptions }
   const serverId = options.serverId
   let trackerId = options.trackerId
+  const bypassSimCheck = options.bypassSimCheck ?? false
 
   // If no explicit trackerId passed, auto-detect if this phone number belongs to a registered tracker
   if (!trackerId) {
@@ -38,11 +42,13 @@ export async function purchaseAirtime(
     if (matched) trackerId = matched.id
   }
 
-  // Validate carrier network prefix to prevent cross-carrier delivery failures
-  const detectedNet = detectNetwork(phone)
-  if (detectedNet && detectedNet.id !== networkId) {
-    const expectedName = NETWORKS[networkId]?.name || "the selected network"
-    throw new Error(`Carrier Mismatch: Phone ${phone} is on ${detectedNet.name}, but you selected ${expectedName}. Please select ${expectedName} SIM.`)
+  // Validate carrier network prefix to prevent cross-carrier delivery failures, unless SIM bypass is enabled (e.g. for ported SIMs)
+  if (!bypassSimCheck) {
+    const detectedNet = detectNetwork(phone)
+    if (detectedNet && detectedNet.id !== networkId) {
+      const expectedName = NETWORKS[networkId]?.name || "the selected network"
+      throw new Error(`You have selected ${expectedName} instead of ${detectedNet.name}. Phone number verification failed. If this is correct, click the 'Bypass number validator' or change the mobile network to continue.`)
+    }
   }
 
   // 1. Resolve server and provider engine first
@@ -93,7 +99,7 @@ export async function purchaseAirtime(
     })
 
     return { purchase, reference }
-  }).then(async ({ purchase, reference }) => {
+  }, TX_OPTIONS).then(async ({ purchase, reference }) => {
     // 7. Call Provider API OUTSIDE the transaction
     try {
       const startMs = Date.now()
@@ -183,7 +189,7 @@ export async function purchaseAirtime(
             })
           }
         }
-      })
+      }, TX_OPTIONS)
 
       return {
         ...purchase,
@@ -207,7 +213,7 @@ export async function purchaseAirtime(
           where: { reference },
           data: { status: "FAILED" },
         })
-      })
+      }, TX_OPTIONS)
 
       const cleanErrorMsg = String(error?.message || "Carrier processing error")
         .replace(/clubkonnect/gi, "Telecom Carrier")
@@ -231,16 +237,18 @@ export async function purchaseData(
     trackerId?: string
     planName?: string
     validityDays?: number
+    bypassSimCheck?: boolean
   }
 ) {
   const options =
     typeof serverIdOrOptions === "object"
       ? serverIdOrOptions
-      : { serverId: serverIdOrOptions, trackerId: undefined, planName: undefined, validityDays: 30 }
+      : { serverId: serverIdOrOptions, trackerId: undefined, planName: undefined, validityDays: 30, bypassSimCheck: false }
   const serverId = options.serverId
   let trackerId = options.trackerId
   const planName = options.planName
   const validityDays = options.validityDays || 30
+  const bypassSimCheck = options.bypassSimCheck ?? false
 
   // If no explicit trackerId passed, auto-detect if this phone number belongs to a registered tracker
   if (!trackerId) {
@@ -256,11 +264,13 @@ export async function purchaseData(
     if (matched) trackerId = matched.id
   }
 
-  // Validate carrier network prefix to prevent cross-carrier delivery failures
-  const detectedNet = detectNetwork(phone)
-  if (detectedNet && detectedNet.id !== networkId) {
-    const expectedName = NETWORKS[networkId]?.name || "the selected network"
-    throw new Error(`Carrier Mismatch: Phone ${phone} is on ${detectedNet.name}, but you selected ${expectedName}. Please select ${expectedName} SIM.`)
+  // Validate carrier network prefix to prevent cross-carrier delivery failures, unless SIM bypass is enabled (e.g. for ported SIMs)
+  if (!bypassSimCheck) {
+    const detectedNet = detectNetwork(phone)
+    if (detectedNet && detectedNet.id !== networkId) {
+      const expectedName = NETWORKS[networkId]?.name || "the selected network"
+      throw new Error(`You have selected ${expectedName} instead of ${detectedNet.name}. Phone number verification failed. If this is correct, click the 'Bypass number validator' or change the mobile network to continue.`)
+    }
   }
 
   // 1. Resolve server and provider engine first
@@ -312,7 +322,7 @@ export async function purchaseData(
     })
 
     return { purchase, reference }
-  }).then(async ({ purchase, reference }) => {
+  }, TX_OPTIONS).then(async ({ purchase, reference }) => {
     // 7. Call Provider API OUTSIDE the transaction
     try {
       const startMs = Date.now()
@@ -408,7 +418,7 @@ export async function purchaseData(
             })
           }
         }
-      })
+      }, TX_OPTIONS)
 
       return {
         ...purchase,
@@ -432,7 +442,7 @@ export async function purchaseData(
           where: { reference },
           data: { status: "FAILED" },
         })
-      })
+      }, TX_OPTIONS)
 
       const cleanErrorMsg = String(error?.message || "Carrier processing error")
         .replace(/clubkonnect/gi, "Telecom Carrier")
@@ -529,7 +539,7 @@ export async function reconcilePendingTransactions(userId?: string) {
                 },
               })
             }
-          })
+          }, TX_OPTIONS)
           reconciledCount++
         } else if (queryRes.isFailed) {
           await prisma.$transaction(async (tx: any) => {
@@ -545,7 +555,7 @@ export async function reconcilePendingTransactions(userId?: string) {
               where: { id: d.userId },
               data: { walletBalance: { increment: d.amount } },
             })
-          })
+          }, TX_OPTIONS)
           reconciledCount++
         }
       } catch (err: any) {
@@ -592,7 +602,7 @@ export async function reconcilePendingTransactions(userId?: string) {
                 },
               })
             }
-          })
+          }, TX_OPTIONS)
           reconciledCount++
         } else if (queryRes.isFailed) {
           await prisma.$transaction(async (tx: any) => {
@@ -608,7 +618,7 @@ export async function reconcilePendingTransactions(userId?: string) {
               where: { id: a.userId },
               data: { walletBalance: { increment: a.amount } },
             })
-          })
+          }, TX_OPTIONS)
           reconciledCount++
         }
       } catch (err: any) {

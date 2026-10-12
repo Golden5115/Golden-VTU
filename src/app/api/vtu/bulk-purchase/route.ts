@@ -15,7 +15,7 @@ export async function POST(request: NextRequest) {
     const userId = session.user.id
 
     const body = await request.json()
-    const { type, networkId, planId, amount, serverId, phones } = body
+    const { type, networkId, planId, amount, serverId, phones, bypassSimCheck } = body
 
     if (!Array.isArray(phones) || phones.length === 0) {
       return NextResponse.json({ error: "At least one recipient phone number is required" }, { status: 400 })
@@ -43,12 +43,21 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "No valid 11-digit phone numbers found" }, { status: 400 })
     }
 
-    // Pre-check total wallet balance
+    // Pre-check total wallet balance (with transient network retry)
     const totalRequired = Math.round(unitAmount * cleanPhones.length * 100) / 100
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { walletBalance: true },
-    })
+    let user = null
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        user = await prisma.user.findUnique({
+          where: { id: userId },
+          select: { walletBalance: true },
+        })
+        break
+      } catch (dbErr: any) {
+        if (attempt === 2) throw dbErr
+        await new Promise((r) => setTimeout(r, 400))
+      }
+    }
 
     if (!user || user.walletBalance < totalRequired) {
       return NextResponse.json(
@@ -59,7 +68,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    console.log(`[BulkPurchaseAPI] Starting bulk ${type} for ${cleanPhones.length} numbers (Total: ₦${totalRequired})`)
+    console.log(`[BulkPurchaseAPI] Starting bulk ${type} for ${cleanPhones.length} numbers (Total: ₦${totalRequired}, SIM Bypass: ${Boolean(bypassSimCheck)})`)
 
     const results: Array<{
       phone: string
@@ -69,28 +78,36 @@ export async function POST(request: NextRequest) {
     }> = []
 
     for (const phone of cleanPhones) {
-      // Validate that carrier matches the selected network
-      const detected = detectNetwork(phone)
-      if (detected && detected.id !== networkId) {
-        const expectedName = NETWORKS[networkId]?.name || "selected network"
-        results.push({
-          phone,
-          success: false,
-          error: `Carrier mismatch: This number belongs to ${detected.name}, not ${expectedName}. Please use an ${expectedName} plan.`,
-        })
-        continue
+      // Validate that carrier matches the selected network unless SIM bypass is enabled for ported numbers
+      if (!bypassSimCheck) {
+        const detected = detectNetwork(phone)
+        if (detected && detected.id !== networkId) {
+          const expectedName = NETWORKS[networkId]?.name || "selected network"
+          results.push({
+            phone,
+            success: false,
+            error: `You have selected ${expectedName} instead of ${detected.name}. Phone number verification failed. If this is correct, click the 'Bypass number validator' or change the mobile network to continue.`,
+          })
+          continue
+        }
       }
 
       try {
         if (type === "data") {
-          const res = await purchaseData(userId, networkId, planId, phone, unitAmount, serverId)
+          const res = await purchaseData(userId, networkId, planId, phone, unitAmount, {
+            serverId,
+            bypassSimCheck: Boolean(bypassSimCheck),
+          })
           results.push({
             phone,
             success: true,
             reference: (res as any)?.reference || (res as any)?.id,
           })
         } else {
-          const res = await purchaseAirtime(userId, networkId, phone, unitAmount, serverId)
+          const res = await purchaseAirtime(userId, networkId, phone, unitAmount, {
+            serverId,
+            bypassSimCheck: Boolean(bypassSimCheck),
+          })
           results.push({
             phone,
             success: true,

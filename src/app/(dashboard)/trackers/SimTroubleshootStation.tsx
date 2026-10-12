@@ -141,6 +141,7 @@ export function SimTroubleshootStation({
   const [bulkSelectedPhones, setBulkSelectedPhones] = useState<string[]>([])
   const [bulkPlanValue, setBulkPlanValue] = useState("")
   const [bulkAirtimeAmount, setBulkAirtimeAmount] = useState("200")
+  const [bulkBypassSimCheck, setBulkBypassSimCheck] = useState(false)
   const [bulkIsSubmitting, setBulkIsSubmitting] = useState(false)
   const [bulkFeedback, setBulkFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null)
   const [bulkBatchResults, setBulkBatchResults] = useState<{
@@ -233,6 +234,7 @@ export function SimTroubleshootStation({
           amount: amt,
           phones: [phone],
           serverId: selectedServerId || undefined,
+          bypassSimCheck: true,
         }),
       })
       const data = await res.json()
@@ -308,6 +310,7 @@ export function SimTroubleshootStation({
           amount: amt,
           phones: [phone],
           serverId: selectedServerId || undefined,
+          bypassSimCheck: true,
         }),
       })
       const data = await res.json()
@@ -418,6 +421,7 @@ export function SimTroubleshootStation({
           amount: unitCost,
           phones: bulkSelectedPhones,
           serverId: selectedServerId || undefined,
+          bypassSimCheck: bulkBypassSimCheck,
         }),
       })
 
@@ -1761,6 +1765,8 @@ export function SimTroubleshootStation({
                     onSelectedPhonesChange={setBulkSelectedPhones}
                     targetNetworkId={bulkNetworkId}
                     onNetworkChange={(netId) => setBulkNetworkId(netId)}
+                    bypassSimCheck={bulkBypassSimCheck}
+                    onBypassSimCheckChange={setBulkBypassSimCheck}
                   />
                 </div>
 

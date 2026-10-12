@@ -221,6 +221,7 @@ export async function rechargeTrackerAirtime(
   await purchaseAirtime(user.id, tracker.network, tracker.simNumber, amount, {
     serverId,
     trackerId: tracker.id,
+    bypassSimCheck: true,
   })
 
   revalidatePath("/trackers")
@@ -251,6 +252,7 @@ export async function rechargeTrackerData(
     trackerId: tracker.id,
     planName,
     validityDays,
+    bypassSimCheck: true,
   })
 
   revalidatePath("/trackers")

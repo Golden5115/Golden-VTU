@@ -102,8 +102,12 @@ export class ClubKonnectProvider implements IVtuProvider {
     const remark = String(data.remark || "").trim().toLowerCase()
     const statusText = String(data.status || "").toUpperCase()
 
-    // 1. Confirmed Success: Code 200 with success remark
-    if (code === "200" || (statusText === "ORDER_COMPLETED" && (remark === "success" || !remark) && code !== "201")) {
+    // 1. Confirmed Success: Code 200, 299, or ORDER_COMPLETED (with non-refund remark)
+    if (
+      code === "200" ||
+      code === "299" ||
+      (statusText === "ORDER_COMPLETED" && code !== "201" && !remark.includes("refund") && !remark.includes("cancel"))
+    ) {
       return {
         isSuccessful: true,
         isPending: false,
@@ -171,8 +175,12 @@ export class ClubKonnectProvider implements IVtuProvider {
     const remark = String(data.remark || "").trim().toLowerCase()
     const statusText = String(data.status || "").toUpperCase()
 
-    // 1. Confirmed Success: Code 200 with success remark
-    if (code === "200" || (statusText === "ORDER_COMPLETED" && (remark === "success" || !remark) && code !== "201")) {
+    // 1. Confirmed Success: Code 200, 299, or ORDER_COMPLETED (with non-refund remark)
+    if (
+      code === "200" ||
+      code === "299" ||
+      (statusText === "ORDER_COMPLETED" && code !== "201" && !remark.includes("refund") && !remark.includes("cancel"))
+    ) {
       return {
         isSuccessful: true,
         isPending: false,
@@ -241,7 +249,13 @@ export class ClubKonnectProvider implements IVtuProvider {
     const remark = String(data.remark || "").trim()
     const status = String(data.status || "").toUpperCase()
 
-    const isSuccessful = code === "200" || (status === "ORDER_COMPLETED" && remark.toLowerCase() === "success")
+    const isSuccessful =
+      code === "200" ||
+      code === "299" ||
+      (status === "ORDER_COMPLETED" &&
+        code !== "201" &&
+        !remark.toLowerCase().includes("refund") &&
+        !remark.toLowerCase().includes("cancel"))
     const isPending =
       code === "100" ||
       code === "300" ||
