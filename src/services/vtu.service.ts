@@ -139,18 +139,29 @@ export async function purchaseAirtime(
           },
         })
 
-        // Decrement provider baseline immediately because carrier charges on order submission
+        // Sync provider baseline with live carrier balance returned directly in response
         if (server?.id && server.id !== "default-mock") {
-          const currentBaseline = parseFloat(String(server.publicKey || "0").replace(/,/g, "").trim()) || 0
-          if (currentBaseline > 0) {
-            const updatedBaseline = Math.max(0, currentBaseline - amount)
+          const liveCarrierBal = parseFloat(String(response.rawResponse?.walletbalance || "").replace(/,/g, "").trim())
+          if (!isNaN(liveCarrierBal) && liveCarrierBal > 0) {
             await tx.provider.update({
               where: { id: server.id },
               data: { 
-                publicKey: updatedBaseline.toString(),
-                lastKnownBalance: updatedBaseline,
+                publicKey: liveCarrierBal.toString(),
+                lastKnownBalance: liveCarrierBal,
               },
             })
+          } else {
+            const currentBaseline = parseFloat(String(server.publicKey || "0").replace(/,/g, "").trim()) || 0
+            if (currentBaseline > 0) {
+              const updatedBaseline = Math.max(0, currentBaseline - amount)
+              await tx.provider.update({
+                where: { id: server.id },
+                data: { 
+                  publicKey: updatedBaseline.toString(),
+                  lastKnownBalance: updatedBaseline,
+                },
+              })
+            }
           }
         }
 
@@ -347,19 +358,30 @@ export async function purchaseData(
           },
         })
 
-        // Decrement provider baseline immediately because carrier charges on order submission
+        // Sync provider baseline with live carrier balance returned directly in response
         if (server?.id && server.id !== "default-mock") {
-          const wholesaleCost = Math.max(0, amount - 100)
-          const currentBaseline = parseFloat(String(server.publicKey || "0").replace(/,/g, "").trim()) || 0
-          if (currentBaseline > 0) {
-            const updatedBaseline = Math.max(0, currentBaseline - wholesaleCost)
+          const liveCarrierBal = parseFloat(String(response.rawResponse?.walletbalance || "").replace(/,/g, "").trim())
+          if (!isNaN(liveCarrierBal) && liveCarrierBal > 0) {
             await tx.provider.update({
               where: { id: server.id },
               data: { 
-                publicKey: updatedBaseline.toString(),
-                lastKnownBalance: updatedBaseline,
+                publicKey: liveCarrierBal.toString(),
+                lastKnownBalance: liveCarrierBal,
               },
             })
+          } else {
+            const wholesaleCost = Math.max(0, amount - 100)
+            const currentBaseline = parseFloat(String(server.publicKey || "0").replace(/,/g, "").trim()) || 0
+            if (currentBaseline > 0) {
+              const updatedBaseline = Math.max(0, currentBaseline - wholesaleCost)
+              await tx.provider.update({
+                where: { id: server.id },
+                data: { 
+                  publicKey: updatedBaseline.toString(),
+                  lastKnownBalance: updatedBaseline,
+                },
+              })
+            }
           }
         }
 
