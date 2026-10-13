@@ -145,8 +145,8 @@ export async function purchaseAirtime(
           },
         })
 
-        // Sync provider baseline with live carrier balance returned directly in response
-        if (server?.id && server.id !== "default-mock") {
+        // Sync provider baseline with live carrier balance returned directly in response (only on confirmed completion)
+        if (isCompleted && server?.id && server.id !== "default-mock") {
           const liveCarrierBal = parseFloat(String(response.rawResponse?.walletbalance || "").replace(/,/g, "").trim())
           if (!isNaN(liveCarrierBal) && liveCarrierBal > 0) {
             await tx.provider.update({
@@ -368,8 +368,8 @@ export async function purchaseData(
           },
         })
 
-        // Sync provider baseline with live carrier balance returned directly in response
-        if (server?.id && server.id !== "default-mock") {
+        // Sync provider baseline with live carrier balance returned directly in response (only on confirmed completion)
+        if (isCompleted && server?.id && server.id !== "default-mock") {
           const liveCarrierBal = parseFloat(String(response.rawResponse?.walletbalance || "").replace(/,/g, "").trim())
           if (!isNaN(liveCarrierBal) && liveCarrierBal > 0) {
             await tx.provider.update({

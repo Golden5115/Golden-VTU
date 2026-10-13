@@ -125,12 +125,13 @@ export async function verifyAutomatedDeposit(forceFullSync?: boolean, expectedIn
         const rawResp = orderCheck?.rawResponse || {}
         const orderType = String(rawResp.ordertype || "").toLowerCase()
         const chargedAmt = parseFloat(String(rawResp.amountcharged || orderCheck.amountCharged || "0").replace(/,/g, ""))
+        const orderStatus = String(rawResp.status || "").toUpperCase()
+        const isDeposit = orderType.includes("deposit") || rawResp.orderid === rawInputStr
 
-        if (orderType.includes("deposit") || rawResp.orderid === rawInputStr) {
-          // Check if this Order ID was already credited
+        if (isDeposit && (orderStatus === "ORDER_COMPLETED" || rawResp.statuscode === "200" || rawResp.statuscode === "299")) {
+          // Check if this Order ID was already credited (across any user)
           const alreadyCredited = await prisma.walletTransaction.findFirst({
             where: {
-              userId,
               reference: { contains: rawInputStr },
             },
           })
@@ -142,7 +143,7 @@ export async function verifyAutomatedDeposit(forceFullSync?: boolean, expectedIn
             }
           }
 
-          const creditAmount = chargedAmt > 0 ? chargedAmt : parsedAmount
+          const creditAmount = chargedAmt > 0 ? chargedAmt : 0
           if (creditAmount > 0) {
             const updatedUser = await prisma.$transaction(async (tx) => {
               const u = await tx.user.update({
@@ -185,65 +186,22 @@ export async function verifyAutomatedDeposit(forceFullSync?: boolean, expectedIn
               message: `ClubKonnect Deposit (Order #${rawInputStr}) of ₦${creditAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })} successfully verified and credited!`,
             }
           }
+        } else {
+          return {
+            success: false,
+            error: `Order ID ${rawInputStr} is not a valid completed fund deposit on ClubKonnect (Status: ${orderStatus || "Incomplete"}).`,
+          }
         }
       } catch (err: any) {
         console.warn("[VerifyAutomatedDeposit] Order ID query check warning:", err.message)
-      }
-    }
-
-    // CASE 2: User specified exact transferred amount (e.g. ₦5,000 or ₦4,973.12)
-    const expectedAmount = parsedAmount > 0 && !isOrderId ? parsedAmount : undefined
-    if (expectedAmount && expectedAmount > 0) {
-      if (liveBal < expectedAmount && liveBal < 100) {
         return {
           success: false,
-          error: `Carrier balance is currently ₦${liveBal.toLocaleString(undefined, { minimumFractionDigits: 2 })}, which is less than the transferred ₦${expectedAmount.toLocaleString()}. Please wait 1-2 minutes for your bank transfer to reflect on your virtual account and try again.`,
+          error: `Could not verify Order ID ${rawInputStr}: ${err.message || "Failed to query carrier"}`,
         }
-      }
-
-      const updatedUser = await prisma.$transaction(async (tx) => {
-        const u = await tx.user.update({
-          where: { id: userId },
-          data: { walletBalance: { increment: expectedAmount } },
-        })
-
-        await tx.walletTransaction.create({
-          data: {
-            userId,
-            amount: expectedAmount,
-            type: "CREDIT",
-            status: "SUCCESS",
-            reference: `DEP_${Date.now()}_${Math.random().toString(36).substring(7)}`,
-          },
-        })
-
-        if (server?.id && server.id !== "default-mock") {
-          await tx.provider.update({
-            where: { id: server.id },
-            data: { 
-              publicKey: liveBal.toString(),
-              lastKnownBalance: liveBal,
-            },
-          })
-        }
-
-        return u
-      })
-
-      revalidatePath("/wallet/fund")
-      revalidatePath("/dashboard")
-      revalidatePath("/trackers")
-      revalidatePath("/transactions")
-
-      return {
-        success: true,
-        credited: expectedAmount,
-        balance: updatedUser.walletBalance,
-        message: `Full transfer of ₦${expectedAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })} confirmed and credited to your wallet!`,
       }
     }
 
-    // CASE 2: Auto-detect deposit delta
+    // CASE 2: Automated Bank Transfer Delta Verification
     // If baseline hasn't been set yet in the database:
     if (!storedBaseline || storedBaseline <= 0) {
       if (server?.id && server.id !== "default-mock") {
@@ -272,10 +230,10 @@ export async function verifyAutomatedDeposit(forceFullSync?: boolean, expectedIn
       }
 
       return {
-        success: true,
+        success: false,
         credited: 0,
         balance: user?.walletBalance || 0,
-        message: `Baseline set to ₦${liveBal.toLocaleString(undefined, { minimumFractionDigits: 2 })}. When you make a transfer to your dedicated virtual account, click verify again to confirm and credit your wallet.`,
+        error: `Dedicated account baseline synchronized at ₦${liveBal.toLocaleString(undefined, { minimumFractionDigits: 2 })}. When your bank transfer completes, click verify to credit your wallet.`,
       }
     }
 
@@ -295,11 +253,11 @@ export async function verifyAutomatedDeposit(forceFullSync?: boolean, expectedIn
       }
     }
 
-    // Calculate delta: newly transferred money into the account
-    const delta = liveBal - previousBalance
+    // Calculate delta: newly transferred money into the carrier account
+    const delta = Math.round((liveBal - previousBalance) * 100) / 100
 
     if (delta > 0) {
-      // New funds transferred into the account!
+      // New funds genuinely transferred into the carrier account!
       const updatedUser = await prisma.$transaction(async (tx) => {
         const u = await tx.user.update({
           where: { id: userId },
@@ -334,14 +292,19 @@ export async function verifyAutomatedDeposit(forceFullSync?: boolean, expectedIn
       revalidatePath("/trackers")
       revalidatePath("/transactions")
 
+      const expectedAmount = parsedAmount > 0 && !isOrderId ? parsedAmount : undefined
+      const confirmationMsg = expectedAmount
+        ? `Transfer confirmed! ₦${delta.toLocaleString(undefined, { minimumFractionDigits: 2 })} received and credited to your wallet (Amount sent: ₦${expectedAmount.toLocaleString()})!`
+        : `New transfer of ₦${delta.toLocaleString(undefined, { minimumFractionDigits: 2 })} confirmed and credited to your wallet!`
+
       return {
         success: true,
         credited: delta,
         balance: updatedUser.walletBalance,
-        message: `New transfer of ₦${delta.toLocaleString(undefined, { minimumFractionDigits: 2 })} confirmed and credited to your wallet!`,
+        message: confirmationMsg,
       }
     } else {
-      // Sync baseline to live balance if out of sync
+      // Delta is <= 0: NO funds have arrived. NEVER credit anything!
       if (server?.id && server.id !== "default-mock" && storedBaseline !== liveBal) {
         await prisma.provider.update({
           where: { id: server.id },
@@ -352,11 +315,16 @@ export async function verifyAutomatedDeposit(forceFullSync?: boolean, expectedIn
         })
       }
 
+      const expectedAmount = parsedAmount > 0 && !isOrderId ? parsedAmount : undefined
+      const errorMessage = expectedAmount
+        ? `No incoming transfer of ₦${expectedAmount.toLocaleString()} detected on your dedicated virtual account yet. If you just transferred from your bank app, please allow 1 to 2 minutes for the payment to reflect, then click Verify again.`
+        : `No new incoming transfer detected on your dedicated virtual account yet. Please ensure your bank transfer is completed, then click Verify again.`
+
       return {
-        success: true,
+        success: false,
         credited: 0,
         balance: user?.walletBalance || 0,
-        message: "No new incoming transfer detected yet. Please ensure your bank transfer is completed, then click verify again.",
+        error: errorMessage,
       }
     }
   } catch (err: any) {

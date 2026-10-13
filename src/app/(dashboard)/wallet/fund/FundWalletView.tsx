@@ -171,26 +171,34 @@ export function FundWalletView({
           </div>
         </div>
 
-        {verifyFeedback && (
-          <div
-            className={`p-2.5 rounded-lg text-xs font-medium flex items-center justify-between ${
-              verifyFeedback.includes("confirmed") ||
-              verifyFeedback.includes("credited") ||
-              verifyFeedback.includes("initialized") ||
-              verifyFeedback.includes("completed")
-                ? "bg-green-100/80 text-green-800 border border-green-300"
-                : "bg-amber-100/80 text-amber-900 border border-amber-300"
-            }`}
-          >
-            <div className="flex items-center gap-1.5">
-              <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-700" />
-              <span>{verifyFeedback}</span>
+        {verifyFeedback && (() => {
+          const isSuccess =
+            verifyFeedback.includes("confirmed") ||
+            verifyFeedback.includes("credited") ||
+            verifyFeedback.includes("initialized") ||
+            verifyFeedback.includes("completed")
+          return (
+            <div
+              className={`p-2.5 rounded-lg text-xs font-medium flex items-center justify-between ${
+                isSuccess
+                  ? "bg-green-100/80 text-green-800 border border-green-300"
+                  : "bg-amber-100/80 text-amber-900 border border-amber-300"
+              }`}
+            >
+              <div className="flex items-center gap-1.5">
+                {isSuccess ? (
+                  <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-700" />
+                ) : (
+                  <AlertTriangle className="w-4 h-4 shrink-0 text-amber-700" />
+                )}
+                <span>{verifyFeedback}</span>
+              </div>
+              <button onClick={() => setVerifyFeedback(null)} className="underline text-[11px] ml-2">
+                Dismiss
+              </button>
             </div>
-            <button onClick={() => setVerifyFeedback(null)} className="underline text-[11px] ml-2">
-              Dismiss
-            </button>
-          </div>
-        )}
+          )
+        })()}
       </div>
 
       {/* Tab Navigation */}
@@ -293,18 +301,18 @@ export function FundWalletView({
             <div className="bg-emerald-50/60 border border-emerald-200 rounded-xl p-3.5 space-y-3 text-xs text-emerald-950">
               <div>
                 <label className="font-bold flex items-center justify-between text-xs text-emerald-900">
-                  <span>Amount Transferred (₦) or ClubKonnect Order ID <span className="font-normal text-gray-500">(Optional)</span></span>
+                  <span>Verify Transfer or ClubKonnect Order ID <span className="font-normal text-gray-500">(Optional)</span></span>
                   <span className="text-[10px] text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full font-bold border border-emerald-200">
-                    100% Exact Credit
+                    Automated &amp; Secure
                   </span>
                 </label>
                 <p className="text-[11px] text-gray-600 mt-0.5">
-                  Enter the exact amount sent (e.g. 5000) or your ClubKonnect deposit Order ID (e.g. 6721245675) to credit 100% immediately. Or leave blank to auto-detect.
+                  Leave blank to auto-detect your incoming bank transfer, or enter the amount sent (e.g. 5000) or ClubKonnect Deposit Order ID (e.g. 6721245675). Funds are credited once your transfer reflects on your dedicated account.
                 </p>
                 <div className="relative mt-2">
                   <input
                     type="text"
-                    placeholder="e.g. 5000 or Order ID 6721245675 (or leave blank to auto-detect)"
+                    placeholder="Optional: Amount sent or ClubKonnect Order ID (or leave blank to auto-detect)"
                     value={depositAmount}
                     onChange={(e) => setDepositAmount(e.target.value)}
                     className="w-full px-3 py-2 text-xs font-semibold bg-white border border-emerald-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-gray-900 font-mono"
