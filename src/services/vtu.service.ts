@@ -217,6 +217,7 @@ export async function purchaseAirtime(
 
       const cleanErrorMsg = String(error?.message || "Carrier processing error")
         .replace(/clubkonnect/gi, "Telecom Carrier")
+        .replace(/pairgate/gi, "Telecom Carrier")
         .replace(/nellobyte/gi, "Network Gateway")
 
       throw new Error(
@@ -446,6 +447,7 @@ export async function purchaseData(
 
       const cleanErrorMsg = String(error?.message || "Carrier processing error")
         .replace(/clubkonnect/gi, "Telecom Carrier")
+        .replace(/pairgate/gi, "Telecom Carrier")
         .replace(/nellobyte/gi, "Network Gateway")
 
       throw new Error(

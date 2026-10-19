@@ -18,8 +18,6 @@ export async function GET(
         id: server.id,
         serverName: server.serverName,
         serverCode: server.serverCode,
-        providerName: server.providerName,
-        identifier: server.identifier,
       },
       plans,
     })

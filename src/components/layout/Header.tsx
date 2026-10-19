@@ -4,15 +4,18 @@ import { auth } from "@/auth"
 import { Zap } from "lucide-react"
 import { MobileNavDrawer } from "./MobileNavDrawer"
 import { CtnLogo } from "@/components/ui/CtnLogo"
+import { isAnalyticsServerEnabled } from "@/lib/feature-flags"
 
 export async function Header() {
   const session = await auth()
+  const showAnalytics = await isAnalyticsServerEnabled()
 
   return (
     <header className="flex items-center justify-between px-4 sm:px-6 py-3.5 bg-white border-b sticky top-0 z-30">
       {/* Mobile Menu & Logo */}
       <div className="flex items-center gap-2 md:hidden">
         <MobileNavDrawer
+          showAnalytics={showAnalytics}
           user={{
             name: session?.user?.name,
             email: session?.user?.email,

@@ -26,13 +26,17 @@ import {
   Layers,
   RefreshCw,
   CheckCheck,
+  Server,
+  ShieldCheck,
+  Radio,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { checkSimHistory, SimDiagnosticHistory } from "@/actions/sim-history.actions"
 import { BulkPhoneInputWithHistory } from "@/components/vtu/BulkPhoneInputWithHistory"
-import { format12HourDateTime } from "@/lib/phone-utils"
+import { format12HourDateTime, detectNetwork } from "@/lib/phone-utils"
+import { NetworkMismatchModal } from "@/components/vtu/NetworkMismatchModal"
 
 interface SimTroubleshootStationProps {
   walletBalance: number
@@ -93,9 +97,45 @@ export function SimTroubleshootStation({
   // Navigation Mode: Single SIM vs Bulk Multi-SIM
   const [activeTab, setActiveTab] = useState<"single" | "bulk">("single")
 
-  // Shared Wallet Balance
+  // Shared Wallet Balance & Server Route
   const [walletBalance, setWalletBalance] = useState(initialWalletBalance)
   const [selectedServerId, setSelectedServerId] = useState(servers[0]?.id || "")
+  const [currentPlans, setCurrentPlans] = useState<any[]>(availablePlans)
+  const [plansCache, setPlansCache] = useState<Record<string, any[]>>({
+    [servers[0]?.id || ""]: availablePlans,
+  })
+  const [isSwitchingServer, setIsSwitchingServer] = useState(false)
+
+  const activeServer = servers.find((s) => s.id === selectedServerId) || servers[0]
+
+  async function handleSelectServer(serverId: string) {
+    if (serverId === selectedServerId) return
+    setSelectedServerId(serverId)
+    setSelectedPlanValue("")
+    setBulkPlanValue("")
+    setFeedback(null)
+    setBulkFeedback(null)
+
+    // Instant switch if plans for this server are already cached
+    if (plansCache[serverId] && plansCache[serverId].length > 0) {
+      setCurrentPlans(plansCache[serverId])
+      return
+    }
+
+    setIsSwitchingServer(true)
+    try {
+      const res = await fetch(`/api/servers/${serverId}/plans`)
+      const data = await res.json()
+      if (data.success && Array.isArray(data.plans)) {
+        setCurrentPlans(data.plans)
+        setPlansCache((prev) => ({ ...prev, [serverId]: data.plans }))
+      }
+    } catch (err) {
+      console.error("[SimStation] Failed to load server plans:", err)
+    } finally {
+      setIsSwitchingServer(false)
+    }
+  }
 
   // Reconcile pending orders live with telecom carrier
   async function handleSyncStatus() {
@@ -117,7 +157,7 @@ export function SimTroubleshootStation({
   const [historyData, setHistoryData] = useState<SimDiagnosticHistory | null>(null)
   const [isSearching, setIsSearching] = useState(false)
   const [selectedAction, setSelectedAction] = useState<"data" | "airtime">("data")
-  const [selectedNetwork, setSelectedNetwork] = useState("01")
+  const [selectedNetwork, setSelectedNetwork] = useState("")
   const [selectedPlanValue, setSelectedPlanValue] = useState("")
   const [airtimeAmount, setAirtimeAmount] = useState("200")
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -136,7 +176,7 @@ export function SimTroubleshootStation({
   // 2. BULK MULTI-SIM STATE
   // ==========================================
   const [bulkServiceType, setBulkServiceType] = useState<"data" | "airtime">("data")
-  const [bulkNetworkId, setBulkNetworkId] = useState("01")
+  const [bulkNetworkId, setBulkNetworkId] = useState("")
   const [bulkRawPhones, setBulkRawPhones] = useState("")
   const [bulkSelectedPhones, setBulkSelectedPhones] = useState<string[]>([])
   const [bulkPlanValue, setBulkPlanValue] = useState("")
@@ -162,6 +202,7 @@ export function SimTroubleshootStation({
   function handleResetForNextSim() {
     setReceipt(null)
     setPhone("")
+    setSelectedNetwork("")
     setHistoryData(null)
     setSelectedPlanValue("")
     setAirtimeAmount("200")
@@ -178,6 +219,97 @@ export function SimTroubleshootStation({
     window.scrollTo({ top: 0, behavior: "smooth" })
   }
 
+  // Carrier Mismatch Confirmation Modal State
+  const [mismatchModal, setMismatchModal] = useState<{
+    isOpen: boolean
+    phone?: string
+    phones?: string[]
+    detectedNetworkId?: string | null
+    detectedNetworkName?: string | null
+    selectedNetworkId: string
+    selectedNetworkName: string
+    onProceed: () => void
+    isBulk?: boolean
+    mismatchedCount?: number
+    totalCount?: number
+  }>({
+    isOpen: false,
+    selectedNetworkId: "",
+    selectedNetworkName: "",
+    onProceed: () => {},
+  })
+
+  // Safe network selection with mismatch detection
+  function handleSelectNetwork(netId: string) {
+    if (!netId) {
+      setSelectedNetwork("")
+      setSelectedPlanValue("")
+      return
+    }
+
+    if (phone.length >= 10) {
+      const detected = detectNetwork(phone)
+      if (detected && detected.id !== netId) {
+        const detectedLabel = NETWORK_META[detected.id]?.label || detected.name
+        const targetLabel = NETWORK_META[netId]?.label || netId
+        setMismatchModal({
+          isOpen: true,
+          phone,
+          detectedNetworkId: detected.id,
+          detectedNetworkName: detectedLabel,
+          selectedNetworkId: netId,
+          selectedNetworkName: targetLabel,
+          onProceed: () => {
+            setSelectedNetwork(netId)
+            setSelectedPlanValue("")
+            setMismatchModal((prev) => ({ ...prev, isOpen: false }))
+          },
+        })
+        return
+      }
+    }
+
+    setSelectedNetwork(netId)
+    setSelectedPlanValue("")
+  }
+
+  // Safe bulk network selection with batch mismatch detection
+  function handleSelectBulkNetwork(netId: string) {
+    if (!netId) {
+      setBulkNetworkId("")
+      setBulkPlanValue("")
+      return
+    }
+
+    if (bulkSelectedPhones.length > 0) {
+      const mismatched = bulkSelectedPhones.filter((p) => {
+        const d = detectNetwork(p)
+        return d && d.id !== netId
+      })
+
+      if (mismatched.length > 0) {
+        const targetLabel = NETWORK_META[netId]?.label || netId
+        setMismatchModal({
+          isOpen: true,
+          isBulk: true,
+          mismatchedCount: mismatched.length,
+          totalCount: bulkSelectedPhones.length,
+          selectedNetworkId: netId,
+          selectedNetworkName: targetLabel,
+          onProceed: () => {
+            setBulkNetworkId(netId)
+            setBulkPlanValue("")
+            setMismatchModal((prev) => ({ ...prev, isOpen: false }))
+          },
+        })
+        return
+      }
+    }
+
+    setBulkNetworkId(netId)
+    setBulkPlanValue("")
+  }
+
   // Quick lookup handler for single SIM
   async function handlePhoneLookup(numberToLookup: string) {
     const clean = numberToLookup.replace(/[^0-9]/g, "")
@@ -189,13 +321,29 @@ export function SimTroubleshootStation({
       return
     }
 
+    if (clean.length === 11 && selectedNetwork) {
+      const detected = detectNetwork(clean)
+      if (detected && detected.id !== selectedNetwork) {
+        const detectedLabel = NETWORK_META[detected.id]?.label || detected.name
+        const targetLabel = NETWORK_META[selectedNetwork]?.label || selectedNetwork
+        setMismatchModal({
+          isOpen: true,
+          phone: clean,
+          detectedNetworkId: detected.id,
+          detectedNetworkName: detectedLabel,
+          selectedNetworkId: selectedNetwork,
+          selectedNetworkName: targetLabel,
+          onProceed: () => {
+            setMismatchModal((prev) => ({ ...prev, isOpen: false }))
+          },
+        })
+      }
+    }
+
     setIsSearching(true)
     try {
       const res = await checkSimHistory(clean)
       setHistoryData(res)
-      if (res?.network?.id) {
-        setSelectedNetwork(res.network.id)
-      }
     } catch (err: any) {
       console.error(err)
     } finally {
@@ -204,11 +352,37 @@ export function SimTroubleshootStation({
   }
 
   // Single Airtime Purchase
-  async function handleBuyAirtime() {
+  async function handleBuyAirtime(bypassMismatch = false) {
     if (!phone || phone.length < 10) {
       setFeedback({ type: "error", message: "Please enter an 11-digit phone number." })
       return
     }
+    if (!selectedNetwork) {
+      setFeedback({ type: "error", message: "Please select a mobile network (MTN, Airtel, Glo, or 9mobile)." })
+      return
+    }
+
+    if (!bypassMismatch) {
+      const detected = detectNetwork(phone)
+      if (detected && detected.id !== selectedNetwork) {
+        const detectedLabel = NETWORK_META[detected.id]?.label || detected.name
+        const targetLabel = NETWORK_META[selectedNetwork]?.label || selectedNetwork
+        setMismatchModal({
+          isOpen: true,
+          phone,
+          detectedNetworkId: detected.id,
+          detectedNetworkName: detectedLabel,
+          selectedNetworkId: selectedNetwork,
+          selectedNetworkName: targetLabel,
+          onProceed: () => {
+            setMismatchModal((prev) => ({ ...prev, isOpen: false }))
+            handleBuyAirtime(true)
+          },
+        })
+        return
+      }
+    }
+
     const amt = parseFloat(airtimeAmount)
     if (!amt || amt < 50) {
       setFeedback({ type: "error", message: "Minimum airtime amount is ₦50." })
@@ -277,14 +451,39 @@ export function SimTroubleshootStation({
   }
 
   // Single Data Purchase
-  async function handleBuyData() {
+  async function handleBuyData(bypassMismatch = false) {
     if (!phone || phone.length < 10) {
       setFeedback({ type: "error", message: "Please enter an 11-digit phone number." })
+      return
+    }
+    if (!selectedNetwork) {
+      setFeedback({ type: "error", message: "Please select a mobile network (MTN, Airtel, Glo, or 9mobile)." })
       return
     }
     if (!selectedPlanValue) {
       setFeedback({ type: "error", message: "Please select a data bundle plan." })
       return
+    }
+
+    if (!bypassMismatch) {
+      const detected = detectNetwork(phone)
+      if (detected && detected.id !== selectedNetwork) {
+        const detectedLabel = NETWORK_META[detected.id]?.label || detected.name
+        const targetLabel = NETWORK_META[selectedNetwork]?.label || selectedNetwork
+        setMismatchModal({
+          isOpen: true,
+          phone,
+          detectedNetworkId: detected.id,
+          detectedNetworkName: detectedLabel,
+          selectedNetworkId: selectedNetwork,
+          selectedNetworkName: targetLabel,
+          onProceed: () => {
+            setMismatchModal((prev) => ({ ...prev, isOpen: false }))
+            handleBuyData(true)
+          },
+        })
+        return
+      }
     }
 
     const [planId, priceStr, planName] = selectedPlanValue.split("::")
@@ -357,7 +556,7 @@ export function SimTroubleshootStation({
   // ==========================================
   // BULK RECHARGE ACTIONS
   // ==========================================
-  const bulkNetworkPlans = availablePlans.filter((p) => p.network === bulkNetworkId)
+  const bulkNetworkPlans = currentPlans.filter((p) => p.network === bulkNetworkId)
 
   // Calculate unit and total costs for bulk
   const bulkUnitCost =
@@ -370,13 +569,45 @@ export function SimTroubleshootStation({
   const bulkTotalCost = bulkUnitCost * bulkSelectedPhones.length
   const bulkHasInsufficientBalance = walletBalance < bulkTotalCost
 
-  async function handleBulkSubmit() {
+  async function handleBulkSubmit(bypassMismatch = false) {
     if (bulkSelectedPhones.length === 0) {
       setBulkFeedback({
         type: "error",
         message: "Please enter or select at least one tracker SIM phone number.",
       })
       return
+    }
+
+    if (!bulkNetworkId) {
+      setBulkFeedback({
+        type: "error",
+        message: "Please select a mobile network (MTN, Airtel, Glo, or 9mobile) for this bulk batch.",
+      })
+      return
+    }
+
+    if (!bypassMismatch) {
+      const mismatched = bulkSelectedPhones.filter((p) => {
+        const d = detectNetwork(p)
+        return d && d.id !== bulkNetworkId
+      })
+
+      if (mismatched.length > 0) {
+        const targetLabel = NETWORK_META[bulkNetworkId]?.label || bulkNetworkId
+        setMismatchModal({
+          isOpen: true,
+          isBulk: true,
+          mismatchedCount: mismatched.length,
+          totalCount: bulkSelectedPhones.length,
+          selectedNetworkId: bulkNetworkId,
+          selectedNetworkName: targetLabel,
+          onProceed: () => {
+            setMismatchModal((prev) => ({ ...prev, isOpen: false }))
+            handleBulkSubmit(true)
+          },
+        })
+        return
+      }
     }
 
     let unitCost = 0
@@ -421,7 +652,7 @@ export function SimTroubleshootStation({
           amount: unitCost,
           phones: bulkSelectedPhones,
           serverId: selectedServerId || undefined,
-          bypassSimCheck: bulkBypassSimCheck,
+          bypassSimCheck: true,
         }),
       })
 
@@ -454,7 +685,7 @@ export function SimTroubleshootStation({
     window.scrollTo({ top: 0, behavior: "smooth" })
   }
 
-  const networkPlans = availablePlans.filter((p) => p.network === selectedNetwork)
+  const networkPlans = currentPlans.filter((p) => p.network === selectedNetwork)
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
@@ -483,6 +714,97 @@ export function SimTroubleshootStation({
         >
           Fund Wallet
         </Link>
+      </div>
+
+      {/* SERVER GATEWAY ROUTE TABS MODULE */}
+      <div className="bg-white rounded-2xl border border-slate-200/90 p-3.5 sm:p-4 shadow-xs space-y-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 border-b border-slate-100 pb-2.5">
+          <div className="flex items-center gap-2">
+            <div className="p-1.5 rounded-lg bg-blue-50 text-blue-600">
+              <Server className="w-4 h-4" />
+            </div>
+            <div>
+              <h3 className="text-xs sm:text-sm font-bold text-gray-900">Select Telecom Gateway Server</h3>
+              <p className="text-[11px] text-gray-500">
+                Switch carrier gateways for different data categories & delivery routes
+              </p>
+            </div>
+          </div>
+          {isSwitchingServer && (
+            <div className="flex items-center gap-1.5 text-xs text-blue-600 font-semibold animate-pulse">
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              <span>Updating route catalogue...</span>
+            </div>
+          )}
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {servers.map((s, idx) => {
+            const isSelected = s.id === selectedServerId
+            const isServer2 = s.serverCode === "server-2" || idx === 1
+            const displayName = isServer2 ? "Server 2" : "Server 1"
+            const subtitle = isServer2 ? "Corporate Data Route" : "Standard Data Route"
+
+            return (
+              <button
+                key={s.id}
+                type="button"
+                onClick={() => handleSelectServer(s.id)}
+                className={`relative text-left p-3.5 rounded-xl border-2 transition-all flex flex-col justify-between ${
+                  isSelected
+                    ? isServer2
+                      ? "border-emerald-500 bg-emerald-50/50 ring-2 ring-emerald-500/20 shadow-xs"
+                      : "border-blue-600 bg-blue-50/50 ring-2 ring-blue-600/20 shadow-xs"
+                    : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50/60"
+                }`}
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-sm text-gray-900">{displayName}</span>
+                    </div>
+                    <p className="text-[11px] text-gray-600 font-medium">
+                      {subtitle}
+                    </p>
+                  </div>
+
+                  <div className="shrink-0">
+                    {isSelected ? (
+                      <span
+                        className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold ${
+                          isServer2 ? "bg-emerald-600 text-white" : "bg-blue-600 text-white"
+                        }`}
+                      >
+                        <Check className="w-3 h-3 stroke-[3]" />
+                        Active Route
+                      </span>
+                    ) : (
+                      <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600">
+                        Click to Select
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 pt-2.5 mt-2 border-t border-slate-200/60 text-[10px]">
+                  <span
+                    className={`font-semibold ${
+                      isSelected
+                        ? isServer2
+                          ? "text-emerald-700"
+                          : "text-blue-700"
+                        : "text-gray-500"
+                    }`}
+                  >
+                    {isServer2 ? "Corporate Gifting & SME Plans" : "Standard SME Plans"}
+                  </span>
+                  <span className="text-gray-300">•</span>
+                  <span className="text-emerald-600 font-semibold">Active &amp; Ready</span>
+                </div>
+              </button>
+            )
+          })}
+        </div>
       </div>
 
       {/* TOP TABS: Single SIM vs Bulk Multi-SIM */}
@@ -681,20 +1003,59 @@ export function SimTroubleshootStation({
             /* MAIN SINGLE SIM SEARCH & INPUT CARD */
             <Card className="border-2 border-blue-200 shadow-sm overflow-hidden">
               <div className="p-5 md:p-6 space-y-4">
-                <label className="text-sm font-bold text-gray-800 flex items-center gap-1.5">
+                {/* 1. Manual Mobile Network Selector */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-gray-700 uppercase tracking-wider">
+                      Select Mobile Network
+                    </label>
+                    <span className="text-[11px] text-gray-500 font-medium">
+                      {selectedNetwork ? `Selected: ${NETWORK_META[selectedNetwork]?.label || "Carrier"}` : "Click to select carrier"}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    {[
+                      { id: "01", name: "MTN Nigeria", activeBorder: "border-amber-500 bg-amber-50 text-amber-900 ring-2 ring-amber-500/20" },
+                      { id: "04", name: "Airtel Nigeria", activeBorder: "border-rose-500 bg-rose-50 text-rose-900 ring-2 ring-rose-500/20" },
+                      { id: "02", name: "Glo Mobile", activeBorder: "border-emerald-500 bg-emerald-50 text-emerald-900 ring-2 ring-emerald-500/20" },
+                      { id: "03", name: "9mobile", activeBorder: "border-green-600 bg-green-50 text-green-950 ring-2 ring-green-600/20" },
+                    ].map((net) => {
+                      const isNetSelected = selectedNetwork === net.id
+                      return (
+                        <button
+                          key={net.id}
+                          type="button"
+                          onClick={() => handleSelectNetwork(net.id)}
+                          className={`py-2.5 px-3 rounded-xl border-2 font-bold text-xs sm:text-sm transition-all flex items-center justify-between ${
+                            isNetSelected
+                              ? net.activeBorder + " font-extrabold shadow-xs"
+                              : "bg-white text-gray-700 border-gray-200 hover:border-gray-300 hover:bg-gray-50"
+                          }`}
+                        >
+                          <span>{net.name}</span>
+                          {isNetSelected ? (
+                            <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
+                          ) : null}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+
+                <label className="text-sm font-bold text-gray-800 flex items-center gap-1.5 pt-1">
                   <Search className="w-4 h-4 text-blue-600" />
                   Paste Tracker SIM Phone Number
                 </label>
 
-                <div className="relative">
-                  <Input
-                    type="tel"
-                    value={phone}
-                    onChange={(e) => handlePhoneLookup(e.target.value)}
-                    placeholder="e.g. 08031234567 or 070..."
-                    className="text-lg font-mono font-bold tracking-wider py-6 px-4 pr-16 bg-gray-50/50 focus:bg-white border-gray-300"
-                    autoFocus
-                  />
+                  <div className="relative">
+                    <Input
+                      type="tel"
+                      value={phone}
+                      onChange={(e) => handlePhoneLookup(e.target.value)}
+                      placeholder="e.g. 08031234567 or 070..."
+                      className="text-lg font-mono font-bold tracking-wider py-6 px-4 pr-16 bg-gray-50/50 focus:bg-white border-gray-300"
+                      autoFocus
+                    />
                   {phone && (
                     <button
                       type="button"
@@ -1009,17 +1370,16 @@ export function SimTroubleshootStation({
                             </span>
                           </div>
                         )}
+
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                           <div>
                             <label className="text-xs font-semibold text-gray-700">Mobile Network</label>
                             <select
                               value={selectedNetwork}
-                              onChange={(e) => {
-                                setSelectedNetwork(e.target.value)
-                                setSelectedPlanValue("")
-                              }}
+                              onChange={(e) => handleSelectNetwork(e.target.value)}
                               className="w-full border rounded-lg px-3 py-2.5 text-base sm:text-sm mt-1 bg-white font-medium min-h-[44px]"
                             >
+                              <option value="">-- Choose Mobile Network --</option>
                               <option value="01">MTN Nigeria</option>
                               <option value="04">Airtel Nigeria</option>
                               <option value="02">Glo Mobile</option>
@@ -1034,21 +1394,27 @@ export function SimTroubleshootStation({
                               onChange={(e) => setSelectedPlanValue(e.target.value)}
                               className="w-full border rounded-lg px-3 py-2.5 text-base sm:text-sm mt-1 bg-white font-medium min-h-[44px]"
                             >
-                              <option value="">-- Choose Data Bundle --</option>
-                              {networkPlans.map((p) => {
-                                const hasDuration = /day|month|week|daily|weekly|monthly|\(\d+/i.test(p.name)
-                                const validityLabel = !hasDuration && p.validity ? ` (${p.validity})` : ""
-                                return (
-                                  <option key={p.id} value={`${p.id}::${p.price}::${p.name}`}>
-                                    {p.name} — ₦{p.price.toLocaleString()}{validityLabel}
-                                  </option>
-                                )
-                              })}
-                              {networkPlans.length === 0 && (
+                              {!selectedNetwork ? (
+                                <option value="">-- Select a mobile network first --</option>
+                              ) : (
                                 <>
-                                  <option value="8::380::1.0GB SME (30 Days)">1.0GB — ₦380 (Recommended for Trackers, 30 Days)</option>
-                                  <option value="7::245::500MB SME (30 Days)">500MB — ₦245 (Budget Plan, 30 Days)</option>
-                                  <option value="9::660::2.0GB SME (30 Days)">2.0GB — ₦660 (30 Days)</option>
+                                  <option value="">-- Choose Data Bundle --</option>
+                                  {networkPlans.map((p) => {
+                                    const hasDuration = /day|month|week|daily|weekly|monthly|\(\d+/i.test(p.name)
+                                    const validityLabel = !hasDuration && p.validity ? ` (${p.validity})` : ""
+                                    return (
+                                      <option key={p.id} value={`${p.id}::${p.price}::${p.name}`}>
+                                        {p.name} — ₦{p.price.toLocaleString()}{validityLabel}
+                                      </option>
+                                    )
+                                  })}
+                                  {networkPlans.length === 0 && (
+                                    <>
+                                      <option value="8::380::1.0GB SME (30 Days)">1.0GB — ₦380 (Recommended for Trackers, 30 Days)</option>
+                                      <option value="7::245::500MB SME (30 Days)">500MB — ₦245 (Budget Plan, 30 Days)</option>
+                                      <option value="9::660::2.0GB SME (30 Days)">2.0GB — ₦660 (30 Days)</option>
+                                    </>
+                                  )}
                                 </>
                               )}
                             </select>
@@ -1077,7 +1443,7 @@ export function SimTroubleshootStation({
                             Destination: <span className="font-mono font-bold text-gray-800">{phone}</span>
                           </span>
                           <Button
-                            onClick={handleBuyData}
+                            onClick={() => handleBuyData()}
                             disabled={isSubmitting || !selectedPlanValue}
                             className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs px-6 py-3 min-h-[44px]"
                           >
@@ -1105,9 +1471,10 @@ export function SimTroubleshootStation({
                             <label className="text-xs font-semibold text-gray-700">Mobile Network</label>
                             <select
                               value={selectedNetwork}
-                              onChange={(e) => setSelectedNetwork(e.target.value)}
+                              onChange={(e) => handleSelectNetwork(e.target.value)}
                               className="w-full border rounded-lg px-3 py-2.5 text-base sm:text-sm mt-1 bg-white font-medium min-h-[44px]"
                             >
+                              <option value="">-- Choose Mobile Network --</option>
                               <option value="01">MTN Nigeria</option>
                               <option value="04">Airtel Nigeria</option>
                               <option value="02">Glo Mobile</option>
@@ -1166,7 +1533,7 @@ export function SimTroubleshootStation({
                             Destination: <span className="font-mono font-bold text-gray-800">{phone}</span>
                           </span>
                           <Button
-                            onClick={handleBuyAirtime}
+                            onClick={() => handleBuyAirtime()}
                             disabled={isSubmitting || !airtimeAmount}
                             className="w-full sm:w-auto bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs px-6 py-3 min-h-[44px]"
                           >
@@ -1675,25 +2042,46 @@ export function SimTroubleshootStation({
               </CardHeader>
 
               <CardContent className="p-5 md:p-6 space-y-6">
-                {/* 1. Network & Plan / Amount Selector */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-xs font-semibold text-gray-700">1. Mobile Network</label>
-                    <select
-                      value={bulkNetworkId}
-                      onChange={(e) => {
-                        setBulkNetworkId(e.target.value)
-                        setBulkPlanValue("")
-                      }}
-                      className="w-full border rounded-lg px-3 py-2.5 text-base sm:text-sm mt-1 bg-white font-medium min-h-[44px]"
-                    >
-                      <option value="01">MTN Nigeria</option>
-                      <option value="04">Airtel Nigeria</option>
-                      <option value="02">Glo Mobile</option>
-                      <option value="03">9mobile</option>
-                    </select>
+                {/* 1. Bulk Mobile Network Selector */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-gray-700 uppercase tracking-wider">
+                      1. Select Bulk Mobile Network
+                    </label>
+                    <span className="text-[11px] text-gray-500 font-medium">
+                      {bulkNetworkId ? "Applies to all selected SIMs" : "Click to select carrier for batch"}
+                    </span>
                   </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    {[
+                      { id: "01", name: "MTN Nigeria", activeBorder: "border-amber-500 bg-amber-50 text-amber-900 ring-2 ring-amber-500/20" },
+                      { id: "04", name: "Airtel Nigeria", activeBorder: "border-rose-500 bg-rose-50 text-rose-900 ring-2 ring-rose-500/20" },
+                      { id: "02", name: "Glo Mobile", activeBorder: "border-emerald-500 bg-emerald-50 text-emerald-900 ring-2 ring-emerald-500/20" },
+                      { id: "03", name: "9mobile", activeBorder: "border-green-600 bg-green-50 text-green-950 ring-2 ring-green-600/20" },
+                    ].map((net) => {
+                      const isNetSelected = bulkNetworkId === net.id
+                      return (
+                        <button
+                          key={net.id}
+                          type="button"
+                          onClick={() => handleSelectBulkNetwork(net.id)}
+                          className={`py-3 px-3 rounded-xl border-2 font-bold text-xs sm:text-sm transition-all flex items-center justify-between ${
+                            isNetSelected
+                              ? net.activeBorder + " font-extrabold shadow-xs"
+                              : "bg-white text-gray-700 border-gray-200 hover:border-gray-300 hover:bg-gray-50"
+                          }`}
+                        >
+                          <span>{net.name}</span>
+                          {isNetSelected ? (
+                            <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
+                          ) : null}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
 
+                <div className="pt-2">
                   {bulkServiceType === "data" ? (
                     <div>
                       <label className="text-xs font-semibold text-gray-700">2. Select Data Bundle Plan</label>
@@ -1702,21 +2090,27 @@ export function SimTroubleshootStation({
                         onChange={(e) => setBulkPlanValue(e.target.value)}
                         className="w-full border rounded-lg px-3 py-2.5 text-base sm:text-sm mt-1 bg-white font-medium min-h-[44px]"
                       >
-                        <option value="">-- Choose Data Bundle --</option>
-                        {bulkNetworkPlans.map((p) => {
-                          const hasDuration = /day|month|week|daily|weekly|monthly|\(\d+/i.test(p.name)
-                          const validityLabel = !hasDuration && p.validity ? ` (${p.validity})` : ""
-                          return (
-                            <option key={p.id} value={`${p.id}::${p.price}::${p.name}`}>
-                              {p.name} — ₦{p.price.toLocaleString()}{validityLabel}
-                            </option>
-                          )
-                        })}
-                        {bulkNetworkPlans.length === 0 && (
+                        {!bulkNetworkId ? (
+                          <option value="">-- Select a mobile network above first --</option>
+                        ) : (
                           <>
-                            <option value="8::380::1.0GB SME (30 Days)">1.0GB — ₦380 (Recommended for Trackers, 30 Days)</option>
-                            <option value="7::245::500MB SME (30 Days)">500MB — ₦245 (Budget Plan, 30 Days)</option>
-                            <option value="9::660::2.0GB SME (30 Days)">2.0GB — ₦660 (30 Days)</option>
+                            <option value="">-- Choose Data Bundle --</option>
+                            {bulkNetworkPlans.map((p) => {
+                              const hasDuration = /day|month|week|daily|weekly|monthly|\(\d+/i.test(p.name)
+                              const validityLabel = !hasDuration && p.validity ? ` (${p.validity})` : ""
+                              return (
+                                <option key={p.id} value={`${p.id}::${p.price}::${p.name}`}>
+                                  {p.name} — ₦{p.price.toLocaleString()}{validityLabel}
+                                </option>
+                              )
+                            })}
+                            {bulkNetworkPlans.length === 0 && (
+                              <>
+                                <option value="8::380::1.0GB SME (30 Days)">1.0GB — ₦380 (Recommended for Trackers, 30 Days)</option>
+                                <option value="7::245::500MB SME (30 Days)">500MB — ₦245 (Budget Plan, 30 Days)</option>
+                                <option value="9::660::2.0GB SME (30 Days)">2.0GB — ₦660 (30 Days)</option>
+                              </>
+                            )}
                           </>
                         )}
                       </select>
@@ -1764,7 +2158,7 @@ export function SimTroubleshootStation({
                     selectedPhones={bulkSelectedPhones}
                     onSelectedPhonesChange={setBulkSelectedPhones}
                     targetNetworkId={bulkNetworkId}
-                    onNetworkChange={(netId) => setBulkNetworkId(netId)}
+                    onNetworkChange={(netId) => handleSelectBulkNetwork(netId)}
                     bypassSimCheck={bulkBypassSimCheck}
                     onBypassSimCheckChange={setBulkBypassSimCheck}
                   />
@@ -1816,7 +2210,7 @@ export function SimTroubleshootStation({
 
                 {/* 4. Submit Bulk Button */}
                 <Button
-                  onClick={handleBulkSubmit}
+                  onClick={() => handleBulkSubmit()}
                   disabled={
                     bulkIsSubmitting ||
                     bulkSelectedPhones.length === 0 ||
@@ -1843,6 +2237,30 @@ export function SimTroubleshootStation({
           )}
         </div>
       )}
+      {/* Carrier Network Mismatch Confirmation Modal */}
+      <NetworkMismatchModal
+        isOpen={mismatchModal.isOpen}
+        onClose={() => setMismatchModal((prev) => ({ ...prev, isOpen: false }))}
+        phone={mismatchModal.phone}
+        detectedNetworkId={mismatchModal.detectedNetworkId}
+        detectedNetworkName={mismatchModal.detectedNetworkName}
+        selectedNetworkId={mismatchModal.selectedNetworkId}
+        selectedNetworkName={mismatchModal.selectedNetworkName}
+        onProceed={mismatchModal.onProceed}
+        onSwitchToDetected={(targetId) => {
+          if (mismatchModal.isBulk) {
+            setBulkNetworkId(targetId)
+            setBulkPlanValue("")
+          } else {
+            setSelectedNetwork(targetId)
+            setSelectedPlanValue("")
+          }
+          setMismatchModal((prev) => ({ ...prev, isOpen: false }))
+        }}
+        isBulk={mismatchModal.isBulk}
+        mismatchedCount={mismatchModal.mismatchedCount}
+        totalCount={mismatchModal.totalCount}
+      />
     </div>
   )
 }

@@ -20,7 +20,15 @@ export default async function TrackersPage() {
   })
   const walletBalance = user?.walletBalance || 0
 
-  const servers = await getActiveServers()
+  const rawServers = await getActiveServers()
+  const servers = rawServers.map((s) => ({
+    id: s.id,
+    serverName: s.serverName,
+    serverCode: s.serverCode,
+    status: s.status,
+    isDefault: s.isDefault,
+    sortOrder: s.sortOrder,
+  }))
   const { provider } = await resolveServerAndProvider()
   let availablePlans: any[] = []
   try {

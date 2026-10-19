@@ -4,12 +4,13 @@ import Link from "next/link"
 import prisma from "@/lib/prisma"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { CreditCard, Car, Wifi, ShieldAlert, Clock, ArrowRight, Plus } from "lucide-react"
+import { CreditCard, Car, Wifi, ShieldAlert, Clock, ArrowRight, Plus, BarChart3, Trophy, Award } from "lucide-react"
 import { verifyPayment } from "@/services/paystack.service"
 import { getTrackers } from "@/actions/tracker.actions"
 import { Button } from "@/components/ui/button"
 import { NETWORKS, format12HourDateTime } from "@/lib/phone-utils"
 import { reconcilePendingTransactions } from "@/services/vtu.service"
+import { isAnalyticsServerEnabled } from "@/lib/feature-flags"
 
 export default async function DashboardPage({
   searchParams,
@@ -21,6 +22,7 @@ export default async function DashboardPage({
   
   const userId = session.user.id
   const resolvedSearchParams = await searchParams
+  const showAnalytics = await isAnalyticsServerEnabled()
 
   // Fallback for local testing: If we redirected back with a reference, verify it directly
   if (resolvedSearchParams?.reference) {
@@ -71,7 +73,7 @@ export default async function DashboardPage({
 
   const { trackers, metrics } = await getTrackers()
 
-  const [airtimeList, dataList, walletList] = await Promise.all([
+  const [airtimeList, dataList, walletList, networkDataAgg] = await Promise.all([
     prisma.airtimePurchase.findMany({
       where: { userId: session.user.id },
       orderBy: { createdAt: "desc" },
@@ -87,7 +89,32 @@ export default async function DashboardPage({
       orderBy: { createdAt: "desc" },
       take: 6,
     }),
+    showAnalytics
+      ? prisma.dataPurchase.groupBy({
+          by: ["network"],
+          where: { userId: session.user.id },
+          _count: { id: true },
+          _sum: { amount: true },
+        })
+      : Promise.resolve([] as any[]),
   ])
+
+  // Ranked network providers by highest data transactions added
+  const rankedNetworks = networkDataAgg
+    .map((item) => {
+      const netInfo = NETWORKS[item.network] || { name: item.network, color: "#64748B" }
+      return {
+        id: item.network,
+        name: netInfo.name,
+        color: netInfo.color,
+        count: item._count.id,
+        amount: item._sum.amount || 0,
+      }
+    })
+    .sort((a, b) => b.count - a.count)
+
+  const topNetwork = rankedNetworks.length > 0 ? rankedNetworks[0] : null
+  const totalDataAdded = rankedNetworks.reduce((sum, n) => sum + n.count, 0)
 
   const recentUnified = [
     ...walletList.map((tx) => ({
@@ -143,15 +170,53 @@ export default async function DashboardPage({
             Monitor GPS tracker SIM validity, data expiry, and top-up airtime
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          {showAnalytics && (
+            <Link href="/analytics">
+              <Button variant="outline" className="border-blue-200 text-blue-700 hover:bg-blue-50 flex items-center gap-1.5 font-bold text-xs h-9">
+                <BarChart3 className="w-4 h-4 text-blue-600" />
+                Data Analysis
+              </Button>
+            </Link>
+          )}
           <Link href="/trackers">
-            <Button className="bg-blue-600 hover:bg-blue-700 text-white flex items-center gap-1.5">
+            <Button className="bg-blue-600 hover:bg-blue-700 text-white flex items-center gap-1.5 text-xs h-9 font-semibold">
               <Car className="w-4 h-4" />
               Tracker SIM Station
             </Button>
           </Link>
         </div>
       </div>
+
+      {/* Network Data Provider Analysis Spotlight */}
+      {showAnalytics && topNetwork && (
+        <div className="p-4 bg-gradient-to-r from-blue-50/90 via-indigo-50/40 to-white border border-blue-200/80 rounded-xl flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-2xs">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 bg-blue-600 text-white rounded-xl shrink-0 shadow-xs">
+              <Trophy className="w-5 h-5 text-amber-300" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-[11px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 border border-blue-200">
+                  Data Provider Leaderboard
+                </span>
+                <span className="text-sm font-black text-slate-900">
+                  🏆 {topNetwork.name} is #1 with {topNetwork.count} data additions ({totalDataAdded > 0 ? ((topNetwork.count / totalDataAdded) * 100).toFixed(0) : 0}% of all data)
+                </span>
+              </div>
+              <p className="text-xs text-slate-600 mt-0.5">
+                Total spend on {topNetwork.name}: ₦{topNetwork.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })} • Full comparative rankings across MTN, Airtel, Glo, and 9Mobile.
+              </p>
+            </div>
+          </div>
+          <Link href="/analytics">
+            <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white text-xs shrink-0 font-bold gap-1 shadow-xs">
+              Explore Data Analysis
+              <ArrowRight className="w-3.5 h-3.5" />
+            </Button>
+          </Link>
+        </div>
+      )}
 
       {/* Critical Fleet Alert Banner (Troubleshooting highlight) */}
       {metrics.expired > 0 && (

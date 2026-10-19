@@ -3,15 +3,19 @@
 import { useState, useEffect } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Home, Zap, CreditCard, History, Shield, Settings, Loader2 } from "lucide-react"
+import { Home, Zap, CreditCard, History, Shield, Settings, Loader2, BarChart3 } from "lucide-react"
+
+import { isAnalyticsClientEnabled } from "@/lib/feature-flags"
 
 interface SidebarNavProps {
   isAdmin: boolean
+  showAnalytics?: boolean
 }
 
-export function SidebarNav({ isAdmin }: SidebarNavProps) {
+export function SidebarNav({ isAdmin, showAnalytics }: SidebarNavProps) {
   const pathname = usePathname()
   const [pendingHref, setPendingHref] = useState<string | null>(null)
+  const isDataAnalysisActive = isAnalyticsClientEnabled(showAnalytics)
 
   useEffect(() => {
     setPendingHref(null)
@@ -20,9 +24,16 @@ export function SidebarNav({ isAdmin }: SidebarNavProps) {
   const links = [
     { name: "Dashboard", href: "/dashboard", icon: Home },
     { name: "Tracker SIM Station", href: "/trackers", icon: Zap },
-    { name: "Fund Wallet", href: "/wallet/fund", icon: CreditCard },
-    { name: "Transactions", href: "/transactions", icon: History },
   ]
+
+  if (isDataAnalysisActive) {
+    links.push({ name: "Data Analysis", href: "/analytics", icon: BarChart3 })
+  }
+
+  links.push(
+    { name: "Fund Wallet", href: "/wallet/fund", icon: CreditCard },
+    { name: "Transactions", href: "/transactions", icon: History }
+  )
 
   if (isAdmin) {
     links.push({

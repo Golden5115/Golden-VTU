@@ -19,6 +19,8 @@ import {
   ShieldAlert,
   ShieldCheck,
 } from "lucide-react"
+import { detectNetwork } from "@/lib/phone-utils"
+import { NetworkMismatchModal } from "@/components/vtu/NetworkMismatchModal"
 
 export interface ServerOption {
   id: string
@@ -64,8 +66,28 @@ export function DataPurchaseForm({
   const [plans, setPlans] = useState<PlanItem[]>(initialPlans)
   const [isLoadingPlans, setIsLoadingPlans] = useState(false)
 
-  const [selectedNetworkId, setSelectedNetworkId] = useState("01")
+  const [selectedNetworkId, setSelectedNetworkId] = useState("")
   const [selectedPlan, setSelectedPlan] = useState<PlanItem | null>(null)
+
+  // Carrier Mismatch Confirmation Modal State
+  const [mismatchModal, setMismatchModal] = useState<{
+    isOpen: boolean
+    phone?: string
+    phones?: string[]
+    detectedNetworkId?: string | null
+    detectedNetworkName?: string | null
+    selectedNetworkId: string
+    selectedNetworkName: string
+    onProceed: () => void
+    isBulk?: boolean
+    mismatchedCount?: number
+    totalCount?: number
+  }>({
+    isOpen: false,
+    selectedNetworkId: "",
+    selectedNetworkName: "",
+    onProceed: () => {},
+  })
 
   // Bulk / Comma-separated Phone Input State
   const [rawPhones, setRawPhones] = useState("")
@@ -114,26 +136,51 @@ export function DataPurchaseForm({
   const totalAmount = selectedPlan ? selectedPlan.price * selectedPhones.length : 0
   const hasInsufficientBalance = walletBalance < totalAmount
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault()
-
-    if (selectedPhones.length === 0) {
-      setError("Please enter or select at least one recipient phone number.")
+  // Safe network selection with mismatch detection
+  const handleSelectNetwork = (netId: string) => {
+    if (!netId) {
+      setSelectedNetworkId("")
+      setSelectedPlan(null)
       return
     }
 
-    if (!selectedPlan) {
-      setError("Please select a data bundle plan.")
-      return
+    if (selectedPhones.length > 0) {
+      const mismatched = selectedPhones.filter((p) => {
+        const d = detectNetwork(p)
+        return d && d.id !== netId
+      })
+      if (mismatched.length > 0) {
+        const targetNet = NETWORK_OPTIONS.find((n) => n.id === netId)
+        const targetName = targetNet?.name || netId
+        const firstMismatched = mismatched[0]
+        const firstDetected = detectNetwork(firstMismatched)
+
+        setMismatchModal({
+          isOpen: true,
+          phone: selectedPhones.length === 1 ? firstMismatched : undefined,
+          isBulk: selectedPhones.length > 1,
+          mismatchedCount: mismatched.length,
+          totalCount: selectedPhones.length,
+          detectedNetworkId: firstDetected?.id,
+          detectedNetworkName: firstDetected?.name,
+          selectedNetworkId: netId,
+          selectedNetworkName: targetName,
+          onProceed: () => {
+            setSelectedNetworkId(netId)
+            setSelectedPlan(null)
+            setMismatchModal((prev) => ({ ...prev, isOpen: false }))
+          },
+        })
+        return
+      }
     }
 
-    if (hasInsufficientBalance) {
-      setError(
-        `Insufficient wallet balance. Total cost is ₦${totalAmount.toLocaleString()} for ${selectedPhones.length} numbers, but your balance is ₦${walletBalance.toLocaleString()}. Please fund your wallet.`
-      )
-      return
-    }
+    setSelectedNetworkId(netId)
+    setSelectedPlan(null)
+  }
 
+  const executePurchase = async () => {
+    if (!selectedPlan) return
     setError(null)
     setIsProcessing(true)
     setBatchResults(null)
@@ -167,8 +214,67 @@ export function DataPurchaseForm({
     }
   }
 
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault()
+
+    if (!selectedNetworkId) {
+      setError("Please select a mobile network (MTN, Airtel, Glo, or 9mobile).")
+      return
+    }
+
+    if (selectedPhones.length === 0) {
+      setError("Please enter or select at least one recipient phone number.")
+      return
+    }
+
+    if (!selectedPlan) {
+      setError("Please select a data bundle plan.")
+      return
+    }
+
+    if (hasInsufficientBalance) {
+      setError(
+        `Insufficient wallet balance. Total cost is ₦${totalAmount.toLocaleString()} for ${selectedPhones.length} numbers, but your balance is ₦${walletBalance.toLocaleString()}. Please fund your wallet.`
+      )
+      return
+    }
+
+    // Check for carrier mismatch
+    const mismatched = selectedPhones.filter((p) => {
+      const d = detectNetwork(p)
+      return d && d.id !== selectedNetworkId
+    })
+
+    if (mismatched.length > 0) {
+      const targetNet = NETWORK_OPTIONS.find((n) => n.id === selectedNetworkId)
+      const targetName = targetNet?.name || selectedNetworkId
+      const firstMismatched = mismatched[0]
+      const firstDetected = detectNetwork(firstMismatched)
+
+      setMismatchModal({
+        isOpen: true,
+        phone: selectedPhones.length === 1 ? firstMismatched : undefined,
+        isBulk: selectedPhones.length > 1,
+        mismatchedCount: mismatched.length,
+        totalCount: selectedPhones.length,
+        detectedNetworkId: firstDetected?.id,
+        detectedNetworkName: firstDetected?.name,
+        selectedNetworkId: selectedNetworkId,
+        selectedNetworkName: targetName,
+        onProceed: () => {
+          setMismatchModal((prev) => ({ ...prev, isOpen: false }))
+          executePurchase()
+        },
+      })
+      return
+    }
+
+    executePurchase()
+  }
+
   const resetForm = () => {
     setBatchResults(null)
+    setSelectedNetworkId("")
     setRawPhones("")
     setSelectedPhones([])
     setSelectedPlan(null)
@@ -219,7 +325,7 @@ export function DataPurchaseForm({
                       isActive ? "text-primary-foreground/80" : "text-muted-foreground"
                     }`}
                   >
-                    {srv.providerName.toLowerCase().includes("club") ? "High-Speed Route" : srv.providerName.toLowerCase().includes("mock") ? "Sandbox Route" : "Express Route"}
+                    Standard Route
                   </span>
                 </button>
               )
@@ -336,10 +442,7 @@ export function DataPurchaseForm({
                       <button
                         key={net.id}
                         type="button"
-                        onClick={() => {
-                          setSelectedNetworkId(net.id)
-                          setSelectedPlan(null)
-                        }}
+                        onClick={() => handleSelectNetwork(net.id)}
                         className={`py-2.5 px-2 rounded-xl text-xs font-bold border transition-all text-center ${
                           isSelected
                             ? `${net.color} ring-2 ring-primary ring-offset-1 shadow-sm`
@@ -369,6 +472,10 @@ export function DataPurchaseForm({
                 {isLoadingPlans ? (
                   <div className="p-4 border rounded-xl text-center text-xs text-muted-foreground animate-pulse">
                     Fetching latest data plans and pricing for {currentServer?.serverName}...
+                  </div>
+                ) : !selectedNetworkId ? (
+                  <div className="p-4 border rounded-xl text-center text-xs text-muted-foreground bg-muted/20">
+                    Please select a mobile network above to view available data plans.
                   </div>
                 ) : filteredPlans.length === 0 ? (
                   <div className="p-4 border rounded-xl text-center text-xs text-muted-foreground bg-muted/20">
@@ -418,7 +525,7 @@ export function DataPurchaseForm({
                   selectedPhones={selectedPhones}
                   onSelectedPhonesChange={setSelectedPhones}
                   targetNetworkId={selectedNetworkId}
-                  onNetworkChange={(netId) => setSelectedNetworkId(netId)}
+                  onNetworkChange={(netId) => handleSelectNetwork(netId)}
                   bypassSimCheck={bypassSimCheck}
                   onBypassSimCheckChange={setBypassSimCheck}
                 />
@@ -562,6 +669,26 @@ export function DataPurchaseForm({
           )}
         </CardContent>
       </Card>
+
+      {/* Carrier Network Mismatch Confirmation Modal */}
+      <NetworkMismatchModal
+        isOpen={mismatchModal.isOpen}
+        onClose={() => setMismatchModal((prev) => ({ ...prev, isOpen: false }))}
+        phone={mismatchModal.phone}
+        detectedNetworkId={mismatchModal.detectedNetworkId}
+        detectedNetworkName={mismatchModal.detectedNetworkName}
+        selectedNetworkId={mismatchModal.selectedNetworkId}
+        selectedNetworkName={mismatchModal.selectedNetworkName}
+        onProceed={mismatchModal.onProceed}
+        onSwitchToDetected={(targetId) => {
+          setSelectedNetworkId(targetId)
+          setSelectedPlan(null)
+          setMismatchModal((prev) => ({ ...prev, isOpen: false }))
+        }}
+        isBulk={mismatchModal.isBulk}
+        mismatchedCount={mismatchModal.mismatchedCount}
+        totalCount={mismatchModal.totalCount}
+      />
     </div>
   )
 }

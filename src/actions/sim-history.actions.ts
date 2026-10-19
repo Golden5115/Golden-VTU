@@ -315,6 +315,7 @@ export async function queryDirectCarrierStatus(referenceOrOrderId: string) {
     // Sanitize response: NEVER return wholesale pricing, provider balance, or provider internal names
     const cleanRemark = String(live.remark || "")
       .replace(/clubkonnect/gi, "Carrier Gateway")
+      .replace(/pairgate/gi, "Carrier Gateway")
       .replace(/nellobyte/gi, "Network Provider")
 
     const sanitizedData = {

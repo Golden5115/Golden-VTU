@@ -36,7 +36,7 @@ export function FundWalletView({
   userRole,
   virtualBankName = "MONIEPOINT MICROFINANCE BANK",
   virtualAccountNo = "6990056172",
-  virtualAccountName = "NELLOBYTE-AYOMIDE ABIODUN AYOOLA",
+  virtualAccountName = "AYOMIDE ABIODUN AYOOLA",
 }: FundWalletViewProps) {
   const router = useRouter()
   const [balance, setBalance] = useState(initialBalance)
@@ -294,25 +294,25 @@ export function FundWalletView({
               </div>
               <div className="flex items-center justify-between text-xs">
                 <span className="text-gray-500 font-medium">Account Name</span>
-                <span className="font-semibold text-gray-900">{virtualAccountName}</span>
+                <span className="font-semibold text-gray-900">{virtualAccountName.replace(/^NELLOBYTE-?\s*/i, "")}</span>
               </div>
             </div>
 
             <div className="bg-emerald-50/60 border border-emerald-200 rounded-xl p-3.5 space-y-3 text-xs text-emerald-950">
               <div>
                 <label className="font-bold flex items-center justify-between text-xs text-emerald-900">
-                  <span>Verify Transfer or ClubKonnect Order ID <span className="font-normal text-gray-500">(Optional)</span></span>
+                  <span>Verify Transfer or Deposit Reference <span className="font-normal text-gray-500">(Optional)</span></span>
                   <span className="text-[10px] text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full font-bold border border-emerald-200">
                     Automated &amp; Secure
                   </span>
                 </label>
                 <p className="text-[11px] text-gray-600 mt-0.5">
-                  Leave blank to auto-detect your incoming bank transfer, or enter the amount sent (e.g. 5000) or ClubKonnect Deposit Order ID (e.g. 6721245675). Funds are credited once your transfer reflects on your dedicated account.
+                  Leave blank to auto-detect your incoming bank transfer, or enter the amount sent (e.g. 5000) or Bank Transfer Reference ID. Funds are credited once your transfer reflects on your dedicated account.
                 </p>
                 <div className="relative mt-2">
                   <input
                     type="text"
-                    placeholder="Optional: Amount sent or ClubKonnect Order ID (or leave blank to auto-detect)"
+                    placeholder="Optional: Amount sent or Transfer Reference ID (or leave blank to auto-detect)"
                     value={depositAmount}
                     onChange={(e) => setDepositAmount(e.target.value)}
                     className="w-full px-3 py-2 text-xs font-semibold bg-white border border-emerald-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-gray-900 font-mono"

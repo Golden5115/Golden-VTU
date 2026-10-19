@@ -278,122 +278,185 @@ export function BulkPhoneInputWithHistory({
           <div className="pt-2">
             <SimTroubleshootCard
               phone={parsedPhones[0]}
-              onNetworkDetected={onNetworkChange}
             />
           </div>
         )}
       </div>
 
       {/* Summary Chips & Quick Filter Buttons */}
-      {parsedPhones.length > 0 && (
-        <div className="bg-muted/40 p-3 rounded-xl border space-y-3">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="flex items-center gap-1.5 text-xs font-semibold">
-              <span>Status Overview:</span>
-              {recentCount > 0 && (
-                <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 flex items-center gap-1">
-                  <AlertTriangle className="w-3 h-3" />
-                  {recentCount} loaded &le; 30d
-                </span>
-              )}
-              {dueCount > 0 && (
-                <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
-                  <CheckCircle className="w-3 h-3" />
-                  {dueCount} due for top-up
-                </span>
-              )}
-              {newCount > 0 && (
-                <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-muted text-muted-foreground border flex items-center gap-1">
-                  <Clock className="w-3 h-3" />
-                  {newCount} new
-                </span>
-              )}
-            </div>
+      {parsedPhones.length > 0 && (() => {
+        const mtnPhones = parsedPhones.filter((p) => detectNetwork(p)?.id === "01")
+        const airtelPhones = parsedPhones.filter((p) => detectNetwork(p)?.id === "04")
+        const gloPhones = parsedPhones.filter((p) => detectNetwork(p)?.id === "02")
+        const nineMobilePhones = parsedPhones.filter((p) => detectNetwork(p)?.id === "03")
 
-            {/* Quick Action Buttons */}
-            <div className="flex items-center gap-1.5 text-xs flex-wrap">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={copyAllReports}
-                className="h-7 text-[11px] font-semibold text-blue-700 bg-blue-50/80 hover:bg-blue-100 border-blue-200"
-                title="Copy all SIM numbers and their data status for reporting"
-              >
-                {copiedPhone === "ALL" ? (
-                  <>
-                    <Check className="w-3 h-3 mr-1 text-emerald-600" />
-                    Copied Report!
-                  </>
-                ) : (
-                  <>
-                    <Copy className="w-3 h-3 mr-1 text-blue-600" />
-                    Copy Report
-                  </>
-                )}
-              </Button>
-              {recentCount > 0 && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={deselectRecent}
-                  className="h-7 text-[11px] font-semibold border-amber-500/40 text-amber-700 dark:text-amber-300 hover:bg-amber-500/10"
-                >
-                  <ShieldAlert className="w-3 h-3 mr-1 text-amber-500" />
-                  Deselect Recent (&le; 30 Days)
-                </Button>
-              )}
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={selectAll}
-                className="h-7 text-[11px] text-muted-foreground hover:text-foreground"
-              >
-                Select All
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={deselectAll}
-                className="h-7 text-[11px] text-muted-foreground hover:text-foreground"
-              >
-                Clear
-              </Button>
-            </div>
-          </div>
-
-          {/* Smart Ported SIM Prompt */}
-          {targetNetworkId && !bypassSimCheck && onBypassSimCheckChange && (() => {
-            const mismatchPhones = parsedPhones.filter((phone) => {
-              const net = detectNetwork(phone)
-              return net && net.id !== targetNetworkId
-            })
-            if (mismatchPhones.length === 0) return null
-            const mismatchNet = detectNetwork(mismatchPhones[0])
-            const targetNetName = targetNetworkId === "01" ? "MTN" : targetNetworkId === "02" ? "Glo" : targetNetworkId === "04" ? "Airtel" : "9Mobile"
-            return (
-              <div className="flex items-center justify-between p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs gap-2">
-                <div className="flex items-center gap-2 text-amber-800 dark:text-amber-300">
-                  <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
-                  <span>
-                    You have selected {targetNetName} instead of {mismatchNet?.name || "detected network"}. Phone number verification failed. If correct, click <strong>'Bypass number validator'</strong>.
+        return (
+          <div className="bg-muted/40 p-3 rounded-xl border space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-1.5 text-xs font-semibold">
+                <span>Status Overview:</span>
+                {recentCount > 0 && (
+                  <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 flex items-center gap-1">
+                    <AlertTriangle className="w-3 h-3" />
+                    {recentCount} loaded &le; 30d
                   </span>
-                </div>
+                )}
+                {dueCount > 0 && (
+                  <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
+                    <CheckCircle className="w-3 h-3" />
+                    {dueCount} due for top-up
+                  </span>
+                )}
+                {newCount > 0 && (
+                  <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-muted text-muted-foreground border flex items-center gap-1">
+                    <Clock className="w-3 h-3" />
+                    {newCount} new
+                  </span>
+                )}
+              </div>
+
+              {/* Quick Action Buttons */}
+              <div className="flex items-center gap-1.5 text-xs flex-wrap">
                 <Button
                   type="button"
-                  size="sm"
                   variant="outline"
-                  onClick={() => onBypassSimCheckChange(true)}
-                  className="h-7 text-xs font-bold border-amber-500/40 text-amber-700 dark:text-amber-300 hover:bg-amber-500/20 shrink-0"
+                  size="sm"
+                  onClick={copyAllReports}
+                  className="h-7 text-[11px] font-semibold text-blue-700 bg-blue-50/80 hover:bg-blue-100 border-blue-200"
+                  title="Copy all SIM numbers and their data status for reporting"
                 >
-                  Bypass number validator
+                  {copiedPhone === "ALL" ? (
+                    <>
+                      <Check className="w-3 h-3 mr-1 text-emerald-600" />
+                      Copied Report!
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-3 h-3 mr-1 text-blue-600" />
+                      Copy Report
+                    </>
+                  )}
+                </Button>
+                {recentCount > 0 && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={deselectRecent}
+                    className="h-7 text-[11px] font-semibold border-amber-500/40 text-amber-700 dark:text-amber-300 hover:bg-amber-500/10"
+                  >
+                    <ShieldAlert className="w-3 h-3 mr-1 text-amber-500" />
+                    Deselect Recent (&le; 30 Days)
+                  </Button>
+                )}
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={selectAll}
+                  className="h-7 text-[11px] text-muted-foreground hover:text-foreground"
+                >
+                  Select All
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={deselectAll}
+                  className="h-7 text-[11px] text-muted-foreground hover:text-foreground"
+                >
+                  Clear
                 </Button>
               </div>
-            )
-          })()}
+            </div>
+
+            {/* Quick Bulk Selection by Network */}
+            <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-border/50 text-xs">
+              <span className="text-[11px] font-bold text-gray-700 mr-1">
+                Select by Network in Bulk:
+              </span>
+              <Button
+                type="button"
+                variant={selectedPhones.length === parsedPhones.length ? "default" : "outline"}
+                size="sm"
+                onClick={selectAll}
+                className="h-7 text-xs font-bold"
+              >
+                All SIMs ({parsedPhones.length})
+              </Button>
+              {mtnPhones.length > 0 && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    onSelectedPhonesChange(mtnPhones)
+                    onNetworkChange?.("01")
+                  }}
+                  className={`h-7 text-xs font-bold transition-all ${
+                    targetNetworkId === "01" && selectedPhones.length === mtnPhones.length
+                      ? "bg-amber-500 text-white border-amber-600 hover:bg-amber-600 shadow-xs"
+                      : "border-amber-400/70 text-amber-800 dark:text-amber-300 hover:bg-amber-50"
+                  }`}
+                >
+                  MTN ({mtnPhones.length})
+                </Button>
+              )}
+              {airtelPhones.length > 0 && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    onSelectedPhonesChange(airtelPhones)
+                    onNetworkChange?.("04")
+                  }}
+                  className={`h-7 text-xs font-bold transition-all ${
+                    targetNetworkId === "04" && selectedPhones.length === airtelPhones.length
+                      ? "bg-rose-600 text-white border-rose-700 hover:bg-rose-700 shadow-xs"
+                      : "border-rose-400/70 text-rose-800 dark:text-rose-300 hover:bg-rose-50"
+                  }`}
+                >
+                  Airtel ({airtelPhones.length})
+                </Button>
+              )}
+              {gloPhones.length > 0 && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    onSelectedPhonesChange(gloPhones)
+                    onNetworkChange?.("02")
+                  }}
+                  className={`h-7 text-xs font-bold transition-all ${
+                    targetNetworkId === "02" && selectedPhones.length === gloPhones.length
+                      ? "bg-emerald-600 text-white border-emerald-700 hover:bg-emerald-700 shadow-xs"
+                      : "border-emerald-400/70 text-emerald-800 dark:text-emerald-300 hover:bg-emerald-50"
+                  }`}
+                >
+                  Glo ({gloPhones.length})
+                </Button>
+              )}
+              {nineMobilePhones.length > 0 && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    onSelectedPhonesChange(nineMobilePhones)
+                    onNetworkChange?.("03")
+                  }}
+                  className={`h-7 text-xs font-bold transition-all ${
+                    targetNetworkId === "03" && selectedPhones.length === nineMobilePhones.length
+                      ? "bg-green-700 text-white border-green-800 hover:bg-green-800 shadow-xs"
+                      : "border-green-400/70 text-green-900 dark:text-green-300 hover:bg-green-50"
+                  }`}
+                >
+                  9Mobile ({nineMobilePhones.length})
+                </Button>
+              )}
+            </div>
 
           {/* Number Breakdown List */}
           <div className="max-h-64 overflow-y-auto space-y-1.5 pr-1 divide-y divide-border/40">
@@ -476,25 +539,11 @@ export function BulkPhoneInputWithHistory({
                         </span>
                       )}
 
-                      {/* Network mismatch alert / Ported SIM badge */}
-                      {isNetworkMismatch && (
-                        bypassSimCheck ? (
-                          <span className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20 flex items-center gap-1">
-                            <Check className="w-2.5 h-2.5" /> Ported SIM
-                          </span>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              onBypassSimCheckChange?.(true)
-                            }}
-                            title="Click to bypass number validator for this ported number"
-                            className="text-[10px] font-semibold text-amber-600 dark:text-amber-400 bg-amber-500/10 hover:bg-amber-500/20 px-1.5 py-0.5 rounded border border-amber-500/20 transition-colors"
-                          >
-                            Mismatch ({net?.name}) • Bypass validator
-                          </button>
-                        )
+                      {/* Destination Network Notice if different from prefix */}
+                      {isNetworkMismatch && targetNetworkId && (
+                        <span className="text-[10px] font-medium text-muted-foreground bg-muted/60 px-1.5 py-0.5 rounded">
+                          Route via {targetNetworkId === "01" ? "MTN" : targetNetworkId === "04" ? "Airtel" : targetNetworkId === "02" ? "Glo" : "9Mobile"}
+                        </span>
                       )}
                     </div>
 
@@ -586,7 +635,8 @@ export function BulkPhoneInputWithHistory({
             )}
           </div>
         </div>
-      )}
+      )
+    })()}
     </div>
   )
 }

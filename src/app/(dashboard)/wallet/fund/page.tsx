@@ -30,7 +30,7 @@ export default async function FundWalletPage() {
       userRole={user.role}
       virtualBankName={process.env.CLUBKONNECT_VIRTUAL_BANK_NAME || "MONIEPOINT MICROFINANCE BANK"}
       virtualAccountNo={process.env.CLUBKONNECT_VIRTUAL_ACCOUNT_NO || "6990056172"}
-      virtualAccountName={process.env.CLUBKONNECT_VIRTUAL_ACCOUNT_NAME || "NELLOBYTE-AYOMIDE ABIODUN AYOOLA"}
+      virtualAccountName={process.env.CLUBKONNECT_VIRTUAL_ACCOUNT_NAME || "AYOMIDE ABIODUN AYOOLA"}
     />
   )
 }

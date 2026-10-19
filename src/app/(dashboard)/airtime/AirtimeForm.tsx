@@ -19,6 +19,8 @@ import {
   ShieldAlert,
   ShieldCheck,
 } from "lucide-react"
+import { detectNetwork } from "@/lib/phone-utils"
+import { NetworkMismatchModal } from "@/components/vtu/NetworkMismatchModal"
 
 export interface ServerOption {
   id: string
@@ -50,8 +52,28 @@ export function AirtimeForm({
   const router = useRouter()
   const [walletBalance, setWalletBalance] = useState(initialWalletBalance)
   const [selectedServerId, setSelectedServerId] = useState(initialServerId)
-  const [selectedNetworkId, setSelectedNetworkId] = useState("01")
+  const [selectedNetworkId, setSelectedNetworkId] = useState("")
   const [amount, setAmount] = useState("")
+
+  // Carrier Mismatch Confirmation Modal State
+  const [mismatchModal, setMismatchModal] = useState<{
+    isOpen: boolean
+    phone?: string
+    phones?: string[]
+    detectedNetworkId?: string | null
+    detectedNetworkName?: string | null
+    selectedNetworkId: string
+    selectedNetworkName: string
+    onProceed: () => void
+    isBulk?: boolean
+    mismatchedCount?: number
+    totalCount?: number
+  }>({
+    isOpen: false,
+    selectedNetworkId: "",
+    selectedNetworkName: "",
+    onProceed: () => {},
+  })
 
   // Bulk / Comma-separated Phone Input State
   const [rawPhones, setRawPhones] = useState("")
@@ -73,31 +95,47 @@ export function AirtimeForm({
   const totalAmount = amountNum * selectedPhones.length
   const hasInsufficientBalance = walletBalance < totalAmount
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault()
-
-    if (selectedPhones.length === 0) {
-      setError("Please enter or select at least one recipient phone number.")
+  // Safe network selection with mismatch detection
+  const handleSelectNetwork = (netId: string) => {
+    if (!netId) {
+      setSelectedNetworkId("")
       return
     }
 
-    if (!amountNum || amountNum < 50) {
-      setError("Minimum airtime amount is ₦50 per number.")
-      return
+    if (selectedPhones.length > 0) {
+      const mismatched = selectedPhones.filter((p) => {
+        const d = detectNetwork(p)
+        return d && d.id !== netId
+      })
+      if (mismatched.length > 0) {
+        const targetNet = NETWORK_OPTIONS.find((n) => n.id === netId)
+        const targetName = targetNet?.name || netId
+        const firstMismatched = mismatched[0]
+        const firstDetected = detectNetwork(firstMismatched)
+
+        setMismatchModal({
+          isOpen: true,
+          phone: selectedPhones.length === 1 ? firstMismatched : undefined,
+          isBulk: selectedPhones.length > 1,
+          mismatchedCount: mismatched.length,
+          totalCount: selectedPhones.length,
+          detectedNetworkId: firstDetected?.id,
+          detectedNetworkName: firstDetected?.name,
+          selectedNetworkId: netId,
+          selectedNetworkName: targetName,
+          onProceed: () => {
+            setSelectedNetworkId(netId)
+            setMismatchModal((prev) => ({ ...prev, isOpen: false }))
+          },
+        })
+        return
+      }
     }
 
-    if (amountNum > 200000) {
-      setError("Maximum airtime amount is ₦200,000 per number.")
-      return
-    }
+    setSelectedNetworkId(netId)
+  }
 
-    if (hasInsufficientBalance) {
-      setError(
-        `Insufficient wallet balance. Total cost is ₦${totalAmount.toLocaleString()} for ${selectedPhones.length} numbers, but your balance is ₦${walletBalance.toLocaleString()}. Please fund your wallet.`
-      )
-      return
-    }
-
+  const executePurchase = async () => {
     setError(null)
     setIsProcessing(true)
     setBatchResults(null)
@@ -130,8 +168,72 @@ export function AirtimeForm({
     }
   }
 
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault()
+
+    if (!selectedNetworkId) {
+      setError("Please select a mobile network (MTN, Airtel, Glo, or 9mobile).")
+      return
+    }
+
+    if (selectedPhones.length === 0) {
+      setError("Please enter or select at least one recipient phone number.")
+      return
+    }
+
+    if (!amountNum || amountNum < 50) {
+      setError("Minimum airtime amount is ₦50 per number.")
+      return
+    }
+
+    if (amountNum > 200000) {
+      setError("Maximum airtime amount is ₦200,000 per number.")
+      return
+    }
+
+    if (hasInsufficientBalance) {
+      setError(
+        `Insufficient wallet balance. Total cost is ₦${totalAmount.toLocaleString()} for ${selectedPhones.length} numbers, but your balance is ₦${walletBalance.toLocaleString()}. Please fund your wallet.`
+      )
+      return
+    }
+
+    // Check for carrier mismatch
+    const mismatched = selectedPhones.filter((p) => {
+      const d = detectNetwork(p)
+      return d && d.id !== selectedNetworkId
+    })
+
+    if (mismatched.length > 0) {
+      const targetNet = NETWORK_OPTIONS.find((n) => n.id === selectedNetworkId)
+      const targetName = targetNet?.name || selectedNetworkId
+      const firstMismatched = mismatched[0]
+      const firstDetected = detectNetwork(firstMismatched)
+
+      setMismatchModal({
+        isOpen: true,
+        phone: selectedPhones.length === 1 ? firstMismatched : undefined,
+        isBulk: selectedPhones.length > 1,
+        mismatchedCount: mismatched.length,
+        totalCount: selectedPhones.length,
+        detectedNetworkId: firstDetected?.id,
+        detectedNetworkName: firstDetected?.name,
+        selectedNetworkId: selectedNetworkId,
+        selectedNetworkName: targetName,
+        onProceed: () => {
+          setMismatchModal((prev) => ({ ...prev, isOpen: false }))
+          executePurchase()
+        },
+      })
+      return
+    }
+
+    executePurchase()
+  }
+
   const resetForm = () => {
     setBatchResults(null)
+    setSelectedNetworkId("")
     setRawPhones("")
     setSelectedPhones([])
     setAmount("")
@@ -299,7 +401,7 @@ export function AirtimeForm({
                       <button
                         key={net.id}
                         type="button"
-                        onClick={() => setSelectedNetworkId(net.id)}
+                        onClick={() => handleSelectNetwork(net.id)}
                         className={`py-2.5 px-2 rounded-xl text-xs font-bold border transition-all text-center ${
                           isSelected
                             ? `${net.color} ring-2 ring-primary ring-offset-1 shadow-sm`
@@ -363,7 +465,7 @@ export function AirtimeForm({
                   selectedPhones={selectedPhones}
                   onSelectedPhonesChange={setSelectedPhones}
                   targetNetworkId={selectedNetworkId}
-                  onNetworkChange={(netId) => setSelectedNetworkId(netId)}
+                  onNetworkChange={(netId) => handleSelectNetwork(netId)}
                   bypassSimCheck={bypassSimCheck}
                   onBypassSimCheckChange={setBypassSimCheck}
                 />
@@ -507,6 +609,25 @@ export function AirtimeForm({
           )}
         </CardContent>
       </Card>
+
+      {/* Carrier Network Mismatch Confirmation Modal */}
+      <NetworkMismatchModal
+        isOpen={mismatchModal.isOpen}
+        onClose={() => setMismatchModal((prev) => ({ ...prev, isOpen: false }))}
+        phone={mismatchModal.phone}
+        detectedNetworkId={mismatchModal.detectedNetworkId}
+        detectedNetworkName={mismatchModal.detectedNetworkName}
+        selectedNetworkId={mismatchModal.selectedNetworkId}
+        selectedNetworkName={mismatchModal.selectedNetworkName}
+        onProceed={mismatchModal.onProceed}
+        onSwitchToDetected={(targetId) => {
+          setSelectedNetworkId(targetId)
+          setMismatchModal((prev) => ({ ...prev, isOpen: false }))
+        }}
+        isBulk={mismatchModal.isBulk}
+        mismatchedCount={mismatchModal.mismatchedCount}
+        totalCount={mismatchModal.totalCount}
+      />
     </div>
   )
 }

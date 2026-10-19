@@ -78,25 +78,11 @@ export async function POST(request: NextRequest) {
     }> = []
 
     for (const phone of cleanPhones) {
-      // Validate that carrier matches the selected network unless SIM bypass is enabled for ported numbers
-      if (!bypassSimCheck) {
-        const detected = detectNetwork(phone)
-        if (detected && detected.id !== networkId) {
-          const expectedName = NETWORKS[networkId]?.name || "selected network"
-          results.push({
-            phone,
-            success: false,
-            error: `You have selected ${expectedName} instead of ${detected.name}. Phone number verification failed. If this is correct, click the 'Bypass number validator' or change the mobile network to continue.`,
-          })
-          continue
-        }
-      }
-
       try {
         if (type === "data") {
           const res = await purchaseData(userId, networkId, planId, phone, unitAmount, {
             serverId,
-            bypassSimCheck: Boolean(bypassSimCheck),
+            bypassSimCheck: true,
           })
           results.push({
             phone,
@@ -106,7 +92,7 @@ export async function POST(request: NextRequest) {
         } else {
           const res = await purchaseAirtime(userId, networkId, phone, unitAmount, {
             serverId,
-            bypassSimCheck: Boolean(bypassSimCheck),
+            bypassSimCheck: true,
           })
           results.push({
             phone,

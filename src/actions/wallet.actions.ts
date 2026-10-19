@@ -157,7 +157,7 @@ export async function verifyAutomatedDeposit(forceFullSync?: boolean, expectedIn
                   amount: creditAmount,
                   type: "CREDIT",
                   status: "SUCCESS",
-                  reference: `DEP_CK_${rawInputStr}_${Date.now()}`,
+                  reference: `DEP_AUTO_${rawInputStr}_${Date.now()}`,
                 },
               })
 
@@ -183,13 +183,13 @@ export async function verifyAutomatedDeposit(forceFullSync?: boolean, expectedIn
               success: true,
               credited: creditAmount,
               balance: updatedUser.walletBalance,
-              message: `ClubKonnect Deposit (Order #${rawInputStr}) of ₦${creditAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })} successfully verified and credited!`,
+              message: `Deposit (Ref #${rawInputStr}) of ₦${creditAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })} successfully verified and credited!`,
             }
           }
         } else {
           return {
             success: false,
-            error: `Order ID ${rawInputStr} is not a valid completed fund deposit on ClubKonnect (Status: ${orderStatus || "Incomplete"}).`,
+            error: `Deposit reference ${rawInputStr} is not yet marked completed (Status: ${orderStatus || "Incomplete"}). Please check back shortly if transfer was just sent.`,
           }
         }
       } catch (err: any) {

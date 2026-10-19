@@ -17,9 +17,12 @@ import {
   Settings,
   LogOut,
   ChevronRight,
+  BarChart3,
 } from "lucide-react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { CtnLogo } from "@/components/ui/CtnLogo"
+
+import { isAnalyticsClientEnabled } from "@/lib/feature-flags"
 
 interface MobileNavDrawerProps {
   user: {
@@ -28,18 +31,32 @@ interface MobileNavDrawerProps {
     image?: string | null
     role?: string | null
   }
+  showAnalytics?: boolean
 }
 
-export function MobileNavDrawer({ user }: MobileNavDrawerProps) {
+export function MobileNavDrawer({ user, showAnalytics }: MobileNavDrawerProps) {
   const [isOpen, setIsOpen] = useState(false)
   const pathname = usePathname()
+  const isDataAnalysisActive = isAnalyticsClientEnabled(showAnalytics)
 
   const links = [
     { name: "Dashboard", href: "/dashboard", icon: Home },
     { name: "Tracker SIM Station", href: "/trackers", icon: Zap, badge: "GPS Tool" },
+  ]
+
+  if (isDataAnalysisActive) {
+    links.push({
+      name: "Data Analysis",
+      href: "/analytics",
+      icon: BarChart3,
+      badge: "Rankings",
+    })
+  }
+
+  links.push(
     { name: "Fund Wallet", href: "/wallet/fund", icon: CreditCard },
     { name: "Transaction History", href: "/transactions", icon: History },
-  ]
+  )
 
   if (user?.role === "ADMIN") {
     links.push({

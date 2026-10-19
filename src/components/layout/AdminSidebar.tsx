@@ -1,15 +1,25 @@
 import Link from "next/link"
-import { Home, Users, History, Settings, LogOut, ArrowLeft, Zap } from "lucide-react"
+import { Home, Users, History, Settings, LogOut, ArrowLeft, Zap, BarChart3 } from "lucide-react"
 import { CtnLogo } from "@/components/ui/CtnLogo"
+import { isAnalyticsServerEnabled } from "@/lib/feature-flags"
 
-export function AdminSidebar() {
+export async function AdminSidebar() {
+  const showAnalytics = await isAnalyticsServerEnabled()
+
   const links = [
     { name: "Admin Dashboard", href: "/admin/dashboard", icon: Home },
+  ]
+
+  if (showAnalytics) {
+    links.push({ name: "Data Analysis", href: "/admin/analytics", icon: BarChart3 })
+  }
+
+  links.push(
     { name: "Tracker SIM Station", href: "/trackers", icon: Zap },
     { name: "Manage Users", href: "/admin/users", icon: Users },
     { name: "All Transactions", href: "/admin/transactions", icon: History },
     { name: "Providers", href: "/admin/providers", icon: Settings },
-  ]
+  )
 
   return (
     <div className="hidden md:flex flex-col w-64 bg-slate-900 text-white border-r border-slate-800 h-full">

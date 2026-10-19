@@ -63,16 +63,16 @@ export class ClubKonnectProvider implements IVtuProvider {
     })
 
     if (!response.ok) {
-      throw new Error(`ClubKonnect API error: ${response.status} ${response.statusText}`)
+      throw new Error(`Carrier API error: ${response.status} ${response.statusText}`)
     }
 
     const data = await response.json()
 
     if (data.status === "INVALID_CREDENTIALS") {
-      throw new Error("ClubKonnect: Invalid API credentials")
+      throw new Error("Carrier: Invalid API credentials")
     }
     if (data.status === "MISSING_CREDENTIALS") {
-      throw new Error("ClubKonnect: Missing API credentials")
+      throw new Error("Carrier: Missing API credentials")
     }
 
     return data as T

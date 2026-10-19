@@ -1,10 +1,10 @@
 /**
  * Nigerian phone number network detection utility.
- * Maps number prefixes to ClubKonnect network IDs.
+ * Maps number prefixes to standardized network IDs.
  */
 
 export interface NetworkInfo {
-  id: string       // ClubKonnect network ID
+  id: string       // Standardized network ID ("01" = MTN, "02" = Glo, "03" = 9Mobile, "04" = Airtel)
   name: string     // Display name
   color: string    // Brand color for UI
 }
@@ -16,13 +16,13 @@ export const NETWORKS: Record<string, NetworkInfo> = {
   "04": { id: "04", name: "Airtel", color: "#FF0000" },
 }
 
-// Complete map of 4-digit and 5-digit prefixes to ClubKonnect network IDs
+// Complete map of 4-digit and 5-digit prefixes to standardized network IDs
 const PREFIX_MAP: Record<string, string> = {
   // MTN ("01")
   "0803": "01", "0806": "01", "0703": "01", "0706": "01",
   "0813": "01", "0816": "01", "0810": "01", "0814": "01",
   "0903": "01", "0906": "01", "0913": "01", "0916": "01",
-  "0704": "01",
+  "0704": "01", "0707": "01",
   "07025": "01", "07026": "01", "07028": "01", "07029": "01",
 
   // Airtel ("04")
@@ -32,7 +32,7 @@ const PREFIX_MAP: Record<string, string> = {
 
   // Glo ("02")
   "0805": "02", "0807": "02", "0815": "02", "0811": "02",
-  "0905": "02", "0915": "02", "0705": "02", "0707": "02",
+  "0905": "02", "0915": "02", "0705": "02",
 
   // 9Mobile ("03")
   "0809": "03", "0818": "03", "0817": "03", "0819": "03",
