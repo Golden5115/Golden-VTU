@@ -35,8 +35,8 @@ export function FundWalletView({
   userEmail,
   userRole,
   virtualBankName = "MONIEPOINT MICROFINANCE BANK",
-  virtualAccountNo = "6990056172",
-  virtualAccountName = "AYOMIDE ABIODUN AYOOLA",
+  virtualAccountNo = "3006410113",
+  virtualAccountName = "VOLTERNETS TECHNOLOGIES",
 }: FundWalletViewProps) {
   const router = useRouter()
   const [balance, setBalance] = useState(initialBalance)
