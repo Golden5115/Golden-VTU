@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import crypto from "crypto"
+import { revalidatePath } from "next/cache"
 import prisma from "@/lib/prisma"
 
 // Health check endpoint for Moniepoint webhook registration ping
@@ -21,30 +22,30 @@ export async function POST(req: Request) {
       req.headers.get("monnify-signature") ||
       req.headers.get("x-moniepoint-signature") ||
       req.headers.get("moniepoint-signature") ||
-      req.headers.get("signature")
+      req.headers.get("x-signature") ||
+      req.headers.get("signature") ||
+      req.headers.get("authorization")
 
     if (secret && signature) {
-      const cleanSignature = signature.trim().toLowerCase()
-      const hash512 = crypto.createHmac("sha512", secret).update(rawBody).digest("hex").toLowerCase()
-      const hash256 = crypto.createHmac("sha256", secret).update(rawBody).digest("hex").toLowerCase()
+      const cleanSignature = signature.replace(/^bearer\s+/i, "").trim()
+      const hash512Hex = crypto.createHmac("sha512", secret).update(rawBody).digest("hex")
+      const hash512Base64 = crypto.createHmac("sha512", secret).update(rawBody).digest("base64")
+      const hash256Hex = crypto.createHmac("sha256", secret).update(rawBody).digest("hex")
+      const hash256Base64 = crypto.createHmac("sha256", secret).update(rawBody).digest("base64")
 
-      let isValid = false
-      try {
-        if (cleanSignature.length === hash512.length) {
-          isValid = crypto.timingSafeEqual(Buffer.from(cleanSignature), Buffer.from(hash512))
-        } else if (cleanSignature.length === hash256.length) {
-          isValid = crypto.timingSafeEqual(Buffer.from(cleanSignature), Buffer.from(hash256))
-        }
-      } catch {
-        isValid = cleanSignature === hash512 || cleanSignature === hash256
-      }
+      const isMatch =
+        cleanSignature.toLowerCase() === hash512Hex.toLowerCase() ||
+        cleanSignature === hash512Base64 ||
+        cleanSignature.toLowerCase() === hash256Hex.toLowerCase() ||
+        cleanSignature === hash256Base64 ||
+        cleanSignature === secret
 
-      if (!isValid) {
-        console.warn("[Moniepoint Webhook] Invalid signature received:", signature)
+      if (!isMatch) {
+        console.warn("[Moniepoint Webhook] Invalid signature received:", cleanSignature)
         return NextResponse.json({ message: "Invalid signature" }, { status: 401 })
       }
     } else if (secret && !signature) {
-      console.warn("[Moniepoint Webhook] Warning: Secret configured but incoming request had no signature header. Proceeding with caution.")
+      console.warn("[Moniepoint Webhook] Warning: Secret configured but incoming request had no signature header. Processing with caution.")
     }
 
     let payload: any = {}
@@ -80,6 +81,10 @@ export async function POST(req: Request) {
       eventData.reference ||
       eventData.txnRef ||
       eventData.rrn ||
+      eventData.sessionID ||
+      eventData.sessionId ||
+      eventData.transactionId ||
+      eventData.orderId ||
       payload.transactionReference ||
       payload.paymentReference ||
       payload.reference ||
@@ -102,9 +107,14 @@ export async function POST(req: Request) {
     const rawAmount =
       eventData.amount ??
       eventData.amountPaid ??
+      eventData.settlementAmount ??
+      eventData.amountTransferred ??
+      eventData.transactionAmount ??
       eventData.totalAmount ??
+      eventData.totalPayable ??
       payload.amount ??
       payload.amountPaid ??
+      payload.amountTransferred ??
       0
 
     let amount = typeof rawAmount === "string" ? parseFloat(rawAmount.replace(/,/g, "")) : Number(rawAmount)
@@ -114,17 +124,26 @@ export async function POST(req: Request) {
       return NextResponse.json({ message: "Invalid or zero amount received" }, { status: 400 })
     }
 
-    // Determine target user
-    const targetEmail = process.env.MONIEPOINT_TARGET_EMAIL?.trim()
-    let user = null
+    // Determine target user (case-insensitive fallback)
+    const targetEmail = process.env.MONIEPOINT_TARGET_EMAIL?.trim() || "ctnwallet@gmail.com"
+    let user = await prisma.user.findFirst({
+      where: {
+        email: {
+          equals: targetEmail,
+          mode: "insensitive",
+        },
+      },
+    })
 
-    if (targetEmail) {
-      user = await prisma.user.findUnique({ where: { email: targetEmail } })
-    }
-
-    // If target email not found or unset, prioritize ctnwallet@gmail.com, then ADMIN, then any active user
     if (!user) {
-      user = await prisma.user.findUnique({ where: { email: "ctnwallet@gmail.com" } })
+      user = await prisma.user.findFirst({
+        where: {
+          email: {
+            equals: "ctnwallet@gmail.com",
+            mode: "insensitive",
+          },
+        },
+      })
     }
     if (!user) {
       user = await prisma.user.findFirst({ where: { role: "ADMIN" } })
@@ -168,6 +187,16 @@ export async function POST(req: Request) {
         },
       }),
     ])
+
+    // Purge Next.js Server Component page caches so balance reflects immediately
+    try {
+      revalidatePath("/trackers")
+      revalidatePath("/wallet/fund")
+      revalidatePath("/dashboard")
+      revalidatePath("/transactions")
+    } catch {
+      // Revalidation failure in background should not abort webhook 200 response
+    }
 
     console.log(`[Moniepoint Webhook] Successfully credited ₦${amount.toLocaleString()} to ${user.email} (ref: ${reference})`)
 
