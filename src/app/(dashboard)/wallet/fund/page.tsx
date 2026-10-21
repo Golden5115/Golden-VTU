@@ -28,9 +28,9 @@ export default async function FundWalletPage() {
       walletBalance={user.walletBalance || 0}
       userEmail={user.email || session.user.email || "user@example.com"}
       userRole={user.role}
-      virtualBankName={process.env.MONIEPOINT_BANK_NAME || process.env.CLUBKONNECT_VIRTUAL_BANK_NAME || "MONIEPOINT MICROFINANCE BANK"}
-      virtualAccountNo={process.env.MONIEPOINT_ACCOUNT_NO || process.env.CLUBKONNECT_VIRTUAL_ACCOUNT_NO || "3006410113"}
-      virtualAccountName={process.env.MONIEPOINT_BUSINESS_NAME || process.env.CLUBKONNECT_VIRTUAL_ACCOUNT_NAME || "VOLTERNETS TECHNOLOGIES"}
+      virtualBankName={process.env.MONIEPOINT_BANK_NAME || "MONIEPOINT MICROFINANCE BANK"}
+      virtualAccountNo={process.env.MONIEPOINT_ACCOUNT_NO || "3006410113"}
+      virtualAccountName={process.env.MONIEPOINT_BUSINESS_NAME || "VOLTERNETS TECHNOLOGIES"}
     />
   )
 }

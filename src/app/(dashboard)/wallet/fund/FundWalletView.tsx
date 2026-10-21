@@ -156,6 +156,7 @@ export function FundWalletView({
               ₦{balance.toLocaleString(undefined, { minimumFractionDigits: 2 })}
             </div>
           </div>
+          {/* Kept in codebase but hidden from UI as requested:
           <div className="flex items-center gap-2">
             <Button
               type="button"
@@ -169,6 +170,7 @@ export function FundWalletView({
               {isVerifying ? "Verifying Deposit..." : "Verify Bank Deposit"}
             </Button>
           </div>
+          */}
         </div>
 
         {verifyFeedback && (() => {
@@ -269,7 +271,7 @@ export function FundWalletView({
               </span>
             </div>
             <CardDescription className="text-xs">
-              Transfer funds from any Nigerian bank app or USSD (OPay, PalmPay, GTBank, Kuda, Zenith, etc.) to your dedicated virtual account below. Once transferred, click &quot;Verify Bank Deposit&quot; and your funds reflect immediately!
+              Transfer funds from any Nigerian bank app or USSD (OPay, PalmPay, GTBank, Kuda, Zenith, etc.) to your dedicated account below. Once transferred, your funds reflect automatically within 60 seconds!
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -298,6 +300,15 @@ export function FundWalletView({
               </div>
             </div>
 
+            {/* Automated credit notice */}
+            <div className="bg-emerald-50/70 border border-emerald-200 rounded-xl p-3.5 flex items-center gap-2.5 text-xs text-emerald-900">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+              <span>
+                Transfers made to this account are automatically detected and credited to your wallet balance within 60 seconds.
+              </span>
+            </div>
+
+            {/* Preserved in codebase but hidden from UI as requested:
             <div className="bg-emerald-50/60 border border-emerald-200 rounded-xl p-3.5 space-y-3 text-xs text-emerald-950">
               <div>
                 <label className="font-bold flex items-center justify-between text-xs text-emerald-900">
@@ -338,6 +349,7 @@ export function FundWalletView({
                 </Button>
               </div>
             </div>
+            */}
 
             {/* Admin Baseline Tools */}
             {userRole === "ADMIN" && (
