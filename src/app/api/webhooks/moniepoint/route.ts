@@ -58,10 +58,24 @@ export async function POST(req: Request) {
 
     console.log("[Moniepoint Webhook] Received payload:", JSON.stringify(payload, null, 2))
 
-    // Handle envelope formats: eventData, data, array, or root object
-    const eventData = payload.eventData || payload.data || (Array.isArray(payload) ? payload[0] : payload) || {}
+    // Moniepoint POS API (OpenAPI 3.1.0) wraps transaction data in 'payload'
+    const txData =
+      payload.payload ||
+      payload.eventData ||
+      payload.data ||
+      (Array.isArray(payload) ? payload[0] : payload) ||
+      {}
+
     const eventType = String(payload.eventType || payload.event || payload.type || "").toUpperCase()
-    const status = String(eventData.status || payload.status || eventType || "").toUpperCase()
+
+    // Status: Check processingStatus (OpenAPI enum: SUCCESSFUL, COMPLETED, PROCESSED, PENDING, FAILED, CANCELLED, REJECTED, EXPIRED)
+    const status = String(
+      txData.processingStatus ||
+      txData.status ||
+      payload.status ||
+      eventType ||
+      ""
+    ).toUpperCase()
 
     // Handle verification/test events from Moniepoint Developer Dashboard
     if (
@@ -74,19 +88,19 @@ export async function POST(req: Request) {
       return NextResponse.json({ status: "success", message: "Webhook endpoint verified" }, { status: 200 })
     }
 
-    // Extract reference
+    // Extract reference (Moniepoint POS uses transactionReference or merchantReference or idempotentId)
     const reference = String(
-      eventData.transactionReference ||
-      eventData.paymentReference ||
-      eventData.reference ||
-      eventData.txnRef ||
-      eventData.rrn ||
-      eventData.sessionID ||
-      eventData.sessionId ||
-      eventData.transactionId ||
-      eventData.orderId ||
+      txData.transactionReference ||
+      txData.merchantReference ||
+      txData.paymentReference ||
+      txData.reference ||
+      txData.rrn ||
+      txData.sessionID ||
+      txData.sessionId ||
+      txData.transactionId ||
+      txData.id ||
+      payload.idempotentId ||
       payload.transactionReference ||
-      payload.paymentReference ||
       payload.reference ||
       ""
     ).trim() || `MNP_${Date.now()}_${Math.random().toString(36).substring(7)}`
@@ -96,25 +110,28 @@ export async function POST(req: Request) {
       status.includes("FAIL") ||
       status.includes("CANCEL") ||
       status.includes("DECLINE") ||
-      status.includes("REVERS")
+      status.includes("REVERS") ||
+      status.includes("REJECT") ||
+      status.includes("EXPIRE")
 
     if (isExplicitFailure) {
       console.log(`[Moniepoint Webhook] Transaction ${reference} is marked as failed/cancelled (${status}). Skipping wallet credit.`)
       return NextResponse.json({ message: "Transaction failed or declined", reference }, { status: 200 })
     }
 
-    // Extract amount
+    // Extract amount: Moniepoint POS uses actualAmount or requestAmount (in Naira or kobo)
     const rawAmount =
-      eventData.amount ??
-      eventData.amountPaid ??
-      eventData.settlementAmount ??
-      eventData.amountTransferred ??
-      eventData.transactionAmount ??
-      eventData.totalAmount ??
-      eventData.totalPayable ??
+      txData.actualAmount ??
+      txData.requestAmount ??
+      txData.amountPaid ??
+      txData.amount ??
+      txData.settlementAmount ??
+      txData.amountTransferred ??
+      txData.transactionAmount ??
+      txData.totalAmount ??
+      txData.totalPayable ??
+      payload.actualAmount ??
       payload.amount ??
-      payload.amountPaid ??
-      payload.amountTransferred ??
       0
 
     let amount = typeof rawAmount === "string" ? parseFloat(rawAmount.replace(/,/g, "")) : Number(rawAmount)
