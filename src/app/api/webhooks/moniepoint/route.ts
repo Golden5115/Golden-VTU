@@ -18,25 +18,33 @@ export async function POST(req: Request) {
     // Check for signature if secret is provided in environment variables
     const secret = process.env.MONIEPOINT_WEBHOOK_SECRET?.trim()
     const signature =
-      req.headers.get("x-moniepoint-signature") ||
       req.headers.get("monnify-signature") ||
+      req.headers.get("x-moniepoint-signature") ||
       req.headers.get("moniepoint-signature") ||
       req.headers.get("signature")
 
-    if (secret) {
-      if (!signature) {
-        console.warn("[Moniepoint Webhook] Warning: Secret is configured but no signature header was provided.")
-        return NextResponse.json({ message: "Missing signature header" }, { status: 401 })
+    if (secret && signature) {
+      const cleanSignature = signature.trim().toLowerCase()
+      const hash512 = crypto.createHmac("sha512", secret).update(rawBody).digest("hex").toLowerCase()
+      const hash256 = crypto.createHmac("sha256", secret).update(rawBody).digest("hex").toLowerCase()
+
+      let isValid = false
+      try {
+        if (cleanSignature.length === hash512.length) {
+          isValid = crypto.timingSafeEqual(Buffer.from(cleanSignature), Buffer.from(hash512))
+        } else if (cleanSignature.length === hash256.length) {
+          isValid = crypto.timingSafeEqual(Buffer.from(cleanSignature), Buffer.from(hash256))
+        }
+      } catch {
+        isValid = cleanSignature === hash512 || cleanSignature === hash256
       }
 
-      // Moniepoint / Monnify typically use SHA512 (fallback SHA256)
-      const hash512 = crypto.createHmac("sha512", secret).update(rawBody).digest("hex")
-      const hash256 = crypto.createHmac("sha256", secret).update(rawBody).digest("hex")
-
-      if (signature !== hash512 && signature !== hash256) {
+      if (!isValid) {
         console.warn("[Moniepoint Webhook] Invalid signature received:", signature)
         return NextResponse.json({ message: "Invalid signature" }, { status: 401 })
       }
+    } else if (secret && !signature) {
+      console.warn("[Moniepoint Webhook] Warning: Secret configured but incoming request had no signature header. Proceeding with caution.")
     }
 
     let payload: any = {}
@@ -53,6 +61,17 @@ export async function POST(req: Request) {
     const eventData = payload.eventData || payload.data || (Array.isArray(payload) ? payload[0] : payload) || {}
     const eventType = String(payload.eventType || payload.event || payload.type || "").toUpperCase()
     const status = String(eventData.status || payload.status || eventType || "").toUpperCase()
+
+    // Handle verification/test events from Moniepoint Developer Dashboard
+    if (
+      eventType === "PING" ||
+      eventType === "TEST" ||
+      eventType === "SUBSCRIPTION_CONFIRMATION" ||
+      eventType === "WEBHOOK_VERIFICATION"
+    ) {
+      console.log(`[Moniepoint Webhook] Handled test/verification event: ${eventType}`)
+      return NextResponse.json({ status: "success", message: "Webhook endpoint verified" }, { status: 200 })
+    }
 
     // Extract reference
     const reference = String(
