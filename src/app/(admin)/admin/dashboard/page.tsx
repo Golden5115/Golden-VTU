@@ -3,7 +3,7 @@ import { redirect } from "next/navigation"
 import Link from "next/link"
 import prisma from "@/lib/prisma"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
-import { Users, CreditCard, Activity, Wallet, BarChart3, Trophy, ArrowRight } from "lucide-react"
+import { Users, CreditCard, Activity, Wallet, BarChart3, Trophy, ArrowRight, Coins } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { resolveServerAndProvider } from "@/services/providers/provider.factory"
 import { NETWORKS } from "@/lib/phone-utils"
@@ -85,14 +85,22 @@ export default async function AdminDashboardPage() {
             Platform metrics, server health, and subscriber telemetry
           </p>
         </div>
-        {showAnalytics && (
-          <Link href="/admin/analytics">
-            <Button className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs gap-1.5 shadow-xs">
-              <BarChart3 className="w-4 h-4" />
-              Full Data Analysis Module
+        <div className="flex items-center gap-2">
+          <Link href="/admin/pricing">
+            <Button variant="outline" className="text-xs font-bold gap-1.5 border-amber-300 hover:bg-amber-50 text-amber-900 shadow-xs">
+              <Coins className="w-4 h-4 text-amber-500" />
+              Data Pricing
             </Button>
           </Link>
-        )}
+          {showAnalytics && (
+            <Link href="/admin/analytics">
+              <Button className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs gap-1.5 shadow-xs">
+                <BarChart3 className="w-4 h-4" />
+                Full Data Analysis Module
+              </Button>
+            </Link>
+          )}
+        </div>
       </div>
       
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">

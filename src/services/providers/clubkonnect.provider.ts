@@ -515,6 +515,7 @@ export class ClubKonnectProvider implements IVtuProvider {
                     network: networkId.toString(),
                     networkName: NETWORK_MAP[networkId.toString()] || networkName,
                     name: planName,
+                    rawPrice: planPrice,
                     price: customerPrice,
                     validity: extractedValidity,
                   })

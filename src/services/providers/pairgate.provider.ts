@@ -31,6 +31,7 @@ export const DEFAULT_PAIRGATE_PLANS: VtuDataPlan[] = RAW_PAIRGATE_PLANS.map((p) 
   network: p.network,
   networkName: p.networkName,
   name: p.name,
+  rawPrice: p.rawPrice,
   price: Math.ceil(p.rawPrice + DATA_PROFIT_MARKUP),
   validity: p.validity,
 }))

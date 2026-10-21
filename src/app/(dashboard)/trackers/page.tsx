@@ -32,7 +32,9 @@ export default async function TrackersPage() {
   const { provider } = await resolveServerAndProvider()
   let availablePlans: any[] = []
   try {
-    availablePlans = await provider.getDataPlans()
+    const rawPlans = await provider.getDataPlans()
+    const { applyCustomPricing } = await import("@/services/pricing.service")
+    availablePlans = await applyCustomPricing(rawPlans, provider.identifier)
   } catch (err) {
     console.error("[TrackersPage] Failed to fetch data plans for quick top-up:", err)
   }

@@ -12,6 +12,8 @@ export interface VtuDataPlan {
   name: string       // e.g. "1 GB - Monthly"
   price: number
   validity?: string
+  rawPrice?: number      // Wholesale cost from telecom provider
+  isCustomPrice?: boolean // true if overridden by admin dashboard
 }
 
 export interface VtuBalanceResponse {

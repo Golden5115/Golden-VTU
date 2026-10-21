@@ -198,3 +198,24 @@ model Provider {
   updatedAt        DateTime @default(now()) @updatedAt
 }
 
+model DataPlanPrice {
+  id          String   @id @default(cuid())
+  provider    String   // "CLUBKONNECT" | "PAIRGATE" | "ALL"
+  network     String   // "01", "02", "03", "04"
+  planId      String   // plan code or id
+  planName    String   // descriptive name of the plan
+  customPrice Float    // Customized selling price set by admin
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([provider, network, planId])
+}
+
+model SystemSetting {
+  key       String   @id
+  value     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+
