@@ -21,54 +21,10 @@ const PAIRGATE_TO_NETWORK_MAP: Record<string, { code: string; name: string }> = 
   airtel: { code: "04", name: "Airtel" },
 }
 
+import { RAW_PAIRGATE_PLANS } from "./pairgate.plans"
+
 // Live verified Pairgate plans catalogue with accurate provider plan IDs and durations
 const DATA_PROFIT_MARKUP = 100
-
-const RAW_PAIRGATE_PLANS = [
-  // MTN (CG - 30 Days)
-  { id: "14", network: "01", networkName: "MTN", name: "500MB (CG)", rawPrice: 270, validity: "30 Days" },
-  { id: "15", network: "01", networkName: "MTN", name: "1GB (CG)", rawPrice: 415, validity: "30 Days" },
-  { id: "16", network: "01", networkName: "MTN", name: "2GB (CG)", rawPrice: 830, validity: "30 Days" },
-  { id: "17", network: "01", networkName: "MTN", name: "3GB (CG)", rawPrice: 1245, validity: "30 Days" },
-  { id: "18", network: "01", networkName: "MTN", name: "5GB (CG)", rawPrice: 2075, validity: "30 Days" },
-
-  // Airtel (CG - Corporate Gifting - Genuine 30-Day Data Bundles)
-  { id: "89", network: "04", networkName: "Airtel", name: "500MB (CG)", rawPrice: 500, validity: "7 Days" },
-  { id: "90", network: "04", networkName: "Airtel", name: "1GB (CG)", rawPrice: 830, validity: "7 Days" },
-  { id: "91", network: "04", networkName: "Airtel", name: "1.5GB (CG)", rawPrice: 1000, validity: "7 Days" },
-  { id: "92", network: "04", networkName: "Airtel", name: "2GB (CG - 30 Days)", rawPrice: 1500, validity: "30 Days" },
-  { id: "93", network: "04", networkName: "Airtel", name: "3GB (CG - 30 Days)", rawPrice: 2000, validity: "30 Days" },
-  { id: "95", network: "04", networkName: "Airtel", name: "4GB (CG - 30 Days)", rawPrice: 2500, validity: "30 Days" },
-  { id: "97", network: "04", networkName: "Airtel", name: "8GB (CG - 30 Days)", rawPrice: 3000, validity: "30 Days" },
-  { id: "99", network: "04", networkName: "Airtel", name: "10GB (CG - 30 Days)", rawPrice: 4000, validity: "30 Days" },
-  { id: "100", network: "04", networkName: "Airtel", name: "13GB (CG - 30 Days)", rawPrice: 5000, validity: "30 Days" },
-  { id: "102", network: "04", networkName: "Airtel", name: "18GB (CG - 30 Days)", rawPrice: 6000, validity: "30 Days" },
-  { id: "103", network: "04", networkName: "Airtel", name: "25GB (CG - 30 Days)", rawPrice: 8000, validity: "30 Days" },
-
-  // Airtel Gifting (Alternative direct options)
-  { id: "189", network: "04", networkName: "Airtel", name: "110MB Daily", rawPrice: 100, validity: "1 Day" },
-  { id: "209", network: "04", networkName: "Airtel", name: "1GB Weekly", rawPrice: 800, validity: "7 Days" },
-  { id: "195", network: "04", networkName: "Airtel", name: "2GB Monthly (Gifting)", rawPrice: 1500, validity: "30 Days" },
-  { id: "207", network: "04", networkName: "Airtel", name: "3GB Monthly (Gifting)", rawPrice: 2000, validity: "30 Days" },
-
-  // Glo (CG - Corporate Gifting)
-  { id: "59", network: "02", networkName: "Glo", name: "200MB (CG)", rawPrice: 92, validity: "14 Days" },
-  { id: "60", network: "02", networkName: "Glo", name: "500MB (CG)", rawPrice: 215, validity: "30 Days" },
-  { id: "62", network: "02", networkName: "Glo", name: "1GB (CG - Weekly)", rawPrice: 395, validity: "7 Days" },
-  { id: "63", network: "02", networkName: "Glo", name: "1GB (CG - 30 Days)", rawPrice: 445, validity: "30 Days" },
-  { id: "64", network: "02", networkName: "Glo", name: "2GB (CG - 30 Days)", rawPrice: 890, validity: "30 Days" },
-  { id: "67", network: "02", networkName: "Glo", name: "3GB (CG - 30 Days)", rawPrice: 1335, validity: "30 Days" },
-  { id: "70", network: "02", networkName: "Glo", name: "5GB (CG - 30 Days)", rawPrice: 2225, validity: "30 Days" },
-  { id: "71", network: "02", networkName: "Glo", name: "10GB (CG - 30 Days)", rawPrice: 4450, validity: "30 Days" },
-
-  // 9mobile (SME - 30 Days)
-  { id: "128", network: "03", networkName: "9mobile", name: "500MB (SME)", rawPrice: 260, validity: "30 Days" },
-  { id: "129", network: "03", networkName: "9mobile", name: "1GB (SME)", rawPrice: 515, validity: "30 Days" },
-  { id: "130", network: "03", networkName: "9mobile", name: "1.5GB (SME)", rawPrice: 750, validity: "30 Days" },
-  { id: "131", network: "03", networkName: "9mobile", name: "2GB (SME)", rawPrice: 1030, validity: "30 Days" },
-  { id: "132", network: "03", networkName: "9mobile", name: "3GB (SME)", rawPrice: 1545, validity: "30 Days" },
-  { id: "135", network: "03", networkName: "9mobile", name: "5GB (SME)", rawPrice: 2575, validity: "30 Days" },
-]
 
 export const DEFAULT_PAIRGATE_PLANS: VtuDataPlan[] = RAW_PAIRGATE_PLANS.map((p) => ({
   id: p.id,

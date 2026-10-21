@@ -21,6 +21,154 @@ const NETWORK_ID_MAP: Record<string, string> = {
   AIRTEL: "04",
 }
 
+// Map nominal/legacy PRODUCT_ID values to official ClubKonnect APIDatabundleV1.asp PRODUCT_CODE values
+const CK_PRODUCT_ID_TO_CODE_MAP: Record<string, Record<string, string>> = {
+  "01": {
+    "500": "2",
+    "1000": "4",
+    "2000": "5",
+    "3000": "6",
+    "500.00": "9",
+    "1000.00": "10",
+    "2000.00": "11",
+    "3000.00": "12",
+    "5000.00": "13",
+    "100.01": "38",
+    "200.01": "39",
+    "350.01": "40",
+    "500.01": "14",
+    "750.01": "15",
+    "900.01": "16",
+    "1000.01": "17",
+    "500.02": "18",
+    "800.01": "19",
+    "1000.03": "40",
+    "1500.03": "41",
+    "2500.01": "20",
+    "3500.01": "21",
+    "1500.02": "22",
+    "2000.01": "23",
+    "2500.02": "24",
+    "3500.02": "26",
+    "4500.01": "27",
+    "5500.01": "28",
+    "6500.01": "29",
+    "7500.01": "30",
+    "9000.01": "31",
+    "11000.01": "32",
+    "18000.01": "33",
+    "35000.01": "34",
+    "40000.01": "35",
+    "5000.01": "36",
+    "90000.03": "37",
+  },
+  "02": {
+    "200": "1",
+    "500": "2",
+    "1000": "3",
+    "2000": "4",
+    "3000": "5",
+    "5000": "6",
+    "10000": "7",
+    "1000.11": "8",
+    "3000.11": "9",
+    "5000.11": "10",
+    "1000.12": "11",
+    "3000.12": "12",
+    "5000.12": "13",
+    "1000.21": "37",
+    "3000.21": "38",
+    "5000.21": "39",
+    "10000.21": "40",
+    "100.01": "14",
+    "200.01": "15",
+    "500.01": "16",
+    "1000.01": "17",
+    "1500.01": "18",
+    "2000.01": "19",
+    "2500.01": "20",
+    "3000.01": "21",
+    "4000.01": "22",
+    "5000.01": "23",
+    "8000.01": "24",
+    "10000.01": "25",
+    "15000.01": "26",
+    "20000.01": "27",
+    "500.02": "28",
+    "1500.02": "29",
+    "500.03": "30",
+    "200.02": "31",
+    "30000.01": "32",
+    "36000.01": "33",
+    "50000.01": "34",
+    "60000.01": "35",
+    "75000.01": "36",
+    "150000.03": "41",
+  },
+  "03": {
+    "50": "1",
+    "100": "2",
+    "300": "3",
+    "500": "4",
+    "1000": "5",
+    "2000": "6",
+    "3000": "7",
+    "4000": "8",
+    "5000": "9",
+    "10000": "10",
+    "15000": "11",
+    "20000": "12",
+    "25000": "13",
+    "100.01": "14",
+    "150.01": "15",
+    "200.01": "16",
+    "350.01": "17",
+    "500.01": "18",
+    "1500.01": "19",
+    "600.01": "20",
+    "1000.01": "21",
+    "1200.01": "22",
+    "2000.01": "23",
+    "2500.01": "24",
+    "3000.01": "25",
+    "4000.01": "26",
+    "5000.01": "27",
+    "12000.01": "28",
+    "18500.01": "29",
+    "20000.01": "30",
+    "30000.01": "31",
+  },
+  "04": {
+    "499.91": "14",
+    "599.91": "15",
+    "749.91": "16",
+    "999.91": "17",
+    "1499.91": "18",
+    "499.92": "19",
+    "799.91": "20",
+    "999.92": "21",
+    "1499.92": "22",
+    "2499.91": "23",
+    "2999.91": "24",
+    "4999.91": "25",
+    "1499.93": "26",
+    "1999.91": "27",
+    "2499.92": "28",
+    "2999.92": "29",
+    "3999.91": "30",
+    "4999.92": "31",
+    "5999.91": "32",
+    "7999.91": "33",
+    "9999.91": "34",
+    "14999.91": "35",
+    "19999.91": "36",
+    "29999.91": "37",
+    "39999.91": "38",
+    "49999.91": "39",
+    "59999.91": "40",
+  },
+}
+
 export class ClubKonnectProvider implements IVtuProvider {
   readonly identifier = "CLUBKONNECT"
 
@@ -63,10 +211,18 @@ export class ClubKonnectProvider implements IVtuProvider {
     })
 
     if (!response.ok) {
+      if (response.status === 503) {
+        throw new Error("Carrier Route Unavailable (HTTP 503): This bundle route is temporarily down for maintenance on Server 1. Please try an alternative bundle or switch to Server 2.")
+      }
       throw new Error(`Carrier API error: ${response.status} ${response.statusText}`)
     }
 
-    const data = await response.json()
+    let data: any
+    try {
+      data = await response.json()
+    } catch {
+      throw new Error("Carrier returned an invalid non-JSON response.")
+    }
 
     if (data.status === "INVALID_CREDENTIALS") {
       throw new Error("Carrier: Invalid API credentials")
@@ -158,9 +314,17 @@ export class ClubKonnectProvider implements IVtuProvider {
     reference: string,
     callbackUrl: string
   ): Promise<VtuTransactionResponse> {
+    // Resolve dataPlanId: If it matches a legacy or nominal PRODUCT_ID (e.g. "500.00"), resolve to actual required PRODUCT_CODE
+    let resolvedPlanCode = String(dataPlanId).trim()
+    const networkMap = CK_PRODUCT_ID_TO_CODE_MAP[networkId]
+    if (networkMap && networkMap[resolvedPlanCode]) {
+      console.log(`[ClubKonnect Provider] Mapping legacy PRODUCT_ID "${resolvedPlanCode}" -> PRODUCT_CODE "${networkMap[resolvedPlanCode]}"`)
+      resolvedPlanCode = networkMap[resolvedPlanCode]
+    }
+
     const params: Record<string, string> = {
       MobileNetwork: networkId,
-      DataPlan: dataPlanId,
+      DataPlan: resolvedPlanCode,
       MobileNumber: mobileNumber,
       RequestID: reference,
     }
@@ -293,7 +457,7 @@ export class ClubKonnectProvider implements IVtuProvider {
 
     const response = await fetch(url, {
       headers: { Accept: "application/json" },
-      next: { revalidate: 3600 },
+      next: { revalidate: 60 },
     })
 
     if (!response.ok) {
@@ -316,7 +480,8 @@ export class ClubKonnectProvider implements IVtuProvider {
 
             if (Array.isArray(networkEntry.PRODUCT)) {
               for (const item of networkEntry.PRODUCT) {
-                const planId = item.PRODUCT_ID || ""
+                // Must use PRODUCT_CODE for ClubKonnect APIDatabundleV1.asp DataPlan parameter!
+                const planId = (item.PRODUCT_CODE || item.PRODUCT_ID || "").toString()
                 const planName = item.PRODUCT_NAME || ""
                 const rawPrice = item.PRODUCT_AMOUNT || "0"
                 const planPrice = parseFloat(String(rawPrice).replace(/,/g, "").trim()) || 0

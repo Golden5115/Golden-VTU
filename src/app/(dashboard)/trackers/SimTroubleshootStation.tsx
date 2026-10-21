@@ -1403,7 +1403,7 @@ export function SimTroubleshootStation({
                                     const hasDuration = /day|month|week|daily|weekly|monthly|\(\d+/i.test(p.name)
                                     const validityLabel = !hasDuration && p.validity ? ` (${p.validity})` : ""
                                     return (
-                                      <option key={p.id} value={`${p.id}::${p.price}::${p.name}`}>
+                                      <option key={`${p.id}-${p.name}`} value={`${p.id}::${p.price}::${p.name}`}>
                                         {p.name} — ₦{p.price.toLocaleString()}{validityLabel}
                                       </option>
                                     )
@@ -2099,7 +2099,7 @@ export function SimTroubleshootStation({
                               const hasDuration = /day|month|week|daily|weekly|monthly|\(\d+/i.test(p.name)
                               const validityLabel = !hasDuration && p.validity ? ` (${p.validity})` : ""
                               return (
-                                <option key={p.id} value={`${p.id}::${p.price}::${p.name}`}>
+                                <option key={`${p.id}-${p.name}`} value={`${p.id}::${p.price}::${p.name}`}>
                                   {p.name} — ₦{p.price.toLocaleString()}{validityLabel}
                                 </option>
                               )

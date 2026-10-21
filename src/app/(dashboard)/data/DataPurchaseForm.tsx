@@ -484,10 +484,10 @@ export function DataPurchaseForm({
                 ) : (
                   <div className="grid grid-cols-1 gap-2 max-h-56 overflow-y-auto pr-1">
                     {filteredPlans.map((plan) => {
-                      const isSelected = selectedPlan?.id === plan.id
+                      const isSelected = selectedPlan?.id === plan.id && selectedPlan?.name === plan.name
                       return (
                         <div
-                          key={plan.id}
+                          key={`${plan.id}-${plan.name}`}
                           onClick={() => setSelectedPlan(plan)}
                           className={`flex items-center justify-between p-3 rounded-xl border cursor-pointer transition-all text-sm ${
                             isSelected
