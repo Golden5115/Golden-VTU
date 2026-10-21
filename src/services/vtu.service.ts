@@ -215,7 +215,21 @@ export async function purchaseAirtime(
         })
       }, TX_OPTIONS)
 
-      const cleanErrorMsg = String(error?.message || "Carrier processing error")
+      const rawMsg = String(error?.message || "").trim()
+      const isInsufficientBalance =
+        /insufficient\s*(?:wallet\s*)?balance/i.test(rawMsg) ||
+        /insufficient\s*funds?/i.test(rawMsg) ||
+        /low\s*balance/i.test(rawMsg) ||
+        /wallet\s*(?:is\s*)?low/i.test(rawMsg) ||
+        /balance\s*(?:is\s*)?(?:too\s*)?low/i.test(rawMsg)
+
+      if (isInsufficientBalance || !rawMsg || rawMsg.toLowerCase().includes("carrier processing error")) {
+        throw new Error(
+          `Transaction failed on ${server.serverName}. Your wallet has been automatically refunded.`
+        )
+      }
+
+      const cleanErrorMsg = rawMsg
         .replace(/clubkonnect/gi, "Telecom Carrier")
         .replace(/pairgate/gi, "Telecom Carrier")
         .replace(/nellobyte/gi, "Network Gateway")
@@ -445,13 +459,27 @@ export async function purchaseData(
         })
       }, TX_OPTIONS)
 
-      const cleanErrorMsg = String(error?.message || "Carrier processing error")
+      const rawMsg = String(error?.message || "").trim()
+      const isInsufficientBalance =
+        /insufficient\s*(?:wallet\s*)?balance/i.test(rawMsg) ||
+        /insufficient\s*funds?/i.test(rawMsg) ||
+        /low\s*balance/i.test(rawMsg) ||
+        /wallet\s*(?:is\s*)?low/i.test(rawMsg) ||
+        /balance\s*(?:is\s*)?(?:too\s*)?low/i.test(rawMsg)
+
+      if (isInsufficientBalance || !rawMsg || rawMsg.toLowerCase().includes("carrier processing error")) {
+        throw new Error(
+          `Transaction failed on ${server.serverName}. Your wallet has been automatically refunded.`
+        )
+      }
+
+      const cleanErrorMsg = rawMsg
         .replace(/clubkonnect/gi, "Telecom Carrier")
         .replace(/pairgate/gi, "Telecom Carrier")
         .replace(/nellobyte/gi, "Network Gateway")
 
       throw new Error(
-        `Data purchase failed on ${server.serverName}. Your wallet has been automatically refunded. (${cleanErrorMsg})`
+        `Transaction failed on ${server.serverName}. Your wallet has been automatically refunded. (${cleanErrorMsg})`
       )
     }
   })
