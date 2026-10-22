@@ -516,9 +516,17 @@ export async function reconcilePendingTransactions(userId?: string) {
       return { reconciled: 0 }
     }
 
-    const { provider } = await resolveServerAndProvider()
-    if (typeof (provider as any).queryTransaction !== "function") {
-      return { reconciled: 0 }
+    const providerCache = new Map<string, any>()
+    const getTxProvider = async (serverId?: string | null, providerIdent?: string | null) => {
+      const key = serverId || providerIdent || "default"
+      if (providerCache.has(key)) return providerCache.get(key)
+      try {
+        const resolved = await resolveServerAndProvider(serverId || undefined)
+        providerCache.set(key, resolved.provider)
+        return resolved.provider
+      } catch {
+        return null
+      }
     }
 
     let reconciledCount = 0
@@ -528,7 +536,9 @@ export async function reconcilePendingTransactions(userId?: string) {
       const orderId = d.providerReference || d.reference
       if (!orderId) continue
       try {
-        const queryRes = await (provider as any).queryTransaction(orderId)
+        const txProvider = await getTxProvider(d.serverId, d.provider)
+        if (!txProvider || typeof (txProvider as any).queryTransaction !== "function") continue
+        const queryRes = await (txProvider as any).queryTransaction(orderId)
         if (queryRes.isSuccessful) {
           await prisma.$transaction(async (tx: any) => {
             await tx.dataPurchase.update({
@@ -598,7 +608,9 @@ export async function reconcilePendingTransactions(userId?: string) {
       const orderId = a.providerReference || a.reference
       if (!orderId) continue
       try {
-        const queryRes = await (provider as any).queryTransaction(orderId)
+        const txProvider = await getTxProvider(a.serverId, a.provider)
+        if (!txProvider || typeof (txProvider as any).queryTransaction !== "function") continue
+        const queryRes = await (txProvider as any).queryTransaction(orderId)
         if (queryRes.isSuccessful) {
           await prisma.$transaction(async (tx: any) => {
             await tx.airtimePurchase.update({

@@ -248,28 +248,31 @@ export async function queryDirectCarrierStatus(referenceOrOrderId: string) {
 
   const isAdmin = user?.role === "ADMIN" || user?.email?.toLowerCase() === "ayomide.ayoola6866@gmail.com"
 
-  if (!isAdmin) {
-    const ownsData = await prisma.dataPurchase.findFirst({
-      where: {
-        userId: session.user.id,
-        OR: [{ reference: referenceOrOrderId }, { providerReference: referenceOrOrderId }],
-      },
-    })
-    const ownsAirtime = ownsData
-      ? null
-      : await prisma.airtimePurchase.findFirst({
-          where: {
-            userId: session.user.id,
-            OR: [{ reference: referenceOrOrderId }, { providerReference: referenceOrOrderId }],
-          },
-        })
-    if (!ownsData && !ownsAirtime) {
-      throw new Error("Unauthorized: Transaction not found.")
-    }
+  const dataRec = await prisma.dataPurchase.findFirst({
+    where: {
+      OR: [{ reference: referenceOrOrderId }, { providerReference: referenceOrOrderId }],
+      ...(!isAdmin ? { userId: session.user.id } : {}),
+    },
+    select: { id: true, userId: true, amount: true, reference: true, status: true, serverId: true },
+  })
+
+  const airtimeRec = dataRec
+    ? null
+    : await prisma.airtimePurchase.findFirst({
+        where: {
+          OR: [{ reference: referenceOrOrderId }, { providerReference: referenceOrOrderId }],
+          ...(!isAdmin ? { userId: session.user.id } : {}),
+        },
+        select: { id: true, userId: true, amount: true, reference: true, status: true, serverId: true },
+      })
+
+  if (!isAdmin && !dataRec && !airtimeRec) {
+    throw new Error("Unauthorized: Transaction not found.")
   }
 
+  const txServerId = dataRec?.serverId || airtimeRec?.serverId || undefined
   const { resolveServerAndProvider } = await import("@/services/providers/provider.factory")
-  const { provider } = await resolveServerAndProvider()
+  const { provider } = await resolveServerAndProvider(txServerId)
 
   if (typeof (provider as any).queryTransaction === "function") {
     const live = await (provider as any).queryTransaction(referenceOrOrderId)

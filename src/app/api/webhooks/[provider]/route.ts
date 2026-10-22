@@ -48,10 +48,11 @@ async function handleWebhook(request: NextRequest, provider: string) {
           requestId = content.requestId || null
           isSuccess = content.status === "delivered" || body.code === "000"
         } else if (provider === "pairgate") {
-          orderId = body.reference_code || null
-          requestId = body.reference || null
-          const st = (body.status || "").toLowerCase()
-          isSuccess = st === "successful" || st === "success"
+          const pData = body.data || body
+          orderId = pData.reference_code || body.reference_code || null
+          requestId = pData.reference || body.reference || null
+          const st = String(pData.status || body.status || "").toLowerCase().trim()
+          isSuccess = st === "successful" || st === "delivered" || st === "success"
         } else {
           // Husmodata / generic SME standard
           orderId = String(body.id || body.ident || "")

@@ -101,13 +101,23 @@ export class PairgateProvider implements IVtuProvider {
       throw new Error(errMsg)
     }
 
-    const isSuccess = data.status === "success" || data.code === 200
-    const isPending = data.data?.status === "processing" || data.data?.status === "pending"
+    const txData = data.data || {}
+    const innerStatus = String(txData.status || "").toLowerCase().trim()
+    const isExplicitSuccess = innerStatus === "successful" || innerStatus === "delivered"
+    const isExplicitFailed =
+      innerStatus === "failed" ||
+      innerStatus === "rejected" ||
+      innerStatus === "cancelled" ||
+      innerStatus === "error"
+
+    if (isExplicitFailed) {
+      throw new Error(`Carrier Rejected: ${txData.remark || txData.message || data.message || "Transaction failed on Server 2."}`)
+    }
 
     return {
-      isSuccessful: isSuccess && !isPending,
-      isPending: isPending,
-      providerReference: String(data.data?.reference_code || reference),
+      isSuccessful: isExplicitSuccess,
+      isPending: !isExplicitSuccess,
+      providerReference: String(txData.reference_code || reference),
       rawResponse: data,
     }
   }
@@ -145,13 +155,23 @@ export class PairgateProvider implements IVtuProvider {
       throw new Error(errMsg)
     }
 
-    const isSuccess = data.status === "success" || data.code === 200
-    const isPending = data.data?.status === "processing" || data.data?.status === "pending"
+    const txData = data.data || {}
+    const innerStatus = String(txData.status || "").toLowerCase().trim()
+    const isExplicitSuccess = innerStatus === "successful" || innerStatus === "delivered"
+    const isExplicitFailed =
+      innerStatus === "failed" ||
+      innerStatus === "rejected" ||
+      innerStatus === "cancelled" ||
+      innerStatus === "error"
+
+    if (isExplicitFailed) {
+      throw new Error(`Carrier Rejected: ${txData.remark || txData.message || data.message || "Transaction failed on Server 2."}`)
+    }
 
     return {
-      isSuccessful: isSuccess && !isPending,
-      isPending: isPending,
-      providerReference: String(data.data?.reference_code || reference),
+      isSuccessful: isExplicitSuccess,
+      isPending: !isExplicitSuccess,
+      providerReference: String(txData.reference_code || reference),
       rawResponse: data,
     }
   }
@@ -231,16 +251,24 @@ export class PairgateProvider implements IVtuProvider {
 
       const data = await response.json().catch(() => ({}))
       const txData = data.data || {}
-      const txStatus = (txData.status || data.status || "").toLowerCase()
-      const isSuccess = txStatus === "successful" || txStatus === "success"
-      const isPending = txStatus === "processing" || txStatus === "pending"
-      const isFailed = txStatus === "failed" || data.status === "error"
+      const innerStatus = String(txData.status || "").toLowerCase().trim()
+
+      const isSuccess = innerStatus === "successful" || innerStatus === "delivered"
+      const isFailed =
+        innerStatus === "failed" ||
+        innerStatus === "rejected" ||
+        innerStatus === "cancelled" ||
+        innerStatus === "error" ||
+        data.status === "error" ||
+        data.status === "failed"
+
+      const isPending = !isSuccess && !isFailed
 
       return {
         orderId: String(txData.reference_code || orderIdOrReference),
         statusCode: String(data.code || (isSuccess ? "200" : isPending ? "100" : "400")),
-        status: String(txData.status || data.status || "UNKNOWN").toUpperCase(),
-        remark: String(data.message || txData.message || (isSuccess ? "Successful" : isPending ? "Processing" : "Failed")),
+        status: String(txData.status || (isSuccess ? "SUCCESSFUL" : isPending ? "PENDING" : "FAILED")),
+        remark: String(txData.remark || txData.message || data.message || (isSuccess ? "Successful" : isPending ? "Processing" : "Failed")),
         network: txData.provider_id || undefined,
         mobileNumber: txData.recipient || undefined,
         amountCharged: typeof txData.amount === "number" ? txData.amount : undefined,
