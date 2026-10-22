@@ -13,6 +13,7 @@ import {
   Calendar,
 } from "lucide-react"
 import { checkSimHistory, SimDiagnosticHistory } from "@/actions/sim-history.actions"
+import { ServerBadge } from "@/components/vtu/ServerBadge"
 
 interface SimTroubleshootCardProps {
   phone: string
@@ -169,6 +170,10 @@ export function SimTroubleshootCard({
                 <span className="text-gray-400">Amount:</span>
                 <span className="font-medium text-gray-800">₦{data.lastData.amount.toLocaleString()}</span>
               </div>
+              <div className="flex justify-between items-center pt-0.5">
+                <span className="text-gray-400">Server:</span>
+                <ServerBadge serverName={data.lastData.serverName} provider={data.lastData.provider} />
+              </div>
             </div>
           ) : (
             <p className="text-[11px] text-gray-400 italic">No previous data purchases found for this SIM.</p>
@@ -225,6 +230,10 @@ export function SimTroubleshootCard({
               <div className="flex justify-between">
                 <span className="text-gray-400">Status:</span>
                 <span className="font-semibold text-emerald-600">{data.lastAirtime.status}</span>
+              </div>
+              <div className="flex justify-between items-center pt-0.5">
+                <span className="text-gray-400">Server:</span>
+                <ServerBadge serverName={data.lastAirtime.serverName} provider={data.lastAirtime.provider} />
               </div>
             </div>
           ) : (

@@ -81,4 +81,11 @@ export interface IVtuProvider {
     isFailed: boolean
     rawResponse: any
   }>
+
+  cancelTransaction?(orderId: string): Promise<{
+    orderId: string
+    status: string
+    isCancelled: boolean
+    rawResponse?: any
+  }>
 }

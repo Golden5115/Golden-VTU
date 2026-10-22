@@ -314,17 +314,18 @@ export class ClubKonnectProvider implements IVtuProvider {
     reference: string,
     callbackUrl: string
   ): Promise<VtuTransactionResponse> {
-    // Resolve dataPlanId: If it matches a legacy or nominal PRODUCT_ID (e.g. "500.00"), resolve to actual required PRODUCT_CODE
-    let resolvedPlanCode = String(dataPlanId).trim()
-    const networkMap = CK_PRODUCT_ID_TO_CODE_MAP[networkId]
-    if (networkMap && networkMap[resolvedPlanCode]) {
-      console.log(`[ClubKonnect Provider] Mapping legacy PRODUCT_ID "${resolvedPlanCode}" -> PRODUCT_CODE "${networkMap[resolvedPlanCode]}"`)
-      resolvedPlanCode = networkMap[resolvedPlanCode]
+    // Resolve dataPlanId: ensure we pass active numeric PRODUCT_CODE (e.g. "2", "4", "5") as expected by APIDatabundleV1.asp
+    // If a nominal PRODUCT_ID (e.g. "500", "500.00", "1000", "1000.00") was passed, resolve it to the active PRODUCT_CODE
+    let resolvedPlanId = String(dataPlanId).trim()
+    const codeMap = CK_PRODUCT_ID_TO_CODE_MAP[networkId]
+    if (codeMap && codeMap[resolvedPlanId]) {
+      console.log(`[ClubKonnect Provider] Resolving nominal PRODUCT_ID "${resolvedPlanId}" -> active PRODUCT_CODE "${codeMap[resolvedPlanId]}"`)
+      resolvedPlanId = codeMap[resolvedPlanId]
     }
 
     const params: Record<string, string> = {
       MobileNetwork: networkId,
-      DataPlan: resolvedPlanCode,
+      DataPlan: resolvedPlanId,
       MobileNumber: mobileNumber,
       RequestID: reference,
     }
@@ -451,6 +452,35 @@ export class ClubKonnectProvider implements IVtuProvider {
     }
   }
 
+  /**
+   * Cancel transaction via ClubKonnect APICancelV1.asp
+   */
+  async cancelTransaction(orderId: string): Promise<{
+    orderId: string
+    status: string
+    isCancelled: boolean
+    rawResponse: any
+  }> {
+    try {
+      const data = await this.clubKonnectFetch<any>("APICancelV1.asp", { OrderID: orderId }, 15000)
+      const isCancelled = String(data.status || "").toUpperCase() === "ORDER_CANCELLED" || String(data.statuscode || "") === "500"
+      return {
+        orderId: data.orderid || orderId,
+        status: data.status || "",
+        isCancelled,
+        rawResponse: data,
+      }
+    } catch (err: any) {
+      console.warn(`[ClubKonnect Provider] APICancelV1.asp notice for order ${orderId}:`, err.message)
+      return {
+        orderId,
+        status: "CANCEL_FAILED",
+        isCancelled: false,
+        rawResponse: { error: err.message },
+      }
+    }
+  }
+
   async getDataPlans(): Promise<VtuDataPlan[]> {
     const cleanBaseUrl = this.baseUrl.replace(/\/+$/, "")
     const url = `${cleanBaseUrl}/APIDatabundlePlansV2.asp?UserID=${this.userId}`
@@ -480,7 +510,7 @@ export class ClubKonnectProvider implements IVtuProvider {
 
             if (Array.isArray(networkEntry.PRODUCT)) {
               for (const item of networkEntry.PRODUCT) {
-                // Must use PRODUCT_CODE for ClubKonnect APIDatabundleV1.asp DataPlan parameter!
+                // Must use official ClubKonnect DataPlan numeric PRODUCT_CODE as expected by APIDatabundleV1.asp
                 const planId = (item.PRODUCT_CODE || item.PRODUCT_ID || "").toString()
                 const planName = item.PRODUCT_NAME || ""
                 const rawPrice = item.PRODUCT_AMOUNT || "0"

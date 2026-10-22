@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button"
 import { NETWORKS, format12HourDateTime } from "@/lib/phone-utils"
 import { reconcilePendingTransactions } from "@/services/vtu.service"
 import { isAnalyticsServerEnabled } from "@/lib/feature-flags"
+import { ServerBadge } from "@/components/vtu/ServerBadge"
 
 export default async function DashboardPage({
   searchParams,
@@ -140,6 +141,8 @@ export default async function DashboardPage({
       status: tx.status,
       isRefunded: tx.status === "FAILED",
       date: tx.createdAt,
+      serverName: tx.serverName || (tx.serverId ? "Server" : "Server 1"),
+      provider: tx.provider || "CLUBKONNECT",
     })),
     ...dataList.map((tx) => ({
       id: tx.id,
@@ -152,6 +155,8 @@ export default async function DashboardPage({
       status: tx.status,
       isRefunded: tx.status === "FAILED",
       date: tx.createdAt,
+      serverName: tx.serverName || (tx.serverId ? "Server" : "Server 1"),
+      provider: tx.provider || "CLUBKONNECT",
     })),
   ]
     .sort((a, b) => b.date.getTime() - a.date.getTime())
@@ -426,6 +431,9 @@ export default async function DashboardPage({
                             >
                               {tx.network}
                             </span>
+                          )}
+                          {tx.type !== "TOP-UP" && (
+                            <ServerBadge serverName={(tx as any).serverName} provider={(tx as any).provider} />
                           )}
                           {tx.phone && (
                             <span className="font-mono text-xs font-bold text-gray-800">

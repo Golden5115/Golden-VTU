@@ -28,6 +28,8 @@ export interface PhoneHistoryItem {
     daysUntilExpiry: number
     isExpired: boolean
     isExpiringSoon: boolean
+    serverName?: string | null
+    provider?: string | null
   } | null
   lastAirtime?: {
     id: string
@@ -36,6 +38,8 @@ export interface PhoneHistoryItem {
     daysAgo: number
     amount: number
     status: string
+    serverName?: string | null
+    provider?: string | null
   } | null
   lastPurchase: {
     id: string
@@ -48,6 +52,8 @@ export interface PhoneHistoryItem {
     amount: number
     status: string
     type: "DATA" | "AIRTIME"
+    serverName?: string | null
+    provider?: string | null
   } | null
 }
 
@@ -146,6 +152,8 @@ export async function POST(request: NextRequest) {
           daysUntilExpiry,
           isExpired: daysUntilExpiry <= 0,
           isExpiringSoon: daysUntilExpiry > 0 && daysUntilExpiry <= 3,
+          serverName: dataRecord.serverName || (dataRecord.serverId ? "Server" : "Server 1"),
+          provider: dataRecord.provider || "CLUBKONNECT",
         }
       }
 
@@ -160,6 +168,8 @@ export async function POST(request: NextRequest) {
           daysAgo: aAgo,
           amount: airtimeRecord.amount,
           status: airtimeRecord.status,
+          serverName: airtimeRecord.serverName || (airtimeRecord.serverId ? "Server" : "Server 1"),
+          provider: airtimeRecord.provider || "CLUBKONNECT",
         }
       }
 
@@ -186,6 +196,8 @@ export async function POST(request: NextRequest) {
           amount: contextRecord.amount,
           status: contextRecord.status,
           type: type === "data" ? "DATA" : "AIRTIME",
+          serverName: contextRecord.serverName || (contextRecord.serverId ? "Server" : "Server 1"),
+          provider: contextRecord.provider || "CLUBKONNECT",
         }
       } else if (type === "data" && airtimeRecord) {
         // Did buy airtime, but never data
@@ -200,6 +212,8 @@ export async function POST(request: NextRequest) {
           amount: airtimeRecord.amount,
           status: airtimeRecord.status,
           type: "AIRTIME",
+          serverName: airtimeRecord.serverName || (airtimeRecord.serverId ? "Server" : "Server 1"),
+          provider: airtimeRecord.provider || "CLUBKONNECT",
         }
       } else if (type === "airtime" && dataRecord) {
         // Did buy data, but never airtime

@@ -18,6 +18,7 @@ import {
 } from "lucide-react"
 import { LiveStatusButton } from "@/components/vtu/LiveStatusButton"
 import { format12HourDateTime } from "@/lib/phone-utils"
+import { ServerBadge } from "@/components/vtu/ServerBadge"
 
 export type UnifiedTx = {
   id: string
@@ -31,6 +32,8 @@ export type UnifiedTx = {
   status: string
   isRefunded: boolean
   date: string // ISO string or serializable timestamp
+  serverName?: string
+  provider?: string
 }
 
 interface TransactionsViewProps {
@@ -92,8 +95,9 @@ export function TransactionsView({ initialTransactions, isAdmin }: TransactionsV
         const matchesRef = tx.reference?.toLowerCase().includes(query)
         const matchesLabel = tx.label?.toLowerCase().includes(query)
         const matchesNetwork = tx.networkName?.toLowerCase().includes(query)
+        const matchesServer = tx.serverName?.toLowerCase().includes(query) || tx.provider?.toLowerCase().includes(query)
 
-        if (!matchesPhone && !matchesRef && !matchesLabel && !matchesNetwork) {
+        if (!matchesPhone && !matchesRef && !matchesLabel && !matchesNetwork && !matchesServer) {
           return false
         }
       }
@@ -398,7 +402,7 @@ export function TransactionsView({ initialTransactions, isAdmin }: TransactionsV
                             <div className="font-bold text-xs text-gray-900 leading-tight">
                               {tx.label}
                             </div>
-                            <div className="flex items-center gap-1.5 mt-0.5">
+                            <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
                               {tx.networkName && (
                                 <span
                                   className={`px-1.5 py-0.2 rounded text-[10px] font-bold ${
@@ -415,6 +419,9 @@ export function TransactionsView({ initialTransactions, isAdmin }: TransactionsV
                                 >
                                   {tx.networkName}
                                 </span>
+                              )}
+                              {tx.type !== "WALLET_CREDIT" && (
+                                <ServerBadge serverName={tx.serverName} provider={tx.provider} />
                               )}
                               {tx.phone && (
                                 <span className="text-[11px] font-mono font-bold text-gray-700">
@@ -478,6 +485,7 @@ export function TransactionsView({ initialTransactions, isAdmin }: TransactionsV
                     <TableRow>
                       <TableHead>Type</TableHead>
                       <TableHead>Network</TableHead>
+                      <TableHead>Server</TableHead>
                       <TableHead>Phone / Recipient</TableHead>
                       <TableHead>Reference</TableHead>
                       <TableHead>Amount</TableHead>
@@ -528,6 +536,16 @@ export function TransactionsView({ initialTransactions, isAdmin }: TransactionsV
                               </span>
                             ) : (
                               <span className="text-gray-400 text-xs">—</span>
+                            )}
+                          </TableCell>
+
+                          <TableCell>
+                            {tx.type === "WALLET_CREDIT" ? (
+                              <span className="px-2 py-0.5 rounded text-[11px] font-medium bg-slate-100 text-slate-600 border border-slate-200">
+                                Deposit
+                              </span>
+                            ) : (
+                              <ServerBadge serverName={tx.serverName} provider={tx.provider} showIcon={true} />
                             )}
                           </TableCell>
 

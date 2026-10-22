@@ -26,10 +26,11 @@ async function handleWebhook(request: NextRequest, provider: string) {
     // 1. Parse GET params (ClubKonnect style)
     const searchParams = request.nextUrl.searchParams
     if (searchParams.toString().length > 0) {
-      orderId = searchParams.get("orderid")
-      requestId = searchParams.get("requestid")
-      const orderStatus = searchParams.get("orderstatus")
-      isSuccess = orderStatus === "ORDER_COMPLETED"
+      orderId = searchParams.get("orderid") || searchParams.get("OrderID") || null
+      requestId = searchParams.get("requestid") || searchParams.get("RequestID") || null
+      const orderStatus = (searchParams.get("orderstatus") || searchParams.get("OrderStatus") || "").toUpperCase()
+      const statusCode = searchParams.get("statuscode") || searchParams.get("StatusCode") || ""
+      isSuccess = orderStatus === "ORDER_COMPLETED" || statusCode === "200" || statusCode === "299"
     }
 
     // 2. Parse POST body if present
@@ -39,9 +40,11 @@ async function handleWebhook(request: NextRequest, provider: string) {
         console.log(`[Webhook ${provider}] Received payload:`, body)
 
         if (provider === "clubkonnect") {
-          orderId = body.orderid || null
-          requestId = body.requestid || null
-          isSuccess = body.orderstatus === "ORDER_COMPLETED"
+          orderId = body.orderid || body.OrderID || null
+          requestId = body.requestid || body.RequestID || null
+          const orderStatus = String(body.orderstatus || body.OrderStatus || "").toUpperCase()
+          const statusCode = String(body.statuscode || body.StatusCode || "")
+          isSuccess = orderStatus === "ORDER_COMPLETED" || statusCode === "200" || statusCode === "299"
         } else if (provider === "vtpass") {
           const content = body.content?.transactions || body
           orderId = content.transactionId || null
@@ -82,7 +85,10 @@ async function handleWebhook(request: NextRequest, provider: string) {
         await prisma.$transaction(async (tx: any) => {
           await tx.airtimePurchase.update({
             where: { id: airtime.id },
-            data: { status: isSuccess ? "SUCCESS" : "FAILED" },
+            data: {
+              status: isSuccess ? "SUCCESS" : "FAILED",
+              providerReference: orderId || airtime.providerReference,
+            },
           })
           await tx.walletTransaction.updateMany({
             where: { reference: airtime.reference },
@@ -112,7 +118,10 @@ async function handleWebhook(request: NextRequest, provider: string) {
         await prisma.$transaction(async (tx: any) => {
           await tx.dataPurchase.update({
             where: { id: dataPur.id },
-            data: { status: isSuccess ? "SUCCESS" : "FAILED" },
+            data: {
+              status: isSuccess ? "SUCCESS" : "FAILED",
+              providerReference: orderId || dataPur.providerReference,
+            },
           })
           await tx.walletTransaction.updateMany({
             where: { reference: dataPur.reference },

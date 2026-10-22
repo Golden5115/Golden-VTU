@@ -24,6 +24,8 @@ export interface SimDiagnosticHistory {
     daysUntilExpiry: number
     isExpired: boolean
     isExpiringSoon: boolean
+    serverName?: string
+    provider?: string
   } | null
 
   lastAirtime: {
@@ -35,6 +37,8 @@ export interface SimDiagnosticHistory {
     reference: string
     status: string
     needsAirtime: boolean
+    serverName?: string
+    provider?: string
   } | null
 
   summary: {
@@ -51,6 +55,8 @@ export interface SimDiagnosticHistory {
     status: string
     reference: string
     date: string
+    serverName?: string
+    provider?: string
   }>
 }
 
@@ -119,6 +125,8 @@ export async function checkSimHistory(rawPhone: string): Promise<SimDiagnosticHi
       reference: d.reference,
       date: d.createdAt.toISOString(),
       rawDate: new Date(d.createdAt).getTime(),
+      serverName: d.serverName || (d.serverId ? "Server" : "Server 1"),
+      provider: d.provider || "CLUBKONNECT",
     })),
     ...recentAirtime.map((a: any) => ({
       id: a.id,
@@ -129,6 +137,8 @@ export async function checkSimHistory(rawPhone: string): Promise<SimDiagnosticHi
       reference: a.reference,
       date: a.createdAt.toISOString(),
       rawDate: new Date(a.createdAt).getTime(),
+      serverName: a.serverName || (a.serverId ? "Server" : "Server 1"),
+      provider: a.provider || "CLUBKONNECT",
     })),
   ]
     .sort((a, b) => b.rawDate - a.rawDate)
@@ -160,6 +170,8 @@ export async function checkSimHistory(rawPhone: string): Promise<SimDiagnosticHi
       daysUntilExpiry,
       isExpired,
       isExpiringSoon,
+      serverName: lastDataRecord.serverName || (lastDataRecord.serverId ? "Server" : "Server 1"),
+      provider: lastDataRecord.provider || "CLUBKONNECT",
     }
   }
 
@@ -176,6 +188,8 @@ export async function checkSimHistory(rawPhone: string): Promise<SimDiagnosticHi
       reference: lastAirtimeRecord.reference,
       status: lastAirtimeRecord.status,
       needsAirtime: daysAgo > 45,
+      serverName: lastAirtimeRecord.serverName || (lastAirtimeRecord.serverId ? "Server" : "Server 1"),
+      provider: lastAirtimeRecord.provider || "CLUBKONNECT",
     }
   }
 

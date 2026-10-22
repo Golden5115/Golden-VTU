@@ -21,6 +21,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { TrackerRechargeCards } from "./TrackerRechargeCards"
+import { ServerBadge } from "@/components/vtu/ServerBadge"
 
 const NETWORK_META: Record<string, { label: string; bg: string; text: string; border: string }> = {
   "01": { label: "MTN Nigeria", bg: "bg-amber-100", text: "text-amber-800", border: "border-amber-300" },
@@ -292,6 +293,7 @@ export default async function TrackerDetailPage({
               <TableRow>
                 <TableHead>Type</TableHead>
                 <TableHead>Description / Plan</TableHead>
+                <TableHead>Server</TableHead>
                 <TableHead>Amount</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Reference</TableHead>
@@ -301,7 +303,7 @@ export default async function TrackerDetailPage({
             <TableBody>
               {combinedHistory.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                     No recharge records found for this vehicle SIM yet. Use the top-up forms above to recharge.
                   </TableCell>
                 </TableRow>
@@ -323,6 +325,9 @@ export default async function TrackerDetailPage({
                     </TableCell>
                     <TableCell className="font-medium text-gray-800">
                       {item.description}
+                    </TableCell>
+                    <TableCell>
+                      <ServerBadge serverName={item.serverName || (item.serverId ? "Server" : "Server 1")} provider={item.provider} showIcon={true} />
                     </TableCell>
                     <TableCell className="font-mono">₦{item.amount.toLocaleString()}</TableCell>
                     <TableCell>

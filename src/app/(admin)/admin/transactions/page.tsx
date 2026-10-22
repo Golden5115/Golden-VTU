@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { LiveStatusButton } from "@/components/vtu/LiveStatusButton"
 import { format12HourDateTime } from "@/lib/phone-utils"
+import { ServerBadge } from "@/components/vtu/ServerBadge"
 
 export const dynamic = "force-dynamic"
 
@@ -18,6 +19,27 @@ export default async function AdminTransactionsPage() {
       }
     }
   })
+
+  // Look up servers for any VTU transactions
+  const references = transactions.map((t) => t.reference).filter(Boolean)
+  const [dataP, airtimeP] = await Promise.all([
+    prisma.dataPurchase.findMany({
+      where: { reference: { in: references } },
+      select: { reference: true, serverName: true, serverId: true, provider: true },
+    }),
+    prisma.airtimePurchase.findMany({
+      where: { reference: { in: references } },
+      select: { reference: true, serverName: true, serverId: true, provider: true },
+    }),
+  ])
+
+  const serverInfoMap = new Map<string, { serverName?: string | null; provider?: string | null }>()
+  for (const d of dataP) {
+    serverInfoMap.set(d.reference, { serverName: d.serverName, provider: d.provider })
+  }
+  for (const a of airtimeP) {
+    serverInfoMap.set(a.reference, { serverName: a.serverName, provider: a.provider })
+  }
 
   return (
     <div className="space-y-6">
@@ -34,13 +56,17 @@ export default async function AdminTransactionsPage() {
                 <TableHead>User</TableHead>
                 <TableHead>Type</TableHead>
                 <TableHead>Amount</TableHead>
+                <TableHead>Server</TableHead>
                 <TableHead>Reference</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="text-right">Date</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {transactions.map((tx: any) => (
+              {transactions.map((tx: any) => {
+                const serverInfo = serverInfoMap.get(tx.reference)
+                const isVtu = tx.reference?.startsWith("DAT-") || tx.reference?.startsWith("AIR-")
+                return (
                 <TableRow key={tx.id}>
                   <TableCell>
                     <div className="font-medium">{tx.user.name || "N/A"}</div>
@@ -51,7 +77,16 @@ export default async function AdminTransactionsPage() {
                       {tx.type}
                     </span>
                   </TableCell>
-                  <TableCell>₦{tx.amount.toFixed(2)}</TableCell>
+                  <TableCell className="font-bold">₦{tx.amount.toFixed(2)}</TableCell>
+                  <TableCell>
+                    {isVtu ? (
+                      <ServerBadge serverName={serverInfo?.serverName} provider={serverInfo?.provider} showIcon={true} />
+                    ) : (
+                      <span className="px-2 py-0.5 rounded text-[11px] font-medium bg-slate-100 text-slate-600 border border-slate-200">
+                        Deposit
+                      </span>
+                    )}
+                  </TableCell>
                   <TableCell className="font-mono text-xs text-muted-foreground">{tx.reference}</TableCell>
                   <TableCell>
                     <div className="flex items-center gap-1.5">
@@ -79,7 +114,7 @@ export default async function AdminTransactionsPage() {
                     <span className="font-medium text-gray-800">{format12HourDateTime(tx.createdAt).full}</span>
                   </TableCell>
                 </TableRow>
-              ))}
+              )})}
             </TableBody>
           </Table>
         </CardContent>

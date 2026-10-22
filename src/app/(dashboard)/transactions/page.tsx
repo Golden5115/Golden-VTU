@@ -60,6 +60,8 @@ export default async function TransactionsPage() {
       status: tx.status,
       isRefunded: tx.status === "FAILED",
       date: tx.createdAt.toISOString(),
+      serverName: tx.serverName || (tx.serverId ? "Server" : "Server 1"),
+      provider: tx.provider || "CLUBKONNECT",
     })),
     ...dataTxs.map((tx) => ({
       id: tx.id,
@@ -73,6 +75,8 @@ export default async function TransactionsPage() {
       status: tx.status,
       isRefunded: tx.status === "FAILED",
       date: tx.createdAt.toISOString(),
+      serverName: tx.serverName || (tx.serverId ? "Server" : "Server 1"),
+      provider: tx.provider || "CLUBKONNECT",
     })),
   ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
 
