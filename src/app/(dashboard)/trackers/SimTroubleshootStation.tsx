@@ -37,6 +37,7 @@ import { checkSimHistory, SimDiagnosticHistory } from "@/actions/sim-history.act
 import { BulkPhoneInputWithHistory } from "@/components/vtu/BulkPhoneInputWithHistory"
 import { format12HourDateTime, detectNetwork } from "@/lib/phone-utils"
 import { NetworkMismatchModal } from "@/components/vtu/NetworkMismatchModal"
+import { ServerBadge } from "@/components/vtu/ServerBadge"
 
 interface SimTroubleshootStationProps {
   walletBalance: number
@@ -55,6 +56,8 @@ interface SimTroubleshootStationProps {
     isRefunded: boolean
     reference: string
     date: string
+    serverName?: string
+    provider?: string
   }>
   recentSims?: Array<{
     phone: string
@@ -1206,6 +1209,14 @@ export function SimTroubleshootStation({
                               ₦{historyData.lastData.amount.toLocaleString()}
                             </span>
                           </div>
+                          <div className="flex justify-between items-center">
+                            <span className="text-gray-400">Server:</span>
+                            <ServerBadge
+                              serverName={historyData.lastData.serverName}
+                              provider={historyData.lastData.provider}
+                              size="sm"
+                            />
+                          </div>
                           <div className="flex justify-between text-[11px] text-gray-400 pt-1 border-t">
                             <span>Ref:</span>
                             <span className="font-mono">{historyData.lastData.reference}</span>
@@ -1286,6 +1297,14 @@ export function SimTroubleshootStation({
                             <span className="font-semibold text-emerald-600">
                               {historyData.lastAirtime.status}
                             </span>
+                          </div>
+                          <div className="flex justify-between items-center">
+                            <span className="text-gray-400">Server:</span>
+                            <ServerBadge
+                              serverName={historyData.lastAirtime.serverName}
+                              provider={historyData.lastAirtime.provider}
+                              size="sm"
+                            />
                           </div>
                           <div className="flex justify-between text-[11px] text-gray-400 pt-1 border-t">
                             <span>Ref:</span>
@@ -1575,6 +1594,11 @@ export function SimTroubleshootStation({
                                 {tx.type}
                               </span>
                               <span className="font-medium text-gray-900">{tx.description}</span>
+                              <ServerBadge
+                                serverName={tx.serverName}
+                                provider={tx.provider}
+                                size="sm"
+                              />
                               <span
                                 className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded uppercase tracking-wider ${
                                   tx.status === "SUCCESS"
@@ -1693,7 +1717,7 @@ export function SimTroubleshootStation({
                       >
                         <div className="flex items-start justify-between gap-2">
                           <div className="space-y-1">
-                            <div className="flex items-center gap-1.5">
+                            <div className="flex flex-wrap items-center gap-1.5">
                               <span
                                 className={`px-2 py-0.5 rounded text-[10px] font-bold ${
                                   tx.type === "DATA"
@@ -1708,6 +1732,11 @@ export function SimTroubleshootStation({
                                   {net.label}
                                 </span>
                               )}
+                              <ServerBadge
+                                serverName={tx.serverName}
+                                provider={tx.provider}
+                                size="sm"
+                              />
                               <span className="font-mono font-bold text-xs text-gray-900">
                                 {tx.phone}
                               </span>
@@ -1765,6 +1794,7 @@ export function SimTroubleshootStation({
                       <tr>
                         <th className="py-3 px-4">Type & Plan</th>
                         <th className="py-3 px-4">Network</th>
+                        <th className="py-3 px-4">Server</th>
                         <th className="py-3 px-4">Recipient SIM</th>
                         <th className="py-3 px-4">Reference</th>
                         <th className="py-3 px-4">Amount</th>
@@ -1802,6 +1832,14 @@ export function SimTroubleshootStation({
                               ) : (
                                 <span className="text-gray-400">—</span>
                               )}
+                            </td>
+
+                            <td className="py-3 px-4">
+                              <ServerBadge
+                                serverName={tx.serverName}
+                                provider={tx.provider}
+                                showIcon={true}
+                              />
                             </td>
 
                             <td className="py-3 px-4">

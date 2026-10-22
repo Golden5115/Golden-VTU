@@ -6,6 +6,7 @@ export interface ServerBadgeProps {
   provider?: string | null
   className?: string
   showIcon?: boolean
+  size?: "sm" | "md"
 }
 
 export function parseServerDetails(serverName?: string | null, provider?: string | null): {
@@ -69,18 +70,27 @@ export function parseServerDetails(serverName?: string | null, provider?: string
   }
 }
 
-export function ServerBadge({ serverName, provider, className = "", showIcon = false }: ServerBadgeProps) {
+export function ServerBadge({
+  serverName,
+  provider,
+  className = "",
+  showIcon = false,
+  size = "md",
+}: ServerBadgeProps) {
   const details = parseServerDetails(serverName, provider)
+  const isSm = size === "sm"
 
   return (
     <span
-      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold border tracking-tight shrink-0 ${details.colorClass} ${className}`}
+      className={`inline-flex items-center gap-1 ${
+        isSm ? "px-1.5 py-0.2 text-[10px]" : "px-2 py-0.5 text-[11px]"
+      } rounded font-bold border tracking-tight shrink-0 ${details.colorClass} ${className}`}
       title={details.subLabel ? `${details.label} (${details.subLabel})` : details.label}
     >
-      {showIcon && <Server className="w-3 h-3 opacity-70 shrink-0" />}
+      {showIcon && <Server className={`${isSm ? "w-2.5 h-2.5" : "w-3 h-3"} opacity-70 shrink-0`} />}
       <span>{details.label}</span>
       {details.subLabel && (
-        <span className="text-[9px] font-semibold opacity-75 hidden sm:inline">
+        <span className={`${isSm ? "text-[8px]" : "text-[9px]"} font-semibold opacity-75 hidden sm:inline`}>
           • {details.subLabel}
         </span>
       )}

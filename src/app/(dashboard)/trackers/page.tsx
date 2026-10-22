@@ -68,6 +68,8 @@ export default async function TrackersPage() {
       reference: d.reference,
       date: d.createdAt.toISOString(),
       rawDate: d.createdAt.getTime(),
+      serverName: d.serverName || (d.serverId ? "Server" : "Server 1"),
+      provider: d.provider || "CLUBKONNECT",
     })),
     ...recentAirtime.map((a) => ({
       id: a.id,
@@ -83,6 +85,8 @@ export default async function TrackersPage() {
       reference: a.reference,
       date: a.createdAt.toISOString(),
       rawDate: a.createdAt.getTime(),
+      serverName: a.serverName || (a.serverId ? "Server" : "Server 1"),
+      provider: a.provider || "CLUBKONNECT",
     })),
   ]
     .sort((a, b) => b.rawDate - a.rawDate)
