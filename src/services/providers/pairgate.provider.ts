@@ -253,15 +253,14 @@ export class PairgateProvider implements IVtuProvider {
       const txData = data.data || {}
       const innerStatus = String(txData.status || "").toLowerCase().trim()
 
-      const isSuccess = innerStatus === "successful" || innerStatus === "delivered"
-      const isFailed =
-        innerStatus === "failed" ||
-        innerStatus === "rejected" ||
-        innerStatus === "cancelled" ||
-        innerStatus === "error" ||
-        data.status === "error" ||
-        data.status === "failed"
+      // Only positive confirmed success from Pairgate's inner order status
+      const isSuccess = data.code === 200 && (innerStatus === "successful" || innerStatus === "delivered")
 
+      // Only positive confirmed failure from Pairgate's inner order status
+      // (NEVER treat data.status === "error" or code: 201 as failed! That's just indexing/lookup delay on Pairgate's status API)
+      const isFailed = data.code === 200 && (innerStatus === "failed" || innerStatus === "rejected" || innerStatus === "cancelled")
+
+      // All other cases (processing, pending, queued, 201 indexing, 429 rate limit) are strictly PENDING!
       const isPending = !isSuccess && !isFailed
 
       return {
