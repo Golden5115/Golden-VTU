@@ -289,7 +289,7 @@ export function FleetTroubleshootClient({
   const movingTrackersCount = vehicles.filter(
     (v) => (v.onlineStatus === "online" || v.onlineStatus === "ack") && typeof v.speed === "number" && v.speed > 0
   ).length
-  const idleTrackersCount = vehicles.filter(
+  const activeTrackersCount = vehicles.filter(
     (v) => (v.onlineStatus === "online" || v.onlineStatus === "ack") && !(typeof v.speed === "number" && v.speed > 0)
   ).length
   const offlineTrackersCount = vehicles.filter((v) => v.onlineStatus === "offline").length
@@ -484,7 +484,7 @@ export function FleetTroubleshootClient({
             )}
             <span className="px-2.5 py-1 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 font-bold inline-flex items-center gap-1.5">
               <span className="w-2 h-2 rounded-full bg-amber-500"></span>
-              {idleTrackersCount} Idle
+              {activeTrackersCount} Active
             </span>
             <span className="px-2.5 py-1 rounded-lg bg-rose-50 border border-rose-200 text-rose-800 font-bold inline-flex items-center gap-1.5">
               <span className="w-2 h-2 rounded-full bg-rose-500"></span>
@@ -527,7 +527,7 @@ export function FleetTroubleshootClient({
             )}
             <span className="px-2.5 py-1 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 font-bold inline-flex items-center gap-1.5">
               <span className="w-2 h-2 rounded-full bg-amber-500"></span>
-              {idleTrackersCount} Idle
+              {activeTrackersCount} Active
             </span>
             <span className="px-2.5 py-1 rounded-lg bg-rose-50 border border-rose-200 text-rose-800 font-bold inline-flex items-center gap-1.5">
               <span className="w-2 h-2 rounded-full bg-rose-500"></span>
@@ -752,12 +752,12 @@ export function FleetTroubleshootClient({
                           </div>
                         </td>
 
-                        {/* Tracker Live Status (Moving / Idle / Offline) */}
+                        {/* Tracker Live Status (Moving / Active / Offline) */}
                         <td className="py-3 px-3" onClick={(e) => e.stopPropagation()}>
                           {(() => {
                             const isOnlineOrAck = v.onlineStatus === "online" || v.onlineStatus === "ack"
                             const isMoving = isOnlineOrAck && typeof v.speed === "number" && v.speed > 0
-                            const isIdle = isOnlineOrAck && !isMoving
+                            const isActive = isOnlineOrAck && !isMoving
                             const isOffline = v.onlineStatus === "offline"
 
                             if (isMoving) {
@@ -779,12 +779,12 @@ export function FleetTroubleshootClient({
                               )
                             }
 
-                            if (isIdle) {
+                            if (isActive) {
                               return (
                                 <div>
                                   <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-100 text-amber-800 border border-amber-300 shadow-2xs">
                                     <span className="inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
-                                    Idle
+                                    Active
                                   </span>
                                   {v.lastHeartbeat && (
                                     <div className="text-[10px] text-gray-500 mt-0.5 font-medium truncate max-w-[130px]" title={v.lastHeartbeat}>
@@ -923,11 +923,11 @@ export function FleetTroubleshootClient({
                       </div>
 
                       <div className="flex flex-col items-end gap-1 shrink-0">
-                        {/* Tracker Moving / Idle / Offline Status */}
+                        {/* Tracker Moving / Active / Offline Status */}
                         {(() => {
                           const isOnlineOrAck = v.onlineStatus === "online" || v.onlineStatus === "ack"
                           const isMoving = isOnlineOrAck && typeof v.speed === "number" && v.speed > 0
-                          const isIdle = isOnlineOrAck && !isMoving
+                          const isActive = isOnlineOrAck && !isMoving
                           const isOffline = v.onlineStatus === "offline"
 
                           if (isMoving) {
@@ -942,11 +942,11 @@ export function FleetTroubleshootClient({
                             )
                           }
 
-                          if (isIdle) {
+                          if (isActive) {
                             return (
                               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300">
                                 <span className="inline-flex rounded-full h-1.5 w-1.5 bg-amber-500"></span>
-                                Idle
+                                Active
                               </span>
                             )
                           }
