@@ -18,6 +18,7 @@ import {
   LogOut,
   ChevronRight,
   BarChart3,
+  Radio,
 } from "lucide-react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { CtnLogo } from "@/components/ui/CtnLogo"
@@ -41,6 +42,7 @@ export function MobileNavDrawer({ user, showAnalytics }: MobileNavDrawerProps) {
 
   const links = [
     { name: "Dashboard", href: "/dashboard", icon: Home },
+    { name: "Troubleshoot Section", href: "/fleet", icon: Radio, badge: "CarTracker" },
     { name: "Tracker SIM Station", href: "/trackers", icon: Zap, badge: "GPS Tool" },
   ]
 
@@ -67,7 +69,8 @@ export function MobileNavDrawer({ user, showAnalytics }: MobileNavDrawerProps) {
     })
   }
 
-  links.push({ name: "Settings", href: "/settings", icon: Settings })
+  // Temporarily hidden until /settings route is implemented
+  // links.push({ name: "Settings", href: "/settings", icon: Settings })
 
   return (
     <>

@@ -1,6 +1,6 @@
 import prisma from "@/lib/prisma"
 import { resolveServerAndProvider } from "./providers/provider.factory"
-import { detectNetwork, NETWORKS } from "@/lib/phone-utils"
+import { detectNetwork, NETWORKS, extractValidityDays, formatPlanDisplayName } from "@/lib/phone-utils"
 
 // Determine the callback URL dynamically based on the active provider
 function getCallbackUrl(providerIdentifier: string): string {
@@ -258,11 +258,11 @@ export async function purchaseData(
   const options =
     typeof serverIdOrOptions === "object"
       ? serverIdOrOptions
-      : { serverId: serverIdOrOptions, trackerId: undefined, planName: undefined, validityDays: 30, bypassSimCheck: false }
+      : { serverId: serverIdOrOptions, trackerId: undefined, planName: undefined, validityDays: undefined, bypassSimCheck: false }
   const serverId = options.serverId
   let trackerId = options.trackerId
   const planName = options.planName
-  const validityDays = options.validityDays || 30
+  const validityDays = options.validityDays || extractValidityDays(planName || dataPlanId, 30)
   const bypassSimCheck = options.bypassSimCheck ?? false
 
   // If no explicit trackerId passed, auto-detect if this phone number belongs to a registered tracker
@@ -323,7 +323,7 @@ export async function purchaseData(
       data: {
         userId,
         network: networkId,
-        plan: dataPlanId,
+        plan: planName || formatPlanDisplayName(dataPlanId, networkId),
         phone,
         amount,
         reference,
@@ -564,8 +564,8 @@ export async function reconcilePendingTransactions(userId?: string) {
             })
 
             if (tracker) {
-              const validityDays = 30
-              const expiryDate = new Date(Date.now() + validityDays * 24 * 60 * 60 * 1000)
+              const validityDays = extractValidityDays(d.plan, 30)
+              const expiryDate = new Date(d.createdAt.getTime() + validityDays * 24 * 60 * 60 * 1000)
               await tx.vehicleTracker.update({
                 where: { id: tracker.id },
                 data: {

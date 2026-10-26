@@ -35,7 +35,7 @@ import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { checkSimHistory, SimDiagnosticHistory } from "@/actions/sim-history.actions"
 import { BulkPhoneInputWithHistory } from "@/components/vtu/BulkPhoneInputWithHistory"
-import { format12HourDateTime, detectNetwork } from "@/lib/phone-utils"
+import { format12HourDateTime, detectNetwork, extractValidityDays } from "@/lib/phone-utils"
 import { NetworkMismatchModal } from "@/components/vtu/NetworkMismatchModal"
 import { ServerBadge } from "@/components/vtu/ServerBadge"
 
@@ -489,8 +489,13 @@ export function SimTroubleshootStation({
       }
     }
 
-    const [planId, priceStr, planName] = selectedPlanValue.split("::")
+    const [planId, priceStr, rawPlanName, planValidity] = selectedPlanValue.split("::")
     const amt = parseFloat(priceStr)
+    const effectiveValidity = extractValidityDays(planValidity || rawPlanName || planId, 30)
+    const cleanPlanName = planValidity && !rawPlanName.toLowerCase().includes("day") && !rawPlanName.toLowerCase().includes("week")
+      ? `${rawPlanName} (${planValidity})`
+      : rawPlanName
+
     if (walletBalance < amt) {
       setFeedback({
         type: "error",
@@ -509,6 +514,8 @@ export function SimTroubleshootStation({
           type: "data",
           networkId: selectedNetwork,
           planId: planId,
+          planName: cleanPlanName,
+          validityDays: effectiveValidity,
           amount: amt,
           phones: [phone],
           serverId: selectedServerId || undefined,
@@ -535,7 +542,7 @@ export function SimTroubleshootStation({
         networkName: NETWORK_META[selectedNetwork]?.label || "Network",
         networkId: selectedNetwork,
         amount: amt,
-        planName: planName,
+        planName: cleanPlanName,
         reference: ref,
         date: new Date(),
         walletBalanceBefore: walletBalance,
@@ -615,15 +622,21 @@ export function SimTroubleshootStation({
 
     let unitCost = 0
     let planId: string | undefined = undefined
+    let planName: string | undefined = undefined
+    let validityDays: number | undefined = undefined
 
     if (bulkServiceType === "data") {
       if (!bulkPlanValue) {
         setBulkFeedback({ type: "error", message: "Please select a data bundle plan." })
         return
       }
-      const [pId, priceStr] = bulkPlanValue.split("::")
+      const [pId, priceStr, pName, pValidity] = bulkPlanValue.split("::")
       unitCost = parseFloat(priceStr)
       planId = pId
+      validityDays = extractValidityDays(pValidity || pName || pId, 30)
+      planName = pValidity && !pName.toLowerCase().includes("day") && !pName.toLowerCase().includes("week")
+        ? `${pName} (${pValidity})`
+        : pName
     } else {
       unitCost = parseFloat(bulkAirtimeAmount)
       if (!unitCost || unitCost < 50) {
@@ -652,6 +665,8 @@ export function SimTroubleshootStation({
           type: bulkServiceType,
           networkId: bulkNetworkId,
           planId: planId,
+          planName: planName,
+          validityDays: validityDays,
           amount: unitCost,
           phones: bulkSelectedPhones,
           serverId: selectedServerId || undefined,
@@ -1422,16 +1437,16 @@ export function SimTroubleshootStation({
                                     const hasDuration = /day|month|week|daily|weekly|monthly|\(\d+/i.test(p.name)
                                     const validityLabel = !hasDuration && p.validity ? ` (${p.validity})` : ""
                                     return (
-                                      <option key={`${p.id}-${p.name}`} value={`${p.id}::${p.price}::${p.name}`}>
+                                      <option key={`${p.id}-${p.name}`} value={`${p.id}::${p.price}::${p.name}::${p.validity || ""}`}>
                                         {p.name} — ₦{p.price.toLocaleString()}{validityLabel}
                                       </option>
                                     )
                                   })}
                                   {networkPlans.length === 0 && (
                                     <>
-                                      <option value="8::380::1.0GB SME (30 Days)">1.0GB — ₦380 (Recommended for Trackers, 30 Days)</option>
-                                      <option value="7::245::500MB SME (30 Days)">500MB — ₦245 (Budget Plan, 30 Days)</option>
-                                      <option value="9::660::2.0GB SME (30 Days)">2.0GB — ₦660 (30 Days)</option>
+                                      <option value="8::380::1.0GB SME (30 Days)::30 Days">1.0GB — ₦380 (Recommended for Trackers, 30 Days)</option>
+                                      <option value="7::245::500MB SME (30 Days)::30 Days">500MB — ₦245 (Budget Plan, 30 Days)</option>
+                                      <option value="9::660::2.0GB SME (30 Days)::30 Days">2.0GB — ₦660 (30 Days)</option>
                                     </>
                                   )}
                                 </>
@@ -1789,18 +1804,17 @@ export function SimTroubleshootStation({
 
                 {/* Desktop View (Table matching Transaction History) */}
                 <div className="hidden md:block overflow-x-auto">
-                  <table className="w-full text-left text-xs">
-                    <thead className="bg-slate-50 border-b text-gray-500 font-semibold">
+                  <table className="w-full text-left text-xs divide-y divide-gray-100">
+                    <thead className="bg-slate-50/80 border-b border-slate-200/80 text-gray-600 font-bold text-[10px] uppercase tracking-wider">
                       <tr>
-                        <th className="py-3 px-4">Type & Plan</th>
-                        <th className="py-3 px-4">Network</th>
-                        <th className="py-3 px-4">Server</th>
-                        <th className="py-3 px-4">Recipient SIM</th>
-                        <th className="py-3 px-4">Reference</th>
-                        <th className="py-3 px-4">Amount</th>
-                        <th className="py-3 px-4">Status</th>
-                        <th className="py-3 px-4">Date & Time (12h)</th>
-                        <th className="py-3 px-4 text-right">Action</th>
+                        <th className="py-2.5 px-3 whitespace-nowrap">Type & Plan</th>
+                        <th className="py-2.5 px-2.5 whitespace-nowrap">Network</th>
+                        <th className="py-2.5 px-2.5 whitespace-nowrap">Server</th>
+                        <th className="py-2.5 px-2.5 whitespace-nowrap">Recipient SIM</th>
+                        <th className="py-2.5 px-2.5 whitespace-nowrap">Amount</th>
+                        <th className="py-2.5 px-2.5 whitespace-nowrap">Status</th>
+                        <th className="py-2.5 px-2.5 whitespace-nowrap">Date & Time</th>
+                        <th className="py-2.5 px-3 text-right whitespace-nowrap">Action</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
@@ -1809,40 +1823,47 @@ export function SimTroubleshootStation({
                         const net = NETWORK_META[tx.networkId]
                         return (
                           <tr key={tx.id} className="hover:bg-slate-50/80 transition-colors">
-                            <td className="py-3 px-4">
-                              <span
-                                className={`px-2 py-0.5 rounded text-[11px] font-bold ${
-                                  tx.type === "DATA"
-                                    ? "bg-blue-100 text-blue-800"
-                                    : "bg-indigo-100 text-indigo-800"
-                                }`}
-                              >
-                                {tx.type}
-                              </span>
-                              <div className="text-[11px] text-gray-600 font-medium mt-0.5 truncate max-w-[170px]">
-                                {tx.label}
+                            {/* Type & Plan */}
+                            <td className="py-2.5 px-3 align-middle whitespace-nowrap">
+                              <div className="flex items-center gap-1.5">
+                                <span
+                                  className={`px-1.5 py-0.2 rounded text-[9.5px] font-bold shrink-0 ${
+                                    tx.type === "DATA"
+                                      ? "bg-blue-100 text-blue-800 border border-blue-200"
+                                      : "bg-indigo-100 text-indigo-800 border border-indigo-200"
+                                  }`}
+                                >
+                                  {tx.type}
+                                </span>
+                                <span className="text-[11px] text-gray-800 font-medium truncate max-w-[140px] xl:max-w-[180px]" title={tx.label}>
+                                  {tx.label}
+                                </span>
                               </div>
                             </td>
 
-                            <td className="py-3 px-4">
+                            {/* Network */}
+                            <td className="py-2.5 px-2.5 align-middle whitespace-nowrap">
                               {net ? (
-                                <span className={`px-2 py-0.5 rounded text-xs font-bold border ${net.bg} ${net.text} ${net.border}`}>
+                                <span className={`px-1.5 py-0.2 rounded text-[10px] font-bold border ${net.bg} ${net.text} ${net.border}`}>
                                   {net.label}
                                 </span>
                               ) : (
-                                <span className="text-gray-400">—</span>
+                                <span className="text-gray-400 text-xs">—</span>
                               )}
                             </td>
 
-                            <td className="py-3 px-4">
+                            {/* Server Route */}
+                            <td className="py-2.5 px-2.5 align-middle whitespace-nowrap">
                               <ServerBadge
                                 serverName={tx.serverName}
                                 provider={tx.provider}
+                                size="sm"
                                 showIcon={true}
                               />
                             </td>
 
-                            <td className="py-3 px-4">
+                            {/* Recipient SIM */}
+                            <td className="py-2.5 px-2.5 align-middle whitespace-nowrap">
                               <button
                                 type="button"
                                 onClick={() => {
@@ -1850,31 +1871,31 @@ export function SimTroubleshootStation({
                                   handlePhoneLookup(tx.phone)
                                   window.scrollTo({ top: 0, behavior: "smooth" })
                                 }}
-                                className="font-mono font-bold text-blue-600 hover:text-blue-800 hover:underline"
+                                className="font-mono font-bold text-[11px] text-blue-600 hover:text-blue-800 hover:underline"
                                 title="Inspect this SIM in station"
                               >
                                 {tx.phone}
                               </button>
                             </td>
 
-                            <td className="py-3 px-4 font-mono text-gray-500 text-[11px]">
-                              {tx.reference}
-                            </td>
-
-                            <td className="py-3 px-4 font-bold text-gray-900">
+                            {/* Amount */}
+                            <td className="py-2.5 px-2.5 font-bold text-gray-900 text-[11px] align-middle whitespace-nowrap">
                               ₦{tx.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                             </td>
 
-                            <td className="py-3 px-4">
+                            {/* Status */}
+                            <td className="py-2.5 px-2.5 align-middle whitespace-nowrap">
                               {tx.status === "SUCCESS" ? (
-                                <span className="px-2 py-0.5 rounded text-xs font-bold bg-green-100 text-green-800">
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-green-100 text-green-800 border border-green-200">
+                                  <CheckCircle2 className="w-2.5 h-2.5 text-green-600 shrink-0" />
                                   SUCCESS
                                 </span>
                               ) : tx.isRefunded || tx.status === "FAILED" ? (
                                 <span
-                                  className="px-2 py-0.5 rounded text-xs font-bold bg-rose-100 text-rose-800 border border-rose-200 inline-flex items-center gap-1"
+                                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-200"
                                   title="Transaction failed & funds refunded"
                                 >
+                                  <XCircle className="w-2.5 h-2.5 text-rose-600 shrink-0" />
                                   REFUNDED
                                 </span>
                               ) : (
@@ -1883,20 +1904,22 @@ export function SimTroubleshootStation({
                                   onClick={handleSyncStatus}
                                   disabled={isReconciling}
                                   title="Click to check live carrier status"
-                                  className="px-2 py-0.5 rounded text-xs font-bold bg-amber-100 text-amber-800 border border-amber-200 hover:bg-amber-200 transition-colors inline-flex items-center gap-1"
+                                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200 hover:bg-amber-200 transition-colors"
                                 >
-                                  <RefreshCw className={`w-3 h-3 ${isReconciling ? "animate-spin" : ""}`} />
+                                  <RefreshCw className={`w-2.5 h-2.5 ${isReconciling ? "animate-spin" : ""}`} />
                                   <span>PROCESSING</span>
                                 </button>
                               )}
                             </td>
 
-                            <td className="py-3 px-4">
-                              <div className="font-medium text-gray-800">{dt.dateStr}</div>
-                              <div className="text-[11px] font-mono text-gray-500">{dt.timeStr}</div>
+                            {/* Date & Time */}
+                            <td className="py-2.5 px-2.5 align-middle whitespace-nowrap">
+                              <div className="font-semibold text-gray-800 text-[10.5px] leading-tight">{dt.dateStr}</div>
+                              <div className="text-[9.5px] font-mono text-gray-400 mt-0.5 leading-none">{dt.timeStr}</div>
                             </td>
 
-                            <td className="py-3 px-4 text-right">
+                            {/* Action Button */}
+                            <td className="py-2.5 px-3 text-right align-middle whitespace-nowrap">
                               <Button
                                 type="button"
                                 size="sm"
@@ -1906,9 +1929,10 @@ export function SimTroubleshootStation({
                                   handlePhoneLookup(tx.phone)
                                   window.scrollTo({ top: 0, behavior: "smooth" })
                                 }}
-                                className="h-7 text-[11px] font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 border-blue-200"
+                                className="h-6.5 px-2.5 text-[10px] font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 border-blue-200 shadow-2xs whitespace-nowrap inline-flex items-center gap-1"
                               >
-                                Inspect SIM
+                                <span>Inspect</span>
+                                <ArrowRight className="w-2.5 h-2.5 text-blue-500" />
                               </Button>
                             </td>
                           </tr>
@@ -2137,16 +2161,16 @@ export function SimTroubleshootStation({
                               const hasDuration = /day|month|week|daily|weekly|monthly|\(\d+/i.test(p.name)
                               const validityLabel = !hasDuration && p.validity ? ` (${p.validity})` : ""
                               return (
-                                <option key={`${p.id}-${p.name}`} value={`${p.id}::${p.price}::${p.name}`}>
+                                <option key={`${p.id}-${p.name}`} value={`${p.id}::${p.price}::${p.name}::${p.validity || ""}`}>
                                   {p.name} — ₦{p.price.toLocaleString()}{validityLabel}
                                 </option>
                               )
                             })}
                             {bulkNetworkPlans.length === 0 && (
                               <>
-                                <option value="8::380::1.0GB SME (30 Days)">1.0GB — ₦380 (Recommended for Trackers, 30 Days)</option>
-                                <option value="7::245::500MB SME (30 Days)">500MB — ₦245 (Budget Plan, 30 Days)</option>
-                                <option value="9::660::2.0GB SME (30 Days)">2.0GB — ₦660 (30 Days)</option>
+                                <option value="8::380::1.0GB SME (30 Days)::30 Days">1.0GB — ₦380 (Recommended for Trackers, 30 Days)</option>
+                                <option value="7::245::500MB SME (30 Days)::30 Days">500MB — ₦245 (Budget Plan, 30 Days)</option>
+                                <option value="9::660::2.0GB SME (30 Days)::30 Days">2.0GB — ₦660 (30 Days)</option>
                               </>
                             )}
                           </>

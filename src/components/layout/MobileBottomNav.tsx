@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Home, Zap, CreditCard, History, Loader2 } from "lucide-react"
+import { Home, Zap, CreditCard, History, Loader2, Radio } from "lucide-react"
 
 export function MobileBottomNav() {
   const pathname = usePathname()
@@ -19,6 +19,11 @@ export function MobileBottomNav() {
       name: "Dashboard",
       href: "/dashboard",
       icon: Home,
+    },
+    {
+      name: "Troubleshoot",
+      href: "/fleet",
+      icon: Radio,
     },
     {
       name: "SIM Station",
@@ -40,7 +45,7 @@ export function MobileBottomNav() {
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-gray-200/90 md:hidden shadow-[0_-4px_20px_rgba(0,0,0,0.05)]">
-      <div className="grid grid-cols-4 h-16 items-center px-2">
+      <div className="grid grid-cols-5 h-16 items-center px-1">
         {navItems.map((item) => {
           const isActive = pathname === item.href || (item.href !== "/dashboard" && pathname.startsWith(item.href))
           const isPending = pendingHref === item.href
@@ -82,11 +87,11 @@ export function MobileBottomNav() {
                 </div>
               )}
               <span
-                className={`text-[10px] tracking-tight mt-0.5 truncate max-w-[64px] flex items-center gap-0.5 ${
+                className={`text-[9.5px] tracking-tight mt-0.5 truncate max-w-[62px] text-center ${
                   isActive ? "font-bold text-blue-600" : "font-medium"
                 }`}
               >
-                {isPending ? "Loading..." : item.name}
+                {isPending ? "..." : item.name}
               </span>
             </Link>
           )

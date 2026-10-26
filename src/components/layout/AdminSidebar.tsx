@@ -1,5 +1,5 @@
 import Link from "next/link"
-import { Home, Users, History, Settings, LogOut, ArrowLeft, Zap, BarChart3, Coins } from "lucide-react"
+import { Home, Users, History, Settings, LogOut, ArrowLeft, Zap, BarChart3, Coins, Radio } from "lucide-react"
 import { CtnLogo } from "@/components/ui/CtnLogo"
 import { isAnalyticsServerEnabled } from "@/lib/feature-flags"
 
@@ -15,6 +15,7 @@ export async function AdminSidebar() {
   }
 
   links.push(
+    { name: "Troubleshoot Section", href: "/fleet", icon: Radio },
     { name: "Data Pricing", href: "/admin/pricing", icon: Coins },
     { name: "Tracker SIM Station", href: "/trackers", icon: Zap },
     { name: "Manage Users", href: "/admin/users", icon: Users },

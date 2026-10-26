@@ -22,6 +22,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { TrackerRechargeCards } from "./TrackerRechargeCards"
 import { ServerBadge } from "@/components/vtu/ServerBadge"
+import { formatPlanDisplayName } from "@/lib/phone-utils"
 
 const NETWORK_META: Record<string, { label: string; bg: string; text: string; border: string }> = {
   "01": { label: "MTN Nigeria", bg: "bg-amber-100", text: "text-amber-800", border: "border-amber-300" },
@@ -69,7 +70,7 @@ export default async function TrackerDetailPage({
     ...tracker.dataPurchases.map((d: any) => ({
       ...d,
       itemType: "DATA",
-      description: `Data Plan: ${d.plan}`,
+      description: `Data Plan: ${formatPlanDisplayName(d.plan, tracker.network)}`,
     })),
   ].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
 

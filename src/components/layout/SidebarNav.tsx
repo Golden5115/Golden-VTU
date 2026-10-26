@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Home, Zap, CreditCard, History, Shield, Settings, Loader2, BarChart3 } from "lucide-react"
+import { Home, Zap, CreditCard, History, Shield, Settings, Loader2, BarChart3, Radio } from "lucide-react"
 
 import { isAnalyticsClientEnabled } from "@/lib/feature-flags"
 
@@ -23,6 +23,7 @@ export function SidebarNav({ isAdmin, showAnalytics }: SidebarNavProps) {
 
   const links = [
     { name: "Dashboard", href: "/dashboard", icon: Home },
+    { name: "Troubleshoot Section", href: "/fleet", icon: Radio },
     { name: "Tracker SIM Station", href: "/trackers", icon: Zap },
   ]
 
@@ -43,7 +44,8 @@ export function SidebarNav({ isAdmin, showAnalytics }: SidebarNavProps) {
     })
   }
 
-  links.push({ name: "Settings", href: "/settings", icon: Settings })
+  // Temporarily hidden until /settings route is implemented
+  // links.push({ name: "Settings", href: "/settings", icon: Settings })
 
   return (
     <nav className="flex-1 p-4 space-y-1">

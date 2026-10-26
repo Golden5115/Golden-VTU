@@ -2,7 +2,7 @@
 
 import prisma from "@/lib/prisma"
 import { auth } from "@/auth"
-import { normalizePhoneNumber, detectNetwork, getDaysAgo, formatDisplayDate } from "@/lib/phone-utils"
+import { normalizePhoneNumber, detectNetwork, getDaysAgo, formatDisplayDate, extractValidityDays, formatPlanDisplayName } from "@/lib/phone-utils"
 
 export interface SimDiagnosticHistory {
   phone: string
@@ -22,6 +22,7 @@ export interface SimDiagnosticHistory {
     status: string
     expiryDate: string
     daysUntilExpiry: number
+    validityDays: number
     isExpired: boolean
     isExpiringSoon: boolean
     serverName?: string
@@ -119,7 +120,7 @@ export async function checkSimHistory(rawPhone: string): Promise<SimDiagnosticHi
     ...recentData.map((d: any) => ({
       id: d.id,
       type: "DATA" as const,
-      description: `Data Bundle (${d.plan})`,
+      description: `Data Bundle (${formatPlanDisplayName(d.plan, d.network)})`,
       amount: d.amount,
       status: d.status,
       reference: d.reference,
@@ -150,16 +151,17 @@ export async function checkSimHistory(rawPhone: string): Promise<SimDiagnosticHi
   if (lastDataRecord) {
     const daysAgo = getDaysAgo(lastDataRecord.createdAt)
     const purchaseTime = new Date(lastDataRecord.createdAt).getTime()
-    const validityDays = 30 // standard monthly VTU validity
+    const validityDays = extractValidityDays(lastDataRecord.plan, 30)
     const expiryTime = purchaseTime + validityDays * 24 * 60 * 60 * 1000
     const now = Date.now()
-    const daysUntilExpiry = Math.ceil((expiryTime - now) / (1000 * 60 * 60 * 24))
-    const isExpired = daysUntilExpiry <= 0
-    const isExpiringSoon = daysUntilExpiry > 0 && daysUntilExpiry <= 3
+    const diffMs = expiryTime - now
+    const daysUntilExpiry = Math.ceil(diffMs / (1000 * 60 * 60 * 24))
+    const isExpired = diffMs <= 0
+    const isExpiringSoon = !isExpired && (validityDays <= 2 ? diffMs < 12 * 60 * 60 * 1000 : daysUntilExpiry <= 3)
 
     lastData = {
       id: lastDataRecord.id,
-      plan: lastDataRecord.plan,
+      plan: formatPlanDisplayName(lastDataRecord.plan, lastDataRecord.network),
       amount: lastDataRecord.amount,
       date: lastDataRecord.createdAt.toISOString(),
       formattedDate: formatDisplayDate(lastDataRecord.createdAt),
@@ -167,6 +169,7 @@ export async function checkSimHistory(rawPhone: string): Promise<SimDiagnosticHi
       reference: lastDataRecord.reference,
       status: lastDataRecord.status,
       expiryDate: new Date(expiryTime).toISOString(),
+      validityDays,
       daysUntilExpiry,
       isExpired,
       isExpiringSoon,

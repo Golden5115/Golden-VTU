@@ -19,7 +19,7 @@ import {
   ShieldAlert,
   ShieldCheck,
 } from "lucide-react"
-import { detectNetwork } from "@/lib/phone-utils"
+import { detectNetwork, extractValidityDays } from "@/lib/phone-utils"
 import { NetworkMismatchModal } from "@/components/vtu/NetworkMismatchModal"
 
 export interface ServerOption {
@@ -193,6 +193,8 @@ export function DataPurchaseForm({
           type: "data",
           networkId: selectedNetworkId,
           planId: selectedPlan.id,
+          planName: selectedPlan.name,
+          validityDays: extractValidityDays(selectedPlan.validity || selectedPlan.name, 30),
           amount: selectedPlan.price,
           serverId: selectedServerId,
           phones: selectedPhones,

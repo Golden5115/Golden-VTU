@@ -1,7 +1,7 @@
 import { auth } from "@/auth"
 import { redirect } from "next/navigation"
 import prisma from "@/lib/prisma"
-import { NETWORKS } from "@/lib/phone-utils"
+import { NETWORKS, formatPlanDisplayName } from "@/lib/phone-utils"
 import { reconcilePendingTransactions } from "@/services/vtu.service"
 import { TransactionsView, UnifiedTx } from "./TransactionsView"
 
@@ -67,7 +67,7 @@ export default async function TransactionsPage() {
       id: tx.id,
       reference: tx.reference,
       type: "DATA" as const,
-      label: `Data Bundle (${tx.plan})`,
+      label: `Data Bundle (${formatPlanDisplayName(tx.plan, tx.network)})`,
       phone: tx.phone,
       networkId: tx.network,
       networkName: NETWORKS[tx.network]?.name || tx.network,

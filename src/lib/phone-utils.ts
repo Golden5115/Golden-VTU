@@ -189,4 +189,177 @@ export function format12HourDateTime(date: Date | string): {
   }
 }
 
+// Comprehensive mapping of known numerical plan IDs to their actual durations (days) for legacy and active orders
+const KNOWN_PLAN_ID_VALIDITY: Record<string, number> = {
+  // Common short codes & ClubKonnect
+  "4": 7,    // MTN 1GB Weekly SME (7 days)
+  "8": 3,    // Glo 1GB SME (3 days)
+  "19": 7,   // Airtel Weekly Bundle (7 days)
+
+  // Pairgate Airtel CG Weekly Plans (IDs 89, 90, 91, 94, 96, 98, 101)
+  "89": 7,   // Airtel 500MB (CG) - 7 Days
+  "90": 7,   // Airtel 1GB (CG) - 7 Days
+  "91": 7,   // Airtel 1.5GB (CG) - 7 Days
+  "94": 7,   // Airtel 3.5GB (CG) - 7 Days
+  "96": 7,   // Airtel 6GB (CG) - 7 Days
+  "98": 7,   // Airtel 10GB (CG) - 7 Days
+  "101": 7,  // Airtel 18GB (CG) - 7 Days
+
+  // Airtel Awoof, Binge & Weekly Plans
+  "121": 1, "122": 2, "123": 2, "124": 1, "125": 2, "126": 2,
+  "189": 1, "193": 7, "196": 7, "197": 2, "198": 1, "200": 7,
+  "204": 2, "206": 7, "208": 7, "209": 7, "210": 3, "211": 2,
+  "212": 1, "215": 2, "216": 2, "362": 1, "363": 7,
+
+  // Glo Awoof, Specials, Collabo & Mega Plans
+  "85": 1, "86": 1, "87": 2, "88": 7, "217": 15, "218": 10,
+  "219": 7, "220": 3, "221": 1, "222": 1, "226": 7, "227": 2,
+  "228": 1, "232": 15, "233": 90, "236": 365, "237": 2, "238": 2,
+  "239": 60, "240": 60, "243": 2, "244": 1, "245": 14, "246": 7,
+  "247": 7, "250": 7, "251": 7, "252": 2, "253": 3, "255": 1,
+  "256": 1, "266": 7, "267": 2, "268": 1, "359": 14, "360": 7, "361": 7,
+
+  // MTN Daily, Weekly, Gifting & Mega Plans
+  "59": 14, "61": 3, "62": 7, "65": 3, "66": 7, "68": 3, "69": 7,
+  "270": 2, "271": 2, "272": 1, "273": 7, "274": 1, "275": 90,
+  "277": 60, "281": 7, "282": 90, "283": 2, "285": 2, "290": 7,
+  "295": 7, "297": 2, "298": 2, "299": 7, "300": 1, "301": 1,
+  "302": 1, "313": 2, "316": 7, "317": 365, "318": 7, "320": 7,
+  "323": 2, "324": 14, "325": 14, "326": 14, "327": 7, "328": 14,
+  "332": 1, "333": 7, "364": 1,
+
+  // 9mobile
+  "177": 7, "178": 1, "186": 7, "187": 1, "188": 1, "391": 1, "397": 7,
+}
+
+// Known human-readable names for numerical IDs so UI does not show raw numbers
+const KNOWN_PLAN_DISPLAY_MAP: Record<string, string> = {
+  "89": "500MB (CG) • 7 Days",
+  "90": "1GB (CG) • 7 Days",
+  "91": "1.5GB (CG) • 7 Days",
+  "92": "2GB (CG) • 30 Days",
+  "93": "3GB (CG) • 30 Days",
+  "94": "3.5GB (CG) • 7 Days",
+  "95": "4GB (CG) • 30 Days",
+  "96": "6GB (CG) • 7 Days",
+  "97": "8GB (CG) • 30 Days",
+  "98": "10GB (CG) • 7 Days",
+  "99": "10GB (CG) • 30 Days",
+  "100": "13GB (CG) • 30 Days",
+  "101": "18GB (CG) • 7 Days",
+  "102": "18GB (CG) • 30 Days",
+  "19": "500MB Weekly • 7 Days",
+  "14": "500MB (CG) • 30 Days",
+  "15": "1GB (CG) • 30 Days",
+  "16": "2GB (CG) • 30 Days",
+  "17": "3GB (CG) • 30 Days",
+  "18": "5GB (CG) • 30 Days",
+  "4": "1GB Weekly SME • 7 Days",
+  "8": "1GB SME • 3 Days",
+  "7": "500MB SME • 30 Days",
+}
+
+/**
+ * Extracts bundle validity in days from plan name, description, or plan ID.
+ * Accurately parses daily (1 day), multi-day (2d, 3d), weekly (7d, 14d), monthly (30d), and extended plans.
+ */
+export function extractValidityDays(planNameOrValidity?: string | null, fallbackDays: number = 30): number {
+  if (!planNameOrValidity) return fallbackDays
+  const text = planNameOrValidity.toLowerCase().trim()
+
+  // Match known numerical code
+  if (KNOWN_PLAN_ID_VALIDITY[text] !== undefined) {
+    return KNOWN_PLAN_ID_VALIDITY[text]
+  }
+
+  // 1. Explicit regex for days: e.g. "1 day", "2 days", "3-day", "7 days", "14 days", "30 days", "60 days"
+  const dayMatch = text.match(/(\d+)\s*(?:day|days|d\b)/i)
+  if (dayMatch && dayMatch[1]) {
+    const parsed = parseInt(dayMatch[1], 10)
+    if (parsed > 0 && parsed <= 365) return parsed
+  }
+
+  // 2. Explicit regex for weeks: e.g. "1 week", "2 weeks"
+  const weekMatch = text.match(/(\d+)\s*(?:week|weeks|wk|wks\b)/i)
+  if (weekMatch && weekMatch[1]) {
+    const parsedWeeks = parseInt(weekMatch[1], 10)
+    if (parsedWeeks > 0 && parsedWeeks <= 52) return parsedWeeks * 7
+  }
+
+  // 3. Explicit regex for months: e.g. "1 month", "2 months", "3 months"
+  const monthMatch = text.match(/(\d+)\s*(?:month|months|mo|mos\b)/i)
+  if (monthMatch && monthMatch[1]) {
+    const parsedMonths = parseInt(monthMatch[1], 10)
+    if (parsedMonths > 0 && parsedMonths <= 12) return parsedMonths * 30
+  }
+
+  // 4. Specific keywords
+  if (text.includes("daily") || text.includes("24 hr") || text.includes("24hr") || text.includes("24 hours") || text.includes("1day")) {
+    return 1
+  }
+  if (text.includes("2day") || text.includes("48 hr") || text.includes("48hr")) {
+    return 2
+  }
+  if (text.includes("3day") || text.includes("72 hr") || text.includes("72hr")) {
+    return 3
+  }
+  if (text.includes("weekly") || text.includes("7day")) {
+    return 7
+  }
+  if (text.includes("bi-weekly") || text.includes("14day") || text.includes("fortnight")) {
+    return 14
+  }
+  if (text.includes("monthly") || text.includes("30day")) {
+    return 30
+  }
+  if (text.includes("quarterly") || text.includes("90day")) {
+    return 90
+  }
+  if (text.includes("yearly") || text.includes("annual") || text.includes("365day") || text.includes("1 year")) {
+    return 365
+  }
+
+  // 5. Common telecom bundles that omit "7 days" from their name (e.g. Pairgate Airtel CG 7-day tiers)
+  if (text.includes("(cg)")) {
+    if (
+      text.includes("500mb") ||
+      text.includes("1gb") ||
+      text.includes("1.5gb") ||
+      text.includes("3.5gb") ||
+      text.includes("6gb")
+    ) {
+      return 7
+    }
+  }
+
+  return fallbackDays
+}
+
+/**
+ * Format plan label for user/admin display.
+ * If the stored plan is a raw ID (e.g. "89"), converts to "500MB (CG) • 7 Days".
+ * If the stored plan does not have validity, appends its duration.
+ */
+export function formatPlanDisplayName(planNameOrId?: string | null, networkId?: string | null): string {
+  if (!planNameOrId || !planNameOrId.trim()) return "Data Bundle"
+  const trimmed = planNameOrId.trim()
+
+  // Match known numerical ID
+  if (KNOWN_PLAN_DISPLAY_MAP[trimmed]) {
+    return KNOWN_PLAN_DISPLAY_MAP[trimmed]
+  }
+
+  // If already formatted with days/weeks, return cleaned
+  if (/\b(?:days?|weeks?|months?|d\b|hrs?)\b/i.test(trimmed)) {
+    return trimmed
+  }
+
+  // Derive validity and append
+  const days = extractValidityDays(trimmed, 30)
+  const durationLabel = days === 1 ? "1 Day" : `${days} Days`
+
+  return `${trimmed} • ${durationLabel}`
+}
+
+
 

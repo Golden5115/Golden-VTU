@@ -15,7 +15,7 @@ export async function POST(request: NextRequest) {
     const userId = session.user.id
 
     const body = await request.json()
-    const { type, networkId, planId, amount, serverId, phones, bypassSimCheck } = body
+    const { type, networkId, planId, amount, serverId, phones, bypassSimCheck, planName, validityDays } = body
 
     if (!Array.isArray(phones) || phones.length === 0) {
       return NextResponse.json({ error: "At least one recipient phone number is required" }, { status: 400 })
@@ -82,6 +82,8 @@ export async function POST(request: NextRequest) {
         if (type === "data") {
           const res = await purchaseData(userId, networkId, planId, phone, unitAmount, {
             serverId,
+            planName,
+            validityDays,
             bypassSimCheck: true,
           })
           results.push({

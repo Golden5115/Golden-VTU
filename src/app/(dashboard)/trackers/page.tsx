@@ -4,7 +4,7 @@ import prisma from "@/lib/prisma"
 import { getActiveServers, resolveServerAndProvider } from "@/services/providers/provider.factory"
 import { SimTroubleshootStation } from "./SimTroubleshootStation"
 
-import { NETWORKS } from "@/lib/phone-utils"
+import { NETWORKS, formatPlanDisplayName } from "@/lib/phone-utils"
 import { reconcilePendingTransactions } from "@/services/vtu.service"
 
 export default async function TrackersPage() {
@@ -54,23 +54,26 @@ export default async function TrackersPage() {
   ])
 
   const recentTransactions = [
-    ...recentData.map((d) => ({
-      id: d.id,
-      type: "DATA" as const,
-      label: `Data Bundle (${d.plan})`,
-      planName: d.plan,
-      phone: d.phone,
-      networkId: d.network,
-      networkName: NETWORKS[d.network]?.name || d.network,
-      amount: d.amount,
-      status: d.status,
-      isRefunded: d.status === "FAILED",
-      reference: d.reference,
-      date: d.createdAt.toISOString(),
-      rawDate: d.createdAt.getTime(),
-      serverName: d.serverName || (d.serverId ? "Server" : "Server 1"),
-      provider: d.provider || "CLUBKONNECT",
-    })),
+    ...recentData.map((d) => {
+      const formattedPlan = formatPlanDisplayName(d.plan, d.network)
+      return {
+        id: d.id,
+        type: "DATA" as const,
+        label: `Data Bundle (${formattedPlan})`,
+        planName: formattedPlan,
+        phone: d.phone,
+        networkId: d.network,
+        networkName: NETWORKS[d.network]?.name || d.network,
+        amount: d.amount,
+        status: d.status,
+        isRefunded: d.status === "FAILED",
+        reference: d.reference,
+        date: d.createdAt.toISOString(),
+        rawDate: d.createdAt.getTime(),
+        serverName: d.serverName || (d.serverId ? "Server" : "Server 1"),
+        provider: d.provider || "CLUBKONNECT",
+      }
+    }),
     ...recentAirtime.map((a) => ({
       id: a.id,
       type: "AIRTIME" as const,

@@ -1,3 +1,5 @@
+import { extractValidityDays } from "./phone-utils"
+
 export type TrackerHealthStatus = "ACTIVE" | "EXPIRING_SOON" | "EXPIRED" | "NEVER_TOPPED_UP"
 
 export interface EnrichedTracker {
@@ -56,7 +58,7 @@ export function computeTrackerDiagnostics(tracker: any): EnrichedTracker {
     }
   } else if (tracker.lastDataDate) {
     const lastTime = new Date(tracker.lastDataDate).getTime()
-    const validity = tracker.dataValidityDays || 30
+    const validity = tracker.dataValidityDays || extractValidityDays(tracker.lastDataPlan, 30)
     const expiryTime = lastTime + validity * 24 * 60 * 60 * 1000
     const diffDays = Math.ceil((expiryTime - now) / (1000 * 60 * 60 * 24))
     dataRemainingDays = diffDays

@@ -8,6 +8,8 @@ import {
   formatRelativeDays,
   formatDisplayDate,
   detectNetwork,
+  extractValidityDays,
+  formatPlanDisplayName,
 } from "@/lib/phone-utils"
 import { reconcilePendingTransactions } from "@/services/vtu.service"
 
@@ -141,17 +143,26 @@ export async function POST(request: NextRequest) {
       let lastData = null
       if (dataRecord) {
         const dAgo = getDaysAgo(dataRecord.createdAt)
-        const daysUntilExpiry = 30 - dAgo
+        const validityDays = extractValidityDays(dataRecord.plan, 30)
+        const purchaseTime = new Date(dataRecord.createdAt).getTime()
+        const expiryTime = purchaseTime + validityDays * 24 * 60 * 60 * 1000
+        const now = Date.now()
+        const diffMs = expiryTime - now
+        const daysUntilExpiry = Math.ceil(diffMs / (1000 * 60 * 60 * 24))
+        const isExpired = diffMs <= 0
+        const isExpiringSoon = !isExpired && (validityDays <= 2 ? diffMs < 12 * 60 * 60 * 1000 : daysUntilExpiry <= 3)
+
         lastData = {
           id: dataRecord.id,
           date: dataRecord.createdAt.toISOString(),
           formattedDate: formatDisplayDate(dataRecord.createdAt),
           daysAgo: dAgo,
-          plan: dataRecord.plan,
+          plan: formatPlanDisplayName(dataRecord.plan, dataRecord.network),
           amount: dataRecord.amount,
+          validityDays,
           daysUntilExpiry,
-          isExpired: daysUntilExpiry <= 0,
-          isExpiringSoon: daysUntilExpiry > 0 && daysUntilExpiry <= 3,
+          isExpired,
+          isExpiringSoon,
           serverName: dataRecord.serverName || (dataRecord.serverId ? "Server" : "Server 1"),
           provider: dataRecord.provider || "CLUBKONNECT",
         }
@@ -183,7 +194,8 @@ export async function POST(request: NextRequest) {
 
       if (contextRecord) {
         daysAgo = getDaysAgo(contextRecord.createdAt)
-        isWithinMonth = daysAgo <= 30
+        const validityDays = type === "data" ? extractValidityDays(contextRecord.plan, 30) : 30
+        isWithinMonth = daysAgo <= validityDays
         statusCategory = isWithinMonth ? "ALREADY_LOADED" : "DUE_FOR_RENEWAL"
         lastPurchase = {
           id: contextRecord.id,
@@ -191,7 +203,7 @@ export async function POST(request: NextRequest) {
           formattedDate: formatDisplayDate(contextRecord.createdAt),
           daysAgo,
           relativeText: formatRelativeDays(daysAgo),
-          plan: contextRecord.plan || null,
+          plan: contextRecord.plan ? formatPlanDisplayName(contextRecord.plan, contextRecord.network) : null,
           network: contextRecord.network,
           amount: contextRecord.amount,
           status: contextRecord.status,
@@ -223,7 +235,7 @@ export async function POST(request: NextRequest) {
           formattedDate: formatDisplayDate(dataRecord.createdAt),
           daysAgo: getDaysAgo(dataRecord.createdAt),
           relativeText: formatRelativeDays(getDaysAgo(dataRecord.createdAt)),
-          plan: dataRecord.plan,
+          plan: formatPlanDisplayName(dataRecord.plan, dataRecord.network),
           network: dataRecord.network,
           amount: dataRecord.amount,
           status: dataRecord.status,
@@ -297,19 +309,29 @@ export async function GET(request: NextRequest) {
     let lastData = null
     if (dataRecord) {
       const daysAgo = getDaysAgo(dataRecord.createdAt)
-      const isWithinMonth = daysAgo <= 30
+      const validityDays = extractValidityDays(dataRecord.plan, 30)
+      const purchaseTime = new Date(dataRecord.createdAt).getTime()
+      const expiryTime = purchaseTime + validityDays * 24 * 60 * 60 * 1000
+      const now = Date.now()
+      const diffMs = expiryTime - now
+      const daysUntilExpiry = Math.ceil(diffMs / (1000 * 60 * 60 * 24))
+      const isExpired = diffMs <= 0
+      const isExpiringSoon = !isExpired && (validityDays <= 2 ? diffMs < 12 * 60 * 60 * 1000 : daysUntilExpiry <= 3)
+
       lastData = {
         id: dataRecord.id,
         date: dataRecord.createdAt.toISOString(),
         formattedDate: formatDisplayDate(dataRecord.createdAt),
         daysAgo,
-        plan: dataRecord.plan,
+        plan: formatPlanDisplayName(dataRecord.plan, dataRecord.network),
         amount: dataRecord.amount,
         status: dataRecord.status,
         reference: dataRecord.reference,
-        isWithinMonth,
-        daysUntilExpiry: 30 - daysAgo,
-        isExpired: daysAgo > 30,
+        isWithinMonth: daysAgo <= validityDays,
+        validityDays,
+        daysUntilExpiry,
+        isExpired,
+        isExpiringSoon,
       }
     }
 

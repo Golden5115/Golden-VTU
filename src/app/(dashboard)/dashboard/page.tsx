@@ -8,7 +8,7 @@ import { CreditCard, Car, Wifi, ShieldAlert, Clock, ArrowRight, Plus, BarChart3,
 import { verifyPayment } from "@/services/paystack.service"
 import { getTrackers } from "@/actions/tracker.actions"
 import { Button } from "@/components/ui/button"
-import { NETWORKS, format12HourDateTime } from "@/lib/phone-utils"
+import { NETWORKS, format12HourDateTime, formatPlanDisplayName } from "@/lib/phone-utils"
 import { reconcilePendingTransactions } from "@/services/vtu.service"
 import { isAnalyticsServerEnabled } from "@/lib/feature-flags"
 import { ServerBadge } from "@/components/vtu/ServerBadge"
@@ -147,7 +147,7 @@ export default async function DashboardPage({
     ...dataList.map((tx) => ({
       id: tx.id,
       type: "DATA",
-      label: `Data (${tx.plan})`,
+      label: `Data (${formatPlanDisplayName(tx.plan, tx.network)})`,
       phone: tx.phone,
       network: NETWORKS[tx.network]?.name || tx.network,
       networkId: tx.network,

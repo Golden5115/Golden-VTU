@@ -480,17 +480,17 @@ export function TransactionsView({ initialTransactions, isAdmin }: TransactionsV
 
               {/* Desktop Table View (Visible on md and above) */}
               <div className="hidden md:block overflow-x-auto">
-                <Table>
+                <Table className="min-w-[960px]">
                   <TableHeader>
-                    <TableRow>
-                      <TableHead>Type</TableHead>
-                      <TableHead>Network</TableHead>
-                      <TableHead>Server</TableHead>
-                      <TableHead>Phone / Recipient</TableHead>
-                      <TableHead>Reference</TableHead>
-                      <TableHead>Amount</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead className="text-right">Date & Time (Nigerian 12h)</TableHead>
+                    <TableRow className="bg-slate-50/80">
+                      <TableHead className="whitespace-nowrap">Type</TableHead>
+                      <TableHead className="whitespace-nowrap">Network</TableHead>
+                      <TableHead className="whitespace-nowrap">Server</TableHead>
+                      <TableHead className="whitespace-nowrap">Phone / Recipient</TableHead>
+                      <TableHead className="whitespace-nowrap">Reference</TableHead>
+                      <TableHead className="whitespace-nowrap">Amount</TableHead>
+                      <TableHead className="whitespace-nowrap">Status</TableHead>
+                      <TableHead className="text-right whitespace-nowrap">Date & Time</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
