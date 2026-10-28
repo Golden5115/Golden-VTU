@@ -85,8 +85,8 @@ export function FleetTroubleshootClient({
   availablePlans,
   initialOfflineData,
 }: FleetTroubleshootClientProps) {
-  // Navigation Search Mode: "offline" (primary), "email", "direct"
-  const [activeTab, setActiveTab] = useState<"offline" | "email" | "direct">("offline")
+  // Navigation Search Mode: "email" (Tab 1), "direct" (Tab 2), "offline" (Tab 3)
+  const [activeTab, setActiveTab] = useState<"email" | "direct" | "offline">("email")
 
   // Wallet State
   const [walletBalance, setWalletBalance] = useState(initialWalletBalance)
@@ -477,24 +477,6 @@ export function FleetTroubleshootClient({
         <div className="flex border-b border-slate-100 bg-slate-50/70 p-1.5 gap-1.5">
           <button
             type="button"
-            onClick={() => setActiveTab("offline")}
-            className={`flex-1 py-2.5 px-4 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 ${
-              activeTab === "offline"
-                ? "bg-white text-indigo-700 shadow-xs border border-slate-200"
-                : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
-            }`}
-          >
-            <Database className="w-4 h-4 text-indigo-600" />
-            <span>Offline Fleet Engine (10,000+)</span>
-            {offlineSummary.totalOffline > 0 && (
-              <span className="px-2 py-0.5 rounded-full text-[10px] bg-rose-100 text-rose-800 font-bold font-mono">
-                {offlineSummary.totalOffline.toLocaleString()}
-              </span>
-            )}
-          </button>
-
-          <button
-            type="button"
             onClick={() => setActiveTab("email")}
             className={`flex-1 py-2.5 px-4 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 ${
               activeTab === "email"
@@ -518,10 +500,28 @@ export function FleetTroubleshootClient({
             <Search className="w-4 h-4 text-indigo-600" />
             <span>Direct Tracker Search (SIM / IMEI / Plate)</span>
           </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab("offline")}
+            className={`flex-1 py-2.5 px-4 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 ${
+              activeTab === "offline"
+                ? "bg-white text-indigo-700 shadow-xs border border-slate-200"
+                : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
+            }`}
+          >
+            <Database className="w-4 h-4 text-indigo-600" />
+            <span>Offline Fleet Engine (10,000+)</span>
+            {offlineSummary.totalOffline > 0 && (
+              <span className="px-2 py-0.5 rounded-full text-[10px] bg-rose-100 text-rose-800 font-bold font-mono">
+                {offlineSummary.totalOffline.toLocaleString()}
+              </span>
+            )}
+          </button>
         </div>
 
         {/* ------------------------------------------------------------- */}
-        {/* TAB 1: OFFLINE FLEET ENGINE VIEW (10,000+ VEHICLES)            */}
+        {/* TAB 3: OFFLINE FLEET ENGINE VIEW (10,000+ VEHICLES)            */}
         {/* ------------------------------------------------------------- */}
         {activeTab === "offline" && (
           <div className="p-6 space-y-6">
@@ -932,7 +932,7 @@ export function FleetTroubleshootClient({
         )}
 
         {/* ------------------------------------------------------------- */}
-        {/* TAB 2: SEARCH CUSTOMER FLEET (BY EMAIL)                        */}
+        {/* TAB 1: SEARCH CUSTOMER FLEET (BY EMAIL)                        */}
         {/* ------------------------------------------------------------- */}
         {activeTab === "email" && (
           <div className="p-6 space-y-6">
@@ -1085,7 +1085,7 @@ export function FleetTroubleshootClient({
         )}
 
         {/* ------------------------------------------------------------- */}
-        {/* TAB 3: DIRECT TRACKER SEARCH (SIM, IMEI, PLATE)                */}
+        {/* TAB 2: DIRECT TRACKER SEARCH (SIM, IMEI, PLATE)                */}
         {/* ------------------------------------------------------------- */}
         {activeTab === "direct" && (
           <div className="p-6 space-y-6">
