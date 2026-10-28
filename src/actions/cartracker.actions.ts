@@ -869,6 +869,7 @@ export async function syncOfflineVehiclesBatch(page: number = 1, limit: number =
       )
     }
 
+    cachedSummaryMemory = null
     const totalInDb = await prisma.offlineVehicle.count()
 
     return {
@@ -942,6 +943,16 @@ export interface GetOfflineVehiclesResult {
   }
   error?: string
 }
+
+let cachedSummaryMemory: {
+  totalOffline: number
+  criticalCount: number
+  expiredCount: number
+  neverLoadedCount: number
+  activeCount: number
+  lastSyncAt: string | null
+  expiresAt: number
+} | null = null
 
 /**
  * High-performance paginated query directly against local indexed PostgreSQL.
@@ -1020,26 +1031,82 @@ export async function getOfflineVehicles(params: GetOfflineVehiclesParams = {}):
     else if (params.sortBy === "lastHeartbeat_desc") orderBy = { lastHeartbeat: "desc" }
     else if (params.sortBy === "plate_asc") orderBy = { plateNumber: "asc" }
 
-    // Execute queries in parallel
-    const [vehicles, total, totalOffline, criticalCount, expiredCount, neverLoadedCount, activeCount, latestSyncRecord] =
-      await Promise.all([
-        prisma.offlineVehicle.findMany({
-          where,
-          skip,
-          take: limit,
-          orderBy,
-        }),
-        prisma.offlineVehicle.count({ where }),
-        prisma.offlineVehicle.count(),
-        prisma.offlineVehicle.count({ where: { daysOffline: { gte: 30 } } }),
-        prisma.offlineVehicle.count({ where: { vtuStatus: "EXPIRED" } }),
-        prisma.offlineVehicle.count({ where: { vtuStatus: "NEVER_LOADED" } }),
-        prisma.offlineVehicle.count({ where: { vtuStatus: "ACTIVE" } }),
-        prisma.offlineVehicle.findFirst({
-          select: { lastSyncAt: true },
-          orderBy: { lastSyncAt: "desc" },
-        }),
-      ])
+    // -------------------------------------------------------------
+    // DB QUOTA OPTIMIZATION: Cache summary metrics for 10 minutes
+    // Reduces queries from 8 to 2 on every page turn / search filter
+    // -------------------------------------------------------------
+    let summaryData: {
+      totalOffline: number
+      criticalCount: number
+      expiredCount: number
+      neverLoadedCount: number
+      activeCount: number
+      lastSyncAt: string | null
+    }
+
+    if (cachedSummaryMemory && cachedSummaryMemory.expiresAt > Date.now()) {
+      summaryData = cachedSummaryMemory
+    } else {
+      try {
+        const rawRes: any[] = await prisma.$queryRaw`
+          SELECT 
+            COUNT(*)::int as "totalOffline",
+            COUNT(*) FILTER (WHERE "daysOffline" >= 30)::int as "criticalCount",
+            COUNT(*) FILTER (WHERE "vtuStatus" = 'EXPIRED')::int as "expiredCount",
+            COUNT(*) FILTER (WHERE "vtuStatus" = 'NEVER_LOADED')::int as "neverLoadedCount",
+            COUNT(*) FILTER (WHERE "vtuStatus" = 'ACTIVE')::int as "activeCount",
+            MAX("lastSyncAt") as "lastSyncAt"
+          FROM "OfflineVehicle"
+        `
+        const r = rawRes?.[0] || {}
+        summaryData = {
+          totalOffline: Number(r.totalOffline || 0),
+          criticalCount: Number(r.criticalCount || 0),
+          expiredCount: Number(r.expiredCount || 0),
+          neverLoadedCount: Number(r.neverLoadedCount || 0),
+          activeCount: Number(r.activeCount || 0),
+          lastSyncAt: r.lastSyncAt ? new Date(r.lastSyncAt).toISOString() : null,
+        }
+        cachedSummaryMemory = {
+          ...summaryData,
+          expiresAt: Date.now() + 10 * 60 * 1000, // 10 minutes
+        }
+      } catch (rawErr) {
+        // Fallback to separate count queries only if raw query is unsupported
+        const [totalOffline, criticalCount, expiredCount, neverLoadedCount, activeCount, latestSyncRecord] =
+          await Promise.all([
+            prisma.offlineVehicle.count(),
+            prisma.offlineVehicle.count({ where: { daysOffline: { gte: 30 } } }),
+            prisma.offlineVehicle.count({ where: { vtuStatus: "EXPIRED" } }),
+            prisma.offlineVehicle.count({ where: { vtuStatus: "NEVER_LOADED" } }),
+            prisma.offlineVehicle.count({ where: { vtuStatus: "ACTIVE" } }),
+            prisma.offlineVehicle.findFirst({ select: { lastSyncAt: true }, orderBy: { lastSyncAt: "desc" } }),
+          ])
+        summaryData = {
+          totalOffline,
+          criticalCount,
+          expiredCount,
+          neverLoadedCount,
+          activeCount,
+          lastSyncAt: latestSyncRecord?.lastSyncAt ? latestSyncRecord.lastSyncAt.toISOString() : null,
+        }
+        cachedSummaryMemory = {
+          ...summaryData,
+          expiresAt: Date.now() + 10 * 60 * 1000,
+        }
+      }
+    }
+
+    // Execute only the active page and filtered total (only 2 operations!)
+    const [vehicles, total] = await Promise.all([
+      prisma.offlineVehicle.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy,
+      }),
+      prisma.offlineVehicle.count({ where }),
+    ])
 
     const formattedVehicles = vehicles.map((v) => ({
       id: v.id,
@@ -1072,14 +1139,7 @@ export async function getOfflineVehicles(params: GetOfflineVehiclesParams = {}):
       total,
       page,
       totalPages: Math.max(1, Math.ceil(total / limit)),
-      summary: {
-        totalOffline,
-        criticalCount,
-        expiredCount,
-        neverLoadedCount,
-        activeCount,
-        lastSyncAt: latestSyncRecord?.lastSyncAt ? latestSyncRecord.lastSyncAt.toISOString() : null,
-      },
+      summary: summaryData,
     }
   } catch (err: any) {
     console.error("[getOfflineVehicles] Query error:", err)
