@@ -437,84 +437,90 @@ export function FleetTroubleshootClient({
   }
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto pb-12">
+    <div className="space-y-4 sm:space-y-6 max-w-7xl mx-auto pb-12">
       {/* 1. TOP HEADER & TELEMETRY STATUS */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white p-6 rounded-2xl shadow-sm border border-slate-800">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 sm:gap-4 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white p-3.5 sm:p-6 rounded-xl sm:rounded-2xl shadow-sm border border-slate-800">
         <div className="space-y-1">
           <div className="flex items-center gap-2">
-            <div className="p-2 bg-indigo-500/20 border border-indigo-400/30 rounded-xl text-indigo-400">
-              <Radio className="w-5 h-5 animate-pulse" />
+            <div className="p-1.5 sm:p-2 bg-indigo-500/20 border border-indigo-400/30 rounded-lg sm:rounded-xl text-indigo-400 shrink-0">
+              <Radio className="w-4 h-4 sm:w-5 sm:h-5 animate-pulse" />
             </div>
             <div>
-              <h1 className="text-xl font-black tracking-tight">Troubleshoot Section</h1>
-              <p className="text-xs text-slate-300">
+              <h1 className="text-base sm:text-xl font-black tracking-tight">Troubleshoot Section</h1>
+              <p className="text-[10px] sm:text-xs text-slate-300">
                 Car Tracker Nigeria Offline Fleet Diagnostic Telemetry & Per-Vehicle SIM Bundle Management
               </p>
             </div>
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="bg-slate-800/80 border border-slate-700/80 rounded-xl px-4 py-2 flex items-center gap-3">
-            <Wallet className="w-4 h-4 text-emerald-400" />
+        <div className="flex items-center justify-between sm:justify-start gap-2 sm:gap-3">
+          <div className="bg-slate-800/80 border border-slate-700/80 rounded-lg sm:rounded-xl px-2.5 py-1.5 sm:px-4 sm:py-2 flex items-center gap-2 sm:gap-3">
+            <Wallet className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-400 shrink-0" />
             <div>
-              <div className="text-[10px] text-slate-400 uppercase font-semibold">Available Wallet</div>
-              <div className="text-sm font-bold text-emerald-400 font-mono">
+              <div className="text-[9px] sm:text-[10px] text-slate-400 uppercase font-semibold">Available Wallet</div>
+              <div className="text-xs sm:text-sm font-bold text-emerald-400 font-mono">
                 ₦{walletBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}
               </div>
             </div>
           </div>
 
-          <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-semibold">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-            <span>app.cartracker.com.ng Live</span>
+          <div className="flex items-center gap-1.5 px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-[10px] sm:text-xs font-semibold shrink-0">
+            <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-emerald-400 animate-ping" />
+            <span className="hidden sm:inline">app.cartracker.com.ng Live</span>
+            <span className="sm:hidden">Live Sync</span>
           </div>
         </div>
       </div>
 
       {/* 2. MODE SELECTOR TABS */}
-      <Card className="border border-slate-200/90 shadow-sm rounded-2xl overflow-hidden bg-white">
-        <div className="flex border-b border-slate-100 bg-slate-50/70 p-1.5 gap-1.5">
+      <Card className="border border-slate-200/90 shadow-sm rounded-xl sm:rounded-2xl overflow-hidden bg-white">
+        <div className="flex border-b border-slate-100 bg-slate-50/70 p-1 sm:p-1.5 gap-1 sm:gap-1.5">
           <button
             type="button"
             onClick={() => setActiveTab("email")}
-            className={`flex-1 py-2.5 px-4 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 ${
+            className={`flex-1 py-2 sm:py-2.5 px-1.5 sm:px-4 rounded-lg sm:rounded-xl text-[10px] sm:text-xs font-bold transition-all flex items-center justify-center gap-1 sm:gap-2 ${
               activeTab === "email"
                 ? "bg-white text-indigo-700 shadow-xs border border-slate-200"
                 : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
             }`}
           >
-            <Layers className="w-4 h-4 text-indigo-600" />
-            <span>Search Customer Account (Email)</span>
+            <Layers className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-indigo-600 shrink-0" />
+            <span className="hidden sm:inline">Search Customer Account (Email)</span>
+            <span className="sm:hidden">Customer</span>
           </button>
 
           <button
             type="button"
             onClick={() => setActiveTab("direct")}
-            className={`flex-1 py-2.5 px-4 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 ${
+            className={`flex-1 py-2 sm:py-2.5 px-1.5 sm:px-4 rounded-lg sm:rounded-xl text-[10px] sm:text-xs font-bold transition-all flex items-center justify-center gap-1 sm:gap-2 ${
               activeTab === "direct"
                 ? "bg-white text-indigo-700 shadow-xs border border-slate-200"
                 : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
             }`}
           >
-            <Search className="w-4 h-4 text-indigo-600" />
-            <span>Direct Tracker Search (SIM / IMEI / Plate)</span>
+            <Search className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-indigo-600 shrink-0" />
+            <span className="hidden sm:inline">Direct Tracker Search (SIM / IMEI / Plate)</span>
+            <span className="sm:hidden">Tracker</span>
           </button>
 
           <button
             type="button"
             onClick={() => setActiveTab("offline")}
-            className={`flex-1 py-2.5 px-4 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 ${
+            className={`flex-1 py-2 sm:py-2.5 px-1.5 sm:px-4 rounded-lg sm:rounded-xl text-[10px] sm:text-xs font-bold transition-all flex items-center justify-center gap-1 sm:gap-2 ${
               activeTab === "offline"
                 ? "bg-white text-indigo-700 shadow-xs border border-slate-200"
                 : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
             }`}
           >
-            <Database className="w-4 h-4 text-indigo-600" />
-            <span>Offline Fleet Engine (10,000+)</span>
+            <Database className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-indigo-600 shrink-0" />
+            <span className="hidden sm:inline">Offline Fleet Engine (10,000+)</span>
+            <span className="sm:hidden">Offline</span>
             {offlineSummary.totalOffline > 0 && (
-              <span className="px-2 py-0.5 rounded-full text-[10px] bg-rose-100 text-rose-800 font-bold font-mono">
-                {offlineSummary.totalOffline.toLocaleString()}
+              <span className="px-1.5 sm:px-2 py-0.2 sm:py-0.5 rounded-full text-[9px] sm:text-[10px] bg-rose-100 text-rose-800 font-bold font-mono">
+                {offlineSummary.totalOffline > 999
+                  ? `${(offlineSummary.totalOffline / 1000).toFixed(1)}k`
+                  : offlineSummary.totalOffline.toLocaleString()}
               </span>
             )}
           </button>
@@ -524,94 +530,94 @@ export function FleetTroubleshootClient({
         {/* TAB 3: OFFLINE FLEET ENGINE VIEW (10,000+ VEHICLES)            */}
         {/* ------------------------------------------------------------- */}
         {activeTab === "offline" && (
-          <div className="p-6 space-y-6">
+          <div className="p-3 sm:p-6 space-y-4 sm:space-y-6">
             {/* Top Metric Summary Cards */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-              <div className="p-4 rounded-xl bg-slate-50 border border-slate-200/80">
-                <div className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Total Offline</div>
-                <div className="text-xl font-black text-slate-900 font-mono mt-0.5">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-3">
+              <div className="p-2.5 sm:p-4 rounded-xl bg-slate-50 border border-slate-200/80">
+                <div className="text-[9px] sm:text-[10px] uppercase font-bold text-slate-500 tracking-wider">Total Offline</div>
+                <div className="text-base sm:text-xl font-black text-slate-900 font-mono mt-0.5">
                   {offlineSummary.totalOffline.toLocaleString()}
                 </div>
-                <div className="text-[11px] text-slate-500 mt-1">From CarTracker</div>
+                <div className="text-[9px] sm:text-[11px] text-slate-500 mt-0.5 sm:mt-1">From CarTracker</div>
               </div>
 
-              <div className="p-4 rounded-xl bg-rose-50 border border-rose-200">
-                <div className="text-[10px] uppercase font-bold text-rose-600 tracking-wider">Critical (&gt;30d)</div>
-                <div className="text-xl font-black text-rose-800 font-mono mt-0.5">
+              <div className="p-2.5 sm:p-4 rounded-xl bg-rose-50 border border-rose-200">
+                <div className="text-[9px] sm:text-[10px] uppercase font-bold text-rose-600 tracking-wider">Critical (&gt;30d)</div>
+                <div className="text-base sm:text-xl font-black text-rose-800 font-mono mt-0.5">
                   {offlineSummary.criticalCount.toLocaleString()}
                 </div>
-                <div className="text-[11px] text-rose-600 mt-1">Prolonged Offline</div>
+                <div className="text-[9px] sm:text-[11px] text-rose-600 mt-0.5 sm:mt-1">Prolonged Offline</div>
               </div>
 
-              <div className="p-4 rounded-xl bg-amber-50 border border-amber-200">
-                <div className="text-[10px] uppercase font-bold text-amber-700 tracking-wider">Data Expired</div>
-                <div className="text-xl font-black text-amber-900 font-mono mt-0.5">
+              <div className="p-2.5 sm:p-4 rounded-xl bg-amber-50 border border-amber-200">
+                <div className="text-[9px] sm:text-[10px] uppercase font-bold text-amber-700 tracking-wider">Data Expired</div>
+                <div className="text-base sm:text-xl font-black text-amber-900 font-mono mt-0.5">
                   {offlineSummary.expiredCount.toLocaleString()}
                 </div>
-                <div className="text-[11px] text-amber-700 mt-1">Needs Data Recharge</div>
+                <div className="text-[9px] sm:text-[11px] text-amber-700 mt-0.5 sm:mt-1">Needs Data Recharge</div>
               </div>
 
-              <div className="p-4 rounded-xl bg-purple-50 border border-purple-200">
-                <div className="text-[10px] uppercase font-bold text-purple-700 tracking-wider">Never Loaded</div>
-                <div className="text-xl font-black text-purple-900 font-mono mt-0.5">
+              <div className="p-2.5 sm:p-4 rounded-xl bg-purple-50 border border-purple-200">
+                <div className="text-[9px] sm:text-[10px] uppercase font-bold text-purple-700 tracking-wider">Never Loaded</div>
+                <div className="text-base sm:text-xl font-black text-purple-900 font-mono mt-0.5">
                   {offlineSummary.neverLoadedCount.toLocaleString()}
                 </div>
-                <div className="text-[11px] text-purple-700 mt-1">No Past VTU History</div>
+                <div className="text-[9px] sm:text-[11px] text-purple-700 mt-0.5 sm:mt-1">No Past VTU Record</div>
               </div>
 
-              <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 col-span-2 sm:col-span-1">
-                <div className="text-[10px] uppercase font-bold text-emerald-700 tracking-wider">Active Data</div>
-                <div className="text-xl font-black text-emerald-900 font-mono mt-0.5">
+              <div className="p-2.5 sm:p-4 rounded-xl bg-emerald-50 border border-emerald-200 col-span-2 sm:col-span-1">
+                <div className="text-[9px] sm:text-[10px] uppercase font-bold text-emerald-700 tracking-wider">Active Data</div>
+                <div className="text-base sm:text-xl font-black text-emerald-900 font-mono mt-0.5">
                   {offlineSummary.activeCount.toLocaleString()}
                 </div>
-                <div className="text-[11px] text-emerald-700 mt-1">Possible HW/GPS Fault</div>
+                <div className="text-[9px] sm:text-[11px] text-emerald-700 mt-0.5 sm:mt-1">Possible HW/GPS Fault</div>
               </div>
             </div>
 
             {/* Sync Bar & Filter Controls */}
-            <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-4">
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-slate-200/80 pb-3">
+            <div className="p-3 sm:p-4 bg-slate-50 border border-slate-200 rounded-xl sm:rounded-2xl space-y-3 sm:space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-3 border-b border-slate-200/80 pb-2.5 sm:pb-3">
                 <div className="flex items-center gap-2">
-                  <span className="relative flex h-2.5 w-2.5">
+                  <span className="relative flex h-2 sm:h-2.5 w-2 sm:w-2.5 shrink-0">
                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-rose-600"></span>
+                    <span className="relative inline-flex rounded-full h-2 sm:h-2.5 w-2 sm:w-2.5 bg-rose-600"></span>
                   </span>
-                  <span className="text-xs font-bold text-slate-800">
-                    High-Performance Offline Telemetry Engine
+                  <span className="text-[11px] sm:text-xs font-bold text-slate-800">
+                    Offline Telemetry Engine
                   </span>
-                  <span className="text-xs text-slate-500">
-                    • Indexed Local Cache ({offlineTotal.toLocaleString()} matching)
+                  <span className="text-[10px] sm:text-xs text-slate-500">
+                    • ({offlineTotal.toLocaleString()} cached)
                   </span>
                 </div>
 
-                <div className="flex items-center gap-3">
+                <div className="flex items-center justify-between sm:justify-end gap-2 sm:gap-3">
                   {offlineSummary.lastSyncAt && (
-                    <span className="text-[11px] text-slate-500">
-                      Last sync: {new Date(offlineSummary.lastSyncAt).toLocaleDateString()} {new Date(offlineSummary.lastSyncAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                    <span className="text-[10px] sm:text-[11px] text-slate-500">
+                      Synced: {new Date(offlineSummary.lastSyncAt).toLocaleDateString()} {new Date(offlineSummary.lastSyncAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                     </span>
                   )}
                   <Button
                     type="button"
                     onClick={handleStartCarTrackerSync}
                     disabled={isSyncing}
-                    className="h-8 px-3.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-xs inline-flex items-center gap-1.5"
+                    className="h-7 sm:h-8 px-2.5 sm:px-3.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[10px] sm:text-xs rounded-lg sm:rounded-xl shadow-xs inline-flex items-center gap-1.5"
                   >
-                    <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? "animate-spin" : ""}`} />
-                    <span>{isSyncing ? "Syncing Fleet..." : "Sync from CarTracker Live"}</span>
+                    <RefreshCw className={`w-3 h-3 sm:w-3.5 sm:h-3.5 ${isSyncing ? "animate-spin" : ""}`} />
+                    <span>{isSyncing ? "Syncing..." : "Sync Live Fleet"}</span>
                   </Button>
                 </div>
               </div>
 
               {/* Filter inputs */}
-              <form onSubmit={handleOfflineSearchSubmit} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              <form onSubmit={handleOfflineSearchSubmit} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
                 {/* Search */}
                 <div className="relative">
-                  <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
+                  <Search className="w-3.5 h-3.5 sm:w-4 sm:h-4 absolute left-2.5 top-2.5 text-slate-400" />
                   <Input
                     placeholder="Search plate, name, SIM, or IMEI..."
                     value={offlineSearch}
                     onChange={(e) => setOfflineSearch(e.target.value)}
-                    className="pl-9 h-9 text-xs bg-white border-slate-200"
+                    className="pl-8 sm:pl-9 h-8 sm:h-9 text-[11px] sm:text-xs bg-white border-slate-200"
                   />
                 </div>
 
@@ -622,7 +628,7 @@ export function FleetTroubleshootClient({
                     setOfflineDaysFilter(e.target.value)
                     setTimeout(() => fetchOfflinePage(1), 0)
                   }}
-                  className="h-9 border border-slate-200 rounded-lg px-3 text-xs bg-white font-medium text-slate-800"
+                  className="h-8 sm:h-9 border border-slate-200 rounded-lg px-2.5 text-[11px] sm:text-xs bg-white font-medium text-slate-800"
                 >
                   <option value="all">All Days Offline</option>
                   <option value="90+">Critical Offline (&gt; 90 Days)</option>
@@ -639,7 +645,7 @@ export function FleetTroubleshootClient({
                     setOfflineVtuFilter(e.target.value)
                     setTimeout(() => fetchOfflinePage(1), 0)
                   }}
-                  className="h-9 border border-slate-200 rounded-lg px-3 text-xs bg-white font-medium text-slate-800"
+                  className="h-8 sm:h-9 border border-slate-200 rounded-lg px-2.5 text-[11px] sm:text-xs bg-white font-medium text-slate-800"
                 >
                   <option value="all">All VTU Statuses</option>
                   <option value="EXPIRED">Data Expired (Needs Top-up)</option>
@@ -656,7 +662,7 @@ export function FleetTroubleshootClient({
                       setOfflineNetworkFilter(e.target.value)
                       setTimeout(() => fetchOfflinePage(1), 0)
                     }}
-                    className="flex-1 h-9 border border-slate-200 rounded-lg px-3 text-xs bg-white font-medium text-slate-800"
+                    className="flex-1 h-8 sm:h-9 border border-slate-200 rounded-lg px-2.5 text-[11px] sm:text-xs bg-white font-medium text-slate-800"
                   >
                     <option value="all">All Networks</option>
                     <option value="MTN">MTN</option>
@@ -667,7 +673,7 @@ export function FleetTroubleshootClient({
 
                   <Button
                     type="submit"
-                    className="h-9 px-3 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-lg shrink-0"
+                    className="h-8 sm:h-9 px-3 bg-slate-900 hover:bg-slate-800 text-white font-bold text-[11px] sm:text-xs rounded-lg shrink-0"
                   >
                     Filter
                   </Button>
@@ -676,8 +682,9 @@ export function FleetTroubleshootClient({
             </div>
 
             {/* Offline Vehicles Table (50 per page) */}
-            <div className="border border-slate-200/90 rounded-2xl overflow-hidden bg-white shadow-2xs">
-              <div className="overflow-x-auto">
+            <div className="border border-slate-200/90 rounded-xl sm:rounded-2xl overflow-hidden bg-white shadow-2xs">
+              {/* Desktop Table View */}
+              <div className="hidden md:block overflow-x-auto">
                 <table className="w-full text-left text-xs">
                   <thead className="bg-slate-50 border-b border-slate-100 text-slate-500 font-semibold">
                     <tr>
@@ -885,10 +892,188 @@ export function FleetTroubleshootClient({
                 </table>
               </div>
 
+              {/* Mobile Card List (Zero horizontal scrolling, dense touch-friendly actions) */}
+              <div className="md:hidden divide-y divide-slate-100">
+                {isLoadingOffline ? (
+                  <div className="py-12 text-center text-slate-500">
+                    <Loader2 className="w-6 h-6 animate-spin mx-auto text-indigo-600 mb-2" />
+                    <span className="text-xs font-semibold">Loading offline vehicles...</span>
+                  </div>
+                ) : offlineVehicles.length === 0 ? (
+                  <div className="p-8 text-center text-slate-500">
+                    <Database className="w-8 h-8 mx-auto text-slate-300 mb-2" />
+                    <div className="text-xs font-bold text-slate-800">No Offline Vehicles Found</div>
+                    <p className="text-[11px] text-slate-400 mt-1 max-w-xs mx-auto">
+                      {offlineTotal === 0
+                        ? "Click 'Sync Live Fleet' above to scan offline vehicles."
+                        : "No records match the active filters or search term."}
+                    </p>
+                  </div>
+                ) : (
+                  offlineVehicles.map((v) => {
+                    const netColor = v.network ? NETWORK_COLORS[v.network] : null
+
+                    return (
+                      <div key={`m-off-${v.id}`} className="p-3 bg-white hover:bg-slate-50/70 transition-colors space-y-2">
+                        {/* Row 1: Vehicle Name & Plate + Days offline badge */}
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0 flex-1">
+                            <div className="font-bold text-xs text-slate-900 truncate flex items-center gap-1.5">
+                              <Car className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                              <span className="truncate">{v.name}</span>
+                            </div>
+                            <div className="flex items-center gap-1.5 mt-0.5">
+                              {v.plateNumber ? (
+                                <span className="font-mono font-bold text-[10px] px-1.5 py-0.2 rounded bg-slate-100 text-slate-700 border border-slate-200">
+                                  {v.plateNumber}
+                                </span>
+                              ) : (
+                                <span className="text-[10px] text-slate-400 italic">No plate</span>
+                              )}
+                              {v.imei && (
+                                <span className="font-mono text-[10px] text-slate-400 truncate max-w-[120px]">
+                                  IMEI: {v.imei}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Days offline badge */}
+                          <span
+                            className={`shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                              v.daysOffline >= 90
+                                ? "bg-rose-100 border-rose-300 text-rose-900"
+                                : v.daysOffline >= 30
+                                ? "bg-rose-50 border-rose-200 text-rose-800"
+                                : v.daysOffline >= 7
+                                ? "bg-amber-50 border-amber-200 text-amber-800"
+                                : "bg-yellow-50 border-yellow-200 text-yellow-800"
+                            }`}
+                          >
+                            <span
+                              className={`w-1.5 h-1.5 rounded-full ${
+                                v.daysOffline >= 30 ? "bg-rose-600 animate-pulse" : "bg-amber-500"
+                              }`}
+                            />
+                            {v.daysOffline}d offline
+                          </span>
+                        </div>
+
+                        {/* Row 2: SIM, Network, VTU Health Badge */}
+                        <div className="flex items-center justify-between gap-2 pt-1.5 border-t border-slate-100 text-[11px]">
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            {v.network && (
+                              <span
+                                className={`px-1.5 py-0.2 rounded text-[9px] font-bold border shrink-0 ${
+                                  netColor ? `${netColor.bg} ${netColor.text} ${netColor.border}` : "bg-slate-100 text-slate-700 border-slate-200"
+                                }`}
+                              >
+                                {v.network}
+                              </span>
+                            )}
+                            <span className="font-mono font-semibold text-slate-800 truncate text-[11px]">
+                              {v.normalizedPhone || v.rawSimNumber || "No SIM"}
+                            </span>
+                            {(v.normalizedPhone || v.rawSimNumber) && (
+                              <button
+                                type="button"
+                                onClick={() => handleCopy(v.normalizedPhone || v.rawSimNumber)}
+                                className="text-slate-400 hover:text-indigo-600 shrink-0"
+                              >
+                                {copiedText === (v.normalizedPhone || v.rawSimNumber) ? (
+                                  <Check className="w-3 h-3 text-emerald-600" />
+                                ) : (
+                                  <Copy className="w-3 h-3" />
+                                )}
+                              </button>
+                            )}
+                          </div>
+
+                          {/* VTU Data Badge */}
+                          <div className="shrink-0">
+                            {v.vtuStatus === "EXPIRED" && (
+                              <span className="px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-rose-100 text-rose-800 border border-rose-200 inline-flex items-center gap-1">
+                                <XCircle className="w-2.5 h-2.5 text-rose-600" />
+                                Data Expired
+                              </span>
+                            )}
+                            {v.vtuStatus === "EXPIRING_SOON" && (
+                              <span className="px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-amber-100 text-amber-800 border border-amber-200 inline-flex items-center gap-1">
+                                <AlertTriangle className="w-2.5 h-2.5 text-amber-600" />
+                                Expiring Soon
+                              </span>
+                            )}
+                            {v.vtuStatus === "ACTIVE" && (
+                              <span className="px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200 inline-flex items-center gap-1">
+                                <CheckCircle className="w-2.5 h-2.5 text-emerald-600" />
+                                Active Data
+                              </span>
+                            )}
+                            {v.vtuStatus === "NEVER_LOADED" && (
+                              <span className="px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-slate-100 text-slate-600 border border-slate-200">
+                                Never Loaded
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Row 3: Heartbeat date & Quick Actions */}
+                        <div className="flex items-center justify-between gap-2 pt-1 border-t border-slate-100 text-[10px] text-slate-500">
+                          <div className="truncate">
+                            {v.lastHeartbeat ? (
+                              <span>Last: {new Date(v.lastHeartbeat).toLocaleDateString()}</span>
+                            ) : (
+                              <span className="italic text-slate-400">Offline / No signal</span>
+                            )}
+                            {v.lastDataPlan && (
+                              <span className="ml-1 text-slate-400 truncate">• {v.lastDataPlan}</span>
+                            )}
+                          </div>
+
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <Button
+                              type="button"
+                              onClick={() =>
+                                openSingleRechargeModal({
+                                  vehicleId: v.cartrackerId,
+                                  vehicleName: v.name,
+                                  plateNumber: v.plateNumber,
+                                  phone: v.normalizedPhone || v.rawSimNumber,
+                                  network: v.network,
+                                  imei: v.imei,
+                                })
+                              }
+                              className="h-7 px-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[10px] rounded-lg inline-flex items-center gap-1 shadow-2xs"
+                            >
+                              <Zap className="w-2.5 h-2.5 text-amber-300" />
+                              <span>Recharge</span>
+                            </Button>
+
+                            <button
+                              type="button"
+                              onClick={() =>
+                                openSimHistoryModal({
+                                  name: v.name,
+                                  plate: v.plateNumber,
+                                  phone: v.normalizedPhone || v.rawSimNumber,
+                                })
+                              }
+                              className="h-7 px-2 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-[10px] font-semibold"
+                            >
+                              History
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })
+                )}
+              </div>
+
               {/* Server-Side Pagination Bar */}
               {offlineTotalPages > 1 && (
-                <div className="p-4 bg-slate-50 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-slate-600">
-                  <div>
+                <div className="p-3 sm:p-4 bg-slate-50 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-3 text-[11px] sm:text-xs text-slate-600">
+                  <div className="text-center sm:text-left">
                     Showing{" "}
                     <span className="font-bold text-slate-900">
                       {(offlinePage - 1) * 50 + 1}
@@ -897,32 +1082,32 @@ export function FleetTroubleshootClient({
                     <span className="font-bold text-slate-900">
                       {Math.min(offlinePage * 50, offlineTotal)}
                     </span>{" "}
-                    of <span className="font-bold text-slate-900">{offlineTotal.toLocaleString()}</span> offline vehicles
+                    of <span className="font-bold text-slate-900">{offlineTotal.toLocaleString()}</span>
                   </div>
 
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center justify-center gap-2">
                     <Button
                       type="button"
                       disabled={offlinePage <= 1 || isLoadingOffline}
                       onClick={() => fetchOfflinePage(offlinePage - 1)}
-                      className="h-8 px-3 border border-slate-200 bg-white hover:bg-slate-100 text-slate-700 font-bold text-xs rounded-lg shadow-2xs"
+                      className="h-7 sm:h-8 px-2.5 sm:px-3 border border-slate-200 bg-white hover:bg-slate-100 text-slate-700 font-bold text-[11px] sm:text-xs rounded-lg shadow-2xs"
                     >
-                      <ChevronLeft className="w-4 h-4 mr-1" />
+                      <ChevronLeft className="w-3.5 h-3.5 mr-0.5 sm:mr-1" />
                       Prev
                     </Button>
 
-                    <span className="font-semibold text-slate-700 px-2">
-                      Page {offlinePage} of {offlineTotalPages}
+                    <span className="font-semibold text-slate-700 px-1 sm:px-2 text-[11px] sm:text-xs">
+                      Page {offlinePage} / {offlineTotalPages}
                     </span>
 
                     <Button
                       type="button"
                       disabled={offlinePage >= offlineTotalPages || isLoadingOffline}
                       onClick={() => fetchOfflinePage(offlinePage + 1)}
-                      className="h-8 px-3 border border-slate-200 bg-white hover:bg-slate-100 text-slate-700 font-bold text-xs rounded-lg shadow-2xs"
+                      className="h-7 sm:h-8 px-2.5 sm:px-3 border border-slate-200 bg-white hover:bg-slate-100 text-slate-700 font-bold text-[11px] sm:text-xs rounded-lg shadow-2xs"
                     >
                       Next
-                      <ChevronRight className="w-4 h-4 ml-1" />
+                      <ChevronRight className="w-3.5 h-3.5 ml-0.5 sm:ml-1" />
                     </Button>
                   </div>
                 </div>
@@ -935,27 +1120,27 @@ export function FleetTroubleshootClient({
         {/* TAB 1: SEARCH CUSTOMER FLEET (BY EMAIL)                        */}
         {/* ------------------------------------------------------------- */}
         {activeTab === "email" && (
-          <div className="p-6 space-y-6">
-            <form onSubmit={handleSearchEmail} className="flex flex-col sm:flex-row gap-3">
+          <div className="p-3 sm:p-6 space-y-4 sm:space-y-6">
+            <form onSubmit={handleSearchEmail} className="flex flex-col sm:flex-row gap-2 sm:gap-3">
               <div className="relative flex-1">
-                <Search className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
+                <Search className="w-3.5 h-3.5 sm:w-4 sm:h-4 absolute left-2.5 top-2.5 text-slate-400" />
                 <Input
                   type="email"
                   placeholder="Enter customer email (e.g. client@example.com)..."
                   value={emailInput}
                   onChange={(e) => setEmailInput(e.target.value)}
-                  className="pl-9 h-10 text-xs bg-white border-slate-200"
+                  className="pl-8 sm:pl-9 h-9 sm:h-10 text-[11px] sm:text-xs bg-white border-slate-200"
                 />
               </div>
               <Button
                 type="submit"
                 disabled={isSearchingOnline || !emailInput.trim()}
-                className="h-10 px-5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-xs shrink-0"
+                className="h-9 sm:h-10 px-4 sm:px-5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[11px] sm:text-xs rounded-xl shadow-xs shrink-0"
               >
                 {isSearchingOnline ? (
                   <>
                     <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
-                    <span>Searching Account...</span>
+                    <span>Searching...</span>
                   </>
                 ) : (
                   <>
@@ -967,14 +1152,14 @@ export function FleetTroubleshootClient({
             </form>
 
             {customerInfo && (
-              <div className="p-4 bg-indigo-50/60 border border-indigo-200 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+              <div className="p-3 sm:p-4 bg-indigo-50/60 border border-indigo-200 rounded-xl sm:rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-3 text-xs">
                 <div>
-                  <div className="font-bold text-indigo-950 text-sm">{customerInfo.email}</div>
-                  <div className="text-slate-600 mt-0.5">
+                  <div className="font-bold text-indigo-950 text-xs sm:text-sm">{customerInfo.email}</div>
+                  <div className="text-[11px] text-slate-600 mt-0.5">
                     Account ID: #{customerInfo.id} • {customerInfo.devicesCount} Total Registered Vehicles
                   </div>
                 </div>
-                <span className="px-3 py-1 rounded-full bg-indigo-600 text-white font-bold text-xs shrink-0">
+                <span className="px-2.5 py-1 rounded-full bg-indigo-600 text-white font-bold text-[10px] sm:text-xs shrink-0 self-start sm:self-auto">
                   {liveVehicles.length} Vehicles Loaded
                 </span>
               </div>
@@ -982,8 +1167,9 @@ export function FleetTroubleshootClient({
 
             {/* Render Live Vehicles for Customer */}
             {liveVehicles.length > 0 && (
-              <div className="border border-slate-200/90 rounded-2xl overflow-hidden bg-white">
-                <div className="overflow-x-auto">
+              <div className="border border-slate-200/90 rounded-xl sm:rounded-2xl overflow-hidden bg-white shadow-2xs">
+                {/* Desktop Table View */}
+                <div className="hidden md:block overflow-x-auto">
                   <table className="w-full text-left text-xs">
                     <thead className="bg-slate-50 border-b border-slate-100 text-slate-500 font-semibold">
                       <tr>
@@ -1079,6 +1265,123 @@ export function FleetTroubleshootClient({
                     </tbody>
                   </table>
                 </div>
+
+                {/* Mobile Card List (Zero horizontal scrolling) */}
+                <div className="md:hidden divide-y divide-slate-100">
+                  {liveVehicles.map((v) => (
+                    <div key={`m-cust-${v.id}`} className="p-3 bg-white hover:bg-slate-50/70 transition-colors space-y-2">
+                      {/* Top: Name & Plate + Online/Offline Status */}
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                          <div className="font-bold text-xs text-slate-900 truncate flex items-center gap-1.5">
+                            <Car className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                            <span className="truncate">{v.name}</span>
+                          </div>
+                          <div className="flex items-center gap-1.5 mt-0.5">
+                            {v.plateNumber ? (
+                              <span className="font-mono font-bold text-[10px] px-1.5 py-0.2 rounded bg-slate-100 text-slate-700 border border-slate-200">
+                                {v.plateNumber}
+                              </span>
+                            ) : (
+                              <span className="text-[10px] text-slate-400 italic">No plate</span>
+                            )}
+                            {v.imei && (
+                              <span className="font-mono text-[10px] text-slate-400 truncate max-w-[120px]">
+                                IMEI: {v.imei}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        <span
+                          className={`shrink-0 px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                            v.onlineStatus === "online"
+                              ? "bg-emerald-100 text-emerald-800"
+                              : "bg-rose-100 text-rose-800"
+                          }`}
+                        >
+                          {v.onlineStatus}
+                        </span>
+                      </div>
+
+                      {/* Mid: SIM, Network, VTU Health */}
+                      <div className="flex items-center justify-between gap-2 pt-1.5 border-t border-slate-100 text-[11px]">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          {v.network && (
+                            <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-slate-100 text-slate-700 border border-slate-200 shrink-0">
+                              {v.network.name}
+                            </span>
+                          )}
+                          <span className="font-mono font-semibold text-slate-800 truncate text-[11px]">
+                            {v.normalizedPhone || v.rawSimNumber || "No SIM"}
+                          </span>
+                          {(v.normalizedPhone || v.rawSimNumber) && (
+                            <button
+                              type="button"
+                              onClick={() => handleCopy(v.normalizedPhone || v.rawSimNumber)}
+                              className="text-slate-400 hover:text-indigo-600 shrink-0"
+                            >
+                              {copiedText === (v.normalizedPhone || v.rawSimNumber) ? (
+                                <Check className="w-3 h-3 text-emerald-600" />
+                              ) : (
+                                <Copy className="w-3 h-3" />
+                              )}
+                            </button>
+                          )}
+                        </div>
+
+                        <div className="shrink-0">
+                          <span
+                            className={`px-1.5 py-0.5 rounded-full text-[9px] font-bold ${
+                              v.vtuHistory.statusBadge === "ACTIVE"
+                                ? "bg-emerald-100 text-emerald-800"
+                                : v.vtuHistory.statusBadge === "EXPIRED"
+                                ? "bg-rose-100 text-rose-800"
+                                : "bg-slate-100 text-slate-600"
+                            }`}
+                          >
+                            {v.vtuHistory.statusBadge}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Bottom: Action buttons */}
+                      <div className="flex items-center justify-end gap-1.5 pt-1 border-t border-slate-100">
+                        <Button
+                          type="button"
+                          onClick={() =>
+                            openSingleRechargeModal({
+                              vehicleId: v.id,
+                              vehicleName: v.name,
+                              plateNumber: v.plateNumber,
+                              phone: v.normalizedPhone || v.rawSimNumber,
+                              network: v.network?.name || null,
+                              imei: v.imei,
+                            })
+                          }
+                          className="h-7 px-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[10px] rounded-lg inline-flex items-center gap-1 shadow-2xs"
+                        >
+                          <Zap className="w-2.5 h-2.5 text-amber-300" />
+                          <span>Recharge</span>
+                        </Button>
+
+                        <button
+                          type="button"
+                          onClick={() =>
+                            openSimHistoryModal({
+                              name: v.name,
+                              plate: v.plateNumber,
+                              phone: v.normalizedPhone || v.rawSimNumber,
+                            })
+                          }
+                          className="h-7 px-2 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-[10px] font-semibold"
+                        >
+                          History
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
           </div>
@@ -1088,26 +1391,26 @@ export function FleetTroubleshootClient({
         {/* TAB 2: DIRECT TRACKER SEARCH (SIM, IMEI, PLATE)                */}
         {/* ------------------------------------------------------------- */}
         {activeTab === "direct" && (
-          <div className="p-6 space-y-6">
-            <form onSubmit={handleSearchDirect} className="flex flex-col sm:flex-row gap-3">
+          <div className="p-3 sm:p-6 space-y-4 sm:space-y-6">
+            <form onSubmit={handleSearchDirect} className="flex flex-col sm:flex-row gap-2 sm:gap-3">
               <div className="relative flex-1">
-                <Search className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
+                <Search className="w-3.5 h-3.5 sm:w-4 sm:h-4 absolute left-2.5 top-2.5 text-slate-400" />
                 <Input
                   placeholder="Enter SIM phone number, IMEI, or vehicle plate number..."
                   value={directQuery}
                   onChange={(e) => setDirectQuery(e.target.value)}
-                  className="pl-9 h-10 text-xs bg-white border-slate-200"
+                  className="pl-8 sm:pl-9 h-9 sm:h-10 text-[11px] sm:text-xs bg-white border-slate-200"
                 />
               </div>
               <Button
                 type="submit"
                 disabled={isSearchingOnline || !directQuery.trim()}
-                className="h-10 px-5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-xs shrink-0"
+                className="h-9 sm:h-10 px-4 sm:px-5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[11px] sm:text-xs rounded-xl shadow-xs shrink-0"
               >
                 {isSearchingOnline ? (
                   <>
                     <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
-                    <span>Searching Tracker...</span>
+                    <span>Searching...</span>
                   </>
                 ) : (
                   <>
@@ -1119,15 +1422,16 @@ export function FleetTroubleshootClient({
             </form>
 
             {onlineSearchError && (
-              <div className="p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-medium">
+              <div className="p-3 sm:p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-[11px] sm:text-xs font-medium">
                 {onlineSearchError}
               </div>
             )}
 
             {/* Render Direct Match Vehicles */}
             {liveVehicles.length > 0 && (
-              <div className="border border-slate-200/90 rounded-2xl overflow-hidden bg-white">
-                <div className="overflow-x-auto">
+              <div className="border border-slate-200/90 rounded-xl sm:rounded-2xl overflow-hidden bg-white shadow-2xs">
+                {/* Desktop Table View */}
+                <div className="hidden md:block overflow-x-auto">
                   <table className="w-full text-left text-xs">
                     <thead className="bg-slate-50 border-b border-slate-100 text-slate-500 font-semibold">
                       <tr>
@@ -1223,6 +1527,123 @@ export function FleetTroubleshootClient({
                     </tbody>
                   </table>
                 </div>
+
+                {/* Mobile Card List (Zero horizontal scrolling) */}
+                <div className="md:hidden divide-y divide-slate-100">
+                  {liveVehicles.map((v) => (
+                    <div key={`m-dir-${v.id}`} className="p-3 bg-white hover:bg-slate-50/70 transition-colors space-y-2">
+                      {/* Top: Name & Plate + Online/Offline Status */}
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                          <div className="font-bold text-xs text-slate-900 truncate flex items-center gap-1.5">
+                            <Car className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                            <span className="truncate">{v.name}</span>
+                          </div>
+                          <div className="flex items-center gap-1.5 mt-0.5">
+                            {v.plateNumber ? (
+                              <span className="font-mono font-bold text-[10px] px-1.5 py-0.2 rounded bg-slate-100 text-slate-700 border border-slate-200">
+                                {v.plateNumber}
+                              </span>
+                            ) : (
+                              <span className="text-[10px] text-slate-400 italic">No plate</span>
+                            )}
+                            {v.imei && (
+                              <span className="font-mono text-[10px] text-slate-400 truncate max-w-[120px]">
+                                IMEI: {v.imei}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        <span
+                          className={`shrink-0 px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                            v.onlineStatus === "online"
+                              ? "bg-emerald-100 text-emerald-800"
+                              : "bg-rose-100 text-rose-800"
+                          }`}
+                        >
+                          {v.onlineStatus}
+                        </span>
+                      </div>
+
+                      {/* Mid: SIM, Network, VTU Health */}
+                      <div className="flex items-center justify-between gap-2 pt-1.5 border-t border-slate-100 text-[11px]">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          {v.network && (
+                            <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-slate-100 text-slate-700 border border-slate-200 shrink-0">
+                              {v.network.name}
+                            </span>
+                          )}
+                          <span className="font-mono font-semibold text-slate-800 truncate text-[11px]">
+                            {v.normalizedPhone || v.rawSimNumber || "No SIM"}
+                          </span>
+                          {(v.normalizedPhone || v.rawSimNumber) && (
+                            <button
+                              type="button"
+                              onClick={() => handleCopy(v.normalizedPhone || v.rawSimNumber)}
+                              className="text-slate-400 hover:text-indigo-600 shrink-0"
+                            >
+                              {copiedText === (v.normalizedPhone || v.rawSimNumber) ? (
+                                <Check className="w-3 h-3 text-emerald-600" />
+                              ) : (
+                                <Copy className="w-3 h-3" />
+                              )}
+                            </button>
+                          )}
+                        </div>
+
+                        <div className="shrink-0">
+                          <span
+                            className={`px-1.5 py-0.5 rounded-full text-[9px] font-bold ${
+                              v.vtuHistory.statusBadge === "ACTIVE"
+                                ? "bg-emerald-100 text-emerald-800"
+                                : v.vtuHistory.statusBadge === "EXPIRED"
+                                ? "bg-rose-100 text-rose-800"
+                                : "bg-slate-100 text-slate-600"
+                            }`}
+                          >
+                            {v.vtuHistory.statusBadge}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Bottom: Action buttons */}
+                      <div className="flex items-center justify-end gap-1.5 pt-1 border-t border-slate-100">
+                        <Button
+                          type="button"
+                          onClick={() =>
+                            openSingleRechargeModal({
+                              vehicleId: v.id,
+                              vehicleName: v.name,
+                              plateNumber: v.plateNumber,
+                              phone: v.normalizedPhone || v.rawSimNumber,
+                              network: v.network?.name || null,
+                              imei: v.imei,
+                            })
+                          }
+                          className="h-7 px-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[10px] rounded-lg inline-flex items-center gap-1 shadow-2xs"
+                        >
+                          <Zap className="w-2.5 h-2.5 text-amber-300" />
+                          <span>Recharge</span>
+                        </Button>
+
+                        <button
+                          type="button"
+                          onClick={() =>
+                            openSimHistoryModal({
+                              name: v.name,
+                              plate: v.plateNumber,
+                              phone: v.normalizedPhone || v.rawSimNumber,
+                            })
+                          }
+                          className="h-7 px-2 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-[10px] font-semibold"
+                        >
+                          History
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
           </div>
@@ -1233,18 +1654,18 @@ export function FleetTroubleshootClient({
       {/* MODAL 1: SINGLE-VEHICLE RECHARGE (PER VEHICLE ONLY)            */}
       {/* ------------------------------------------------------------- */}
       {singleRechargeModalOpen && targetVehicle && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 animate-fadeIn">
-          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 space-y-5 animate-scaleUp">
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 animate-fadeIn">
+          <div className="bg-white rounded-xl sm:rounded-2xl max-w-lg w-full p-4 sm:p-6 shadow-2xl border border-slate-100 space-y-3.5 sm:space-y-5 max-h-[92vh] overflow-y-auto animate-scaleUp">
             {/* Header */}
             <div className="flex items-start justify-between">
               <div>
-                <div className="flex items-center gap-1.5 text-xs font-bold text-indigo-600 uppercase tracking-wider">
-                  <Zap className="w-4 h-4 text-amber-500" />
+                <div className="flex items-center gap-1.5 text-[11px] sm:text-xs font-bold text-indigo-600 uppercase tracking-wider">
+                  <Zap className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-500" />
                   <span>Per-Vehicle Data Top-up</span>
                 </div>
-                <h3 className="text-base font-black text-slate-900 mt-1">{targetVehicle.vehicleName}</h3>
+                <h3 className="text-sm sm:text-base font-black text-slate-900 mt-0.5 sm:mt-1">{targetVehicle.vehicleName}</h3>
                 {targetVehicle.plateNumber && (
-                  <span className="font-mono text-xs font-bold text-slate-700 bg-slate-100 px-2 py-0.5 rounded border border-slate-200 inline-block mt-1">
+                  <span className="font-mono text-[10px] sm:text-xs font-bold text-slate-700 bg-slate-100 px-1.5 sm:px-2 py-0.2 sm:py-0.5 rounded border border-slate-200 inline-block mt-0.5">
                     {targetVehicle.plateNumber}
                   </span>
                 )}
@@ -1259,28 +1680,28 @@ export function FleetTroubleshootClient({
             </div>
 
             {/* Target SIM Card Info */}
-            <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between text-xs">
+            <div className="p-2.5 sm:p-3.5 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between text-xs">
               <div className="flex items-center gap-2">
-                <Smartphone className="w-4 h-4 text-slate-500" />
+                <Smartphone className="w-4 h-4 text-slate-500 shrink-0" />
                 <div>
-                  <div className="font-mono font-bold text-slate-800">{targetVehicle.phone}</div>
-                  <div className="text-[11px] text-slate-500">Tracker SIM Card</div>
+                  <div className="font-mono font-bold text-slate-800 text-xs sm:text-sm">{targetVehicle.phone}</div>
+                  <div className="text-[10px] sm:text-[11px] text-slate-500">Tracker SIM Card</div>
                 </div>
               </div>
               {targetVehicle.network && (
-                <span className="px-2.5 py-1 rounded-lg bg-amber-100 text-amber-800 border border-amber-300 font-bold">
+                <span className="px-2 py-0.5 rounded-lg bg-amber-100 text-amber-800 border border-amber-300 font-bold text-[10px] sm:text-xs">
                   {targetVehicle.network}
                 </span>
               )}
             </div>
 
             {/* Telecom Server Route Selector */}
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-700">Telecom Server Route</label>
+            <div className="space-y-1">
+              <label className="text-[11px] sm:text-xs font-bold text-slate-700">Telecom Server Route</label>
               <select
                 value={modalServerId}
                 onChange={(e) => setModalServerId(e.target.value)}
-                className="w-full h-10 border border-slate-200 rounded-xl px-3 text-xs bg-white font-semibold text-slate-800"
+                className="w-full h-9 sm:h-10 border border-slate-200 rounded-xl px-2.5 sm:px-3 text-[11px] sm:text-xs bg-white font-semibold text-slate-800"
               >
                 {servers.map((s, idx) => (
                   <option key={s.id} value={s.id}>
@@ -1291,12 +1712,12 @@ export function FleetTroubleshootClient({
             </div>
 
             {/* Plan Selector */}
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-700">Select Data Bundle</label>
+            <div className="space-y-1">
+              <label className="text-[11px] sm:text-xs font-bold text-slate-700">Select Data Bundle</label>
               <select
                 value={modalPlanValue}
                 onChange={(e) => setModalPlanValue(e.target.value)}
-                className="w-full h-10 border border-slate-200 rounded-xl px-3 text-xs bg-white font-semibold text-slate-800"
+                className="w-full h-9 sm:h-10 border border-slate-200 rounded-xl px-2.5 sm:px-3 text-[11px] sm:text-xs bg-white font-semibold text-slate-800"
               >
                 <option value="">-- Choose Data Plan --</option>
                 {availablePlans.map((p) => {
@@ -1319,7 +1740,7 @@ export function FleetTroubleshootClient({
             </div>
 
             {/* Wallet & Cost Breakdown */}
-            <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-1.5 text-xs">
+            <div className="p-2.5 sm:p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-1 sm:space-y-1.5 text-[11px] sm:text-xs">
               <div className="flex justify-between text-slate-600">
                 <span>Wallet Balance:</span>
                 <span className="font-mono font-bold text-slate-800">
@@ -1333,7 +1754,7 @@ export function FleetTroubleshootClient({
                 </span>
               </div>
               {planPrice > 0 && (
-                <div className="flex justify-between border-t border-slate-200 pt-1.5 font-bold">
+                <div className="flex justify-between border-t border-slate-200 pt-1 font-bold">
                   <span className="text-slate-800">Balance After Recharge:</span>
                   <span
                     className={`font-mono ${
@@ -1349,7 +1770,7 @@ export function FleetTroubleshootClient({
             {/* Feedback Message */}
             {rechargeFeedback && (
               <div
-                className={`p-3.5 rounded-xl text-xs font-semibold flex items-start gap-2 ${
+                className={`p-3 rounded-xl text-xs font-semibold flex items-start gap-2 ${
                   rechargeFeedback.success
                     ? "bg-emerald-50 text-emerald-800 border border-emerald-200"
                     : "bg-rose-50 text-rose-800 border border-rose-200"
@@ -1372,12 +1793,12 @@ export function FleetTroubleshootClient({
             )}
 
             {/* Buttons */}
-            <div className="flex items-center justify-end gap-2 pt-2">
+            <div className="flex items-center justify-end gap-2 pt-1 sm:pt-2">
               <Button
                 type="button"
                 variant="outline"
                 onClick={() => setSingleRechargeModalOpen(false)}
-                className="h-10 px-4 text-xs font-bold"
+                className="h-9 sm:h-10 px-3.5 sm:px-4 text-[11px] sm:text-xs font-bold"
               >
                 Close
               </Button>
@@ -1386,17 +1807,17 @@ export function FleetTroubleshootClient({
                 type="button"
                 disabled={isDispensing || !modalPlanValue || walletBalance < planPrice}
                 onClick={handleExecuteSingleRecharge}
-                className="h-10 px-5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-xs"
+                className="h-9 sm:h-10 px-3.5 sm:px-5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[11px] sm:text-xs rounded-xl shadow-xs"
               >
                 {isDispensing ? (
                   <>
                     <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
-                    <span>Dispensing Data...</span>
+                    <span>Dispensing...</span>
                   </>
                 ) : (
                   <>
                     <Zap className="w-3.5 h-3.5 mr-1 text-amber-300" />
-                    <span>Dispense Data ({planPrice > 0 ? `₦${planPrice.toLocaleString()}` : ""})</span>
+                    <span>Dispense ({planPrice > 0 ? `₦${planPrice.toLocaleString()}` : ""})</span>
                   </>
                 )}
               </Button>
@@ -1409,29 +1830,29 @@ export function FleetTroubleshootClient({
       {/* MODAL 2: CARTRACKER LIVE BATCH SYNC PROGRESS MODAL             */}
       {/* ------------------------------------------------------------- */}
       {syncModalOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 animate-fadeIn">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-100 space-y-5 animate-scaleUp">
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 animate-fadeIn">
+          <div className="bg-white rounded-xl sm:rounded-2xl max-w-md w-full p-4 sm:p-6 shadow-2xl border border-slate-100 space-y-3.5 sm:space-y-5 animate-scaleUp">
             <div className="flex items-center gap-2">
-              <div className="p-2 rounded-xl bg-indigo-50 border border-indigo-100 text-indigo-600">
-                <CloudDownload className="w-5 h-5 animate-bounce" />
+              <div className="p-1.5 sm:p-2 rounded-xl bg-indigo-50 border border-indigo-100 text-indigo-600 shrink-0">
+                <CloudDownload className="w-4 h-4 sm:w-5 sm:h-5 animate-bounce" />
               </div>
               <div>
-                <h3 className="text-base font-black text-slate-900">Synchronizing CarTracker Fleet</h3>
-                <p className="text-xs text-slate-500">Safely caching offline devices into local PostgreSQL</p>
+                <h3 className="text-sm sm:text-base font-black text-slate-900">Synchronizing CarTracker Fleet</h3>
+                <p className="text-[10px] sm:text-xs text-slate-500">Safely caching offline devices into local PostgreSQL</p>
               </div>
             </div>
 
             {/* Progress indicators */}
-            <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
-              <div className="flex justify-between text-xs">
+            <div className="p-3 sm:p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-2.5 sm:space-y-3">
+              <div className="flex justify-between text-[11px] sm:text-xs">
                 <span className="text-slate-600">Current Batch:</span>
                 <span className="font-bold text-slate-900">Batch {syncProgress.page} (500 per batch)</span>
               </div>
-              <div className="flex justify-between text-xs">
+              <div className="flex justify-between text-[11px] sm:text-xs">
                 <span className="text-slate-600">Total Devices Scanned:</span>
                 <span className="font-mono font-bold text-slate-900">{syncProgress.scanned.toLocaleString()} / ~15,200</span>
               </div>
-              <div className="flex justify-between text-xs">
+              <div className="flex justify-between text-[11px] sm:text-xs">
                 <span className="text-slate-600">Offline Vehicles Synced:</span>
                 <span className="font-mono font-bold text-rose-600">{syncProgress.offlineSynced.toLocaleString()}</span>
               </div>
@@ -1451,25 +1872,25 @@ export function FleetTroubleshootClient({
             </div>
 
             {syncProgress.error && (
-              <div className="p-3 bg-rose-50 border border-rose-200 text-rose-800 text-xs rounded-xl">
+              <div className="p-2.5 sm:p-3 bg-rose-50 border border-rose-200 text-rose-800 text-[11px] sm:text-xs rounded-xl">
                 {syncProgress.error}
               </div>
             )}
 
             {syncProgress.isDone && !isSyncing && (
-              <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs rounded-xl flex items-center gap-2">
+              <div className="p-2.5 sm:p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 text-[11px] sm:text-xs rounded-xl flex items-center gap-2">
                 <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
                 <span>Synchronization completed successfully!</span>
               </div>
             )}
 
-            <div className="flex items-center justify-end gap-2 pt-2">
+            <div className="flex items-center justify-end gap-2 pt-1 sm:pt-2">
               {isSyncing ? (
                 <Button
                   type="button"
                   variant="outline"
                   onClick={handleStopSync}
-                  className="h-9 px-4 text-xs font-bold text-rose-600 hover:text-rose-700"
+                  className="h-8 sm:h-9 px-3.5 sm:px-4 text-[11px] sm:text-xs font-bold text-rose-600 hover:text-rose-700"
                 >
                   Stop Sync
                 </Button>
@@ -1477,7 +1898,7 @@ export function FleetTroubleshootClient({
                 <Button
                   type="button"
                   onClick={() => setSyncModalOpen(false)}
-                  className="h-9 px-5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl"
+                  className="h-8 sm:h-9 px-4 sm:px-5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[11px] sm:text-xs rounded-xl"
                 >
                   Done
                 </Button>
@@ -1491,16 +1912,16 @@ export function FleetTroubleshootClient({
       {/* MODAL 3: SIM DIAGNOSTIC HISTORY MODAL                          */}
       {/* ------------------------------------------------------------- */}
       {historyModalOpen && historyVehicle && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 animate-fadeIn">
-          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 space-y-4 animate-scaleUp">
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 animate-fadeIn">
+          <div className="bg-white rounded-xl sm:rounded-2xl max-w-lg w-full p-4 sm:p-6 shadow-2xl border border-slate-100 space-y-3 sm:space-y-4 max-h-[92vh] overflow-y-auto animate-scaleUp">
             <div className="flex items-start justify-between">
               <div>
-                <div className="text-xs font-bold text-indigo-600 uppercase tracking-wider flex items-center gap-1.5">
-                  <History className="w-4 h-4" />
+                <div className="text-[11px] sm:text-xs font-bold text-indigo-600 uppercase tracking-wider flex items-center gap-1.5">
+                  <History className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                   <span>SIM Transaction History</span>
                 </div>
-                <h3 className="text-base font-black text-slate-900 mt-1">{historyVehicle.name}</h3>
-                <div className="font-mono text-xs text-slate-600">{historyVehicle.phone}</div>
+                <h3 className="text-sm sm:text-base font-black text-slate-900 mt-0.5 sm:mt-1">{historyVehicle.name}</h3>
+                <div className="font-mono text-[11px] sm:text-xs text-slate-600">{historyVehicle.phone}</div>
               </div>
               <button
                 type="button"
@@ -1517,22 +1938,22 @@ export function FleetTroubleshootClient({
                 <span className="text-xs font-semibold">Fetching SIM records from database...</span>
               </div>
             ) : !historyData ? (
-              <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 text-center text-xs text-slate-500">
+              <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 text-center text-[11px] sm:text-xs text-slate-500">
                 No past transactions recorded for this SIM on Golden VTU.
               </div>
             ) : (
               <div className="space-y-3">
                 {/* Last Data Card */}
-                <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-1 text-xs">
-                  <div className="text-[10px] font-bold text-slate-500 uppercase">Most Recent Data Bundle</div>
+                <div className="p-2.5 sm:p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-1 text-xs">
+                  <div className="text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase">Most Recent Data Bundle</div>
                   {historyData.lastData ? (
                     <div>
-                      <div className="font-bold text-slate-900">{historyData.lastData.plan}</div>
-                      <div className="text-slate-600 flex justify-between mt-1">
+                      <div className="font-bold text-slate-900 text-xs sm:text-sm">{historyData.lastData.plan}</div>
+                      <div className="text-slate-600 flex justify-between mt-1 text-[11px] sm:text-xs">
                         <span>Dispensed: {historyData.lastData.formattedDate}</span>
                         <span className="font-mono font-bold text-indigo-600">₦{historyData.lastData.amount}</span>
                       </div>
-                      <div className="flex justify-between items-center text-[11px] text-slate-500 mt-1 border-t border-slate-200/80 pt-1">
+                      <div className="flex justify-between items-center text-[10px] sm:text-[11px] text-slate-500 mt-1 border-t border-slate-200/80 pt-1">
                         <span>Expires: {historyData.lastData.expiryDate}</span>
                         <span
                           className={`font-bold ${
@@ -1544,26 +1965,26 @@ export function FleetTroubleshootClient({
                       </div>
                     </div>
                   ) : (
-                    <div className="text-slate-400 italic">No past data purchases on record.</div>
+                    <div className="text-slate-400 italic text-[11px]">No past data purchases on record.</div>
                   )}
                 </div>
 
                 {/* Recent Purchases List */}
                 <div className="space-y-1.5">
-                  <div className="text-[11px] font-bold text-slate-700">Past SIM Transactions:</div>
+                  <div className="text-[10px] sm:text-[11px] font-bold text-slate-700">Past SIM Transactions:</div>
                   <div className="space-y-1.5 max-h-48 overflow-y-auto">
                     {historyData.recentTransactions && historyData.recentTransactions.length > 0 ? (
                       historyData.recentTransactions.map((tx) => (
                         <div
                           key={tx.id}
-                          className="p-2.5 rounded-lg border border-slate-200 bg-white flex items-center justify-between text-xs"
+                          className="p-2 sm:p-2.5 rounded-lg border border-slate-200 bg-white flex items-center justify-between text-xs"
                         >
                           <div>
-                            <span className="font-bold text-slate-800">{tx.description}</span>
-                            <div className="text-[10px] text-slate-400">{tx.date}</div>
+                            <span className="font-bold text-slate-800 text-[11px] sm:text-xs">{tx.description}</span>
+                            <div className="text-[9px] sm:text-[10px] text-slate-400">{tx.date}</div>
                           </div>
                           <div className="text-right">
-                            <div className="font-mono font-bold text-slate-900">₦{tx.amount}</div>
+                            <div className="font-mono font-bold text-slate-900 text-xs">₦{tx.amount}</div>
                             <span
                               className={`text-[9px] font-bold uppercase ${
                                 tx.status === "SUCCESS" ? "text-emerald-600" : "text-amber-600"
@@ -1575,18 +1996,18 @@ export function FleetTroubleshootClient({
                         </div>
                       ))
                     ) : (
-                      <div className="text-xs text-slate-400 italic">No recent transactions found.</div>
+                      <div className="text-[11px] text-slate-400 italic">No recent transactions found.</div>
                     )}
                   </div>
                 </div>
               </div>
             )}
 
-            <div className="flex justify-end pt-2">
+            <div className="flex justify-end pt-1 sm:pt-2">
               <Button
                 type="button"
                 onClick={() => setHistoryModalOpen(false)}
-                className="h-9 px-4 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl"
+                className="h-8 sm:h-9 px-4 bg-slate-900 hover:bg-slate-800 text-white font-bold text-[11px] sm:text-xs rounded-xl"
               >
                 Close
               </Button>

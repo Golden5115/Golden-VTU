@@ -43,7 +43,7 @@ export default async function FleetTroubleshootPage() {
   const initialOfflineData = await getOfflineVehicles({ page: 1, limit: 50 })
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8">
+    <div className="p-2.5 sm:p-6 lg:p-8">
       <FleetTroubleshootClient
         initialWalletBalance={walletBalance}
         servers={servers}
