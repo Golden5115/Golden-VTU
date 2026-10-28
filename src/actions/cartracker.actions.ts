@@ -174,6 +174,77 @@ async function fetchDeviceTelemetry(
   }
 }
 
+export interface DeviceLiveStatusResult {
+  success: boolean
+  cartrackerId: number
+  onlineStatus: "online" | "ack" | "offline" | "unknown"
+  isOnline: boolean
+  time: string | null
+  speed: number | null
+  stopDuration: string | null
+  message: string
+}
+
+/**
+ * Checks real-time connection status for a single vehicle directly from CarTracker (~200ms).
+ * If the vehicle is now online, it automatically cleans it out of the local OfflineVehicle database.
+ */
+export async function verifyDeviceLiveStatus(cartrackerId: number): Promise<DeviceLiveStatusResult> {
+  await requireUser()
+
+  try {
+    const { baseUrl } = getCarTrackerConfig()
+    const token = await getCarTrackerApiHash()
+
+    const telemetry = await fetchDeviceTelemetry(baseUrl, token, cartrackerId)
+    const isOnline = telemetry.online === "online" || telemetry.online === "ack"
+
+    if (isOnline) {
+      await prisma.offlineVehicle.deleteMany({
+        where: { cartrackerId },
+      }).catch(() => {})
+      cachedSummaryMemory = null
+    } else if (telemetry.time) {
+      const lastHeartbeat = parseCarTrackerDate(telemetry.time)
+      const daysOffline = computeDaysOffline(lastHeartbeat, telemetry.time)
+      await prisma.offlineVehicle.updateMany({
+        where: { cartrackerId },
+        data: {
+          lastHeartbeat,
+          daysOffline,
+          speed: telemetry.speed || 0,
+          stopDuration: telemetry.stopDuration || "",
+          lastSyncAt: new Date(),
+        },
+      }).catch(() => {})
+    }
+
+    return {
+      success: true,
+      cartrackerId,
+      onlineStatus: telemetry.online,
+      isOnline,
+      time: telemetry.time,
+      speed: telemetry.speed,
+      stopDuration: telemetry.stopDuration,
+      message: isOnline
+        ? `Vehicle is currently ONLINE (${telemetry.online.toUpperCase()})! Connected: ${telemetry.time || "Just now"}`
+        : `Vehicle is confirmed OFFLINE. Last heartbeat: ${telemetry.time || "No signal"}`,
+    }
+  } catch (err: any) {
+    return {
+      success: false,
+      cartrackerId,
+      onlineStatus: "unknown",
+      isOnline: false,
+      time: null,
+      speed: null,
+      stopDuration: null,
+      message: err.message || "Failed to verify live device status.",
+    }
+  }
+}
+
 /**
  * Enriches a CarTracker device record with local VTU database diagnostics and live telemetry
  */
@@ -661,11 +732,43 @@ export interface OfflineSyncBatchResult {
 }
 
 /**
+ * Checks if a vehicle's tracking subscription or account has expired on CarTracker Nigeria.
+ * Expired vehicles are excluded from offline troubleshooting syncs.
+ */
+function isCarTrackerVehicleExpired(item: any): boolean {
+  // 1. Time field: CarTracker explicitly sets item.time = "Expired" or "Disabled" when tracking license is expired
+  const time = (item.time || "").trim().toLowerCase()
+  if (time === "expired" || time === "disabled") return true
+
+  // 2. device_data active flag
+  const devData = item.device_data || {}
+  if (devData.active === 0 || devData.active === false) return true
+
+  // 3. Expiration date: Check if device_data.expiration_date is in the past
+  const expDateStr = devData.expiration_date
+  if (expDateStr && typeof expDateStr === "string") {
+    const expDate = new Date(expDateStr.replace(" ", "T"))
+    if (!isNaN(expDate.getTime()) && expDate.getTime() < Date.now()) {
+      return true
+    }
+  }
+
+  return false
+}
+
+/**
  * Synchronizes one chunk/batch of offline devices from CarTracker Nigeria into local PostgreSQL.
  * Runs in safe 500-device batches so the database connection pool is never overwhelmed.
+ * Only pulls vehicles that are NOT expired and are currently offline.
  */
-export async function syncOfflineVehiclesBatch(page: number = 1, limit: number = 500): Promise<OfflineSyncBatchResult> {
-  await requireUser()
+export async function syncOfflineVehiclesBatch(
+  page: number = 1,
+  limit: number = 500,
+  isSystem: boolean = false
+): Promise<OfflineSyncBatchResult> {
+  if (!isSystem) {
+    await requireUser()
+  }
 
   try {
     if (!(prisma as any).offlineVehicle) {
@@ -707,8 +810,19 @@ export async function syncOfflineVehiclesBatch(page: number = 1, limit: number =
       }
     }
 
-    // Filter only offline devices
-    const offlineItems = items.filter((x) => x.online === "offline")
+    // Prune devices in this batch that are online or expired from local offline database
+    const idsToPrune = items
+      .filter((x) => x.online !== "offline" || isCarTrackerVehicleExpired(x))
+      .map((x) => Number(x.id))
+
+    if (idsToPrune.length > 0) {
+      await prisma.offlineVehicle.deleteMany({
+        where: { cartrackerId: { in: idsToPrune } },
+      }).catch(() => {})
+    }
+
+    // Filter ONLY offline devices that have NOT expired
+    const offlineItems = items.filter((x) => x.online === "offline" && !isCarTrackerVehicleExpired(x))
 
     // Extract all valid normalized phone numbers in this batch
     const phoneList: string[] = []
@@ -998,8 +1112,8 @@ export async function getOfflineVehicles(params: GetOfflineVehiclesParams = {}):
         where.daysOffline = { gte: 7, lt: 30 }
       } else if (params.daysOfflineFilter === "1-7") {
         where.daysOffline = { gte: 1, lt: 7 }
-      } else if (params.daysOfflineFilter === "<1") {
-        where.daysOffline = { lt: 1 }
+      } else if (params.daysOfflineFilter === "<1" || params.daysOfflineFilter === "0") {
+        where.daysOffline = { lte: 0 }
       }
     }
 
@@ -1008,9 +1122,9 @@ export async function getOfflineVehicles(params: GetOfflineVehiclesParams = {}):
       where.vtuStatus = params.vtuStatusFilter
     }
 
-    // Network filter
+    // Network filter (case-insensitive)
     if (params.networkFilter && params.networkFilter !== "all") {
-      where.network = params.networkFilter
+      where.network = { equals: params.networkFilter, mode: "insensitive" }
     }
 
     // Search phrase

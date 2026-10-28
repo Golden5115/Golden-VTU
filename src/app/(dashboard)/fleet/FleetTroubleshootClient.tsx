@@ -44,6 +44,7 @@ import {
   getOfflineVehicles,
   syncOfflineVehiclesBatch,
   rechargeSingleVehicle,
+  verifyDeviceLiveStatus,
   type FleetTrackerDevice,
   type CustomerFleetResult,
   type GetOfflineVehiclesResult,
@@ -125,15 +126,28 @@ export function FleetTroubleshootClient({
   const [isLoadingOffline, startOfflineTransition] = useTransition()
 
   // Refetch offline vehicles with current filters
-  const fetchOfflinePage = (pageNumber: number = 1) => {
+  const fetchOfflinePage = (
+    pageNumber: number = 1,
+    overrides?: {
+      search?: string
+      days?: string
+      vtu?: string
+      network?: string
+    }
+  ) => {
+    const s = overrides?.search !== undefined ? overrides.search : offlineSearch
+    const d = overrides?.days !== undefined ? overrides.days : offlineDaysFilter
+    const v = overrides?.vtu !== undefined ? overrides.vtu : offlineVtuFilter
+    const n = overrides?.network !== undefined ? overrides.network : offlineNetworkFilter
+
     startOfflineTransition(async () => {
       const res = await getOfflineVehicles({
         page: pageNumber,
         limit: 50,
-        search: offlineSearch,
-        daysOfflineFilter: offlineDaysFilter,
-        vtuStatusFilter: offlineVtuFilter,
-        networkFilter: offlineNetworkFilter,
+        search: s,
+        daysOfflineFilter: d,
+        vtuStatusFilter: v,
+        networkFilter: n,
       })
       if (res.success) {
         setOfflineVehicles(res.vehicles)
@@ -147,7 +161,56 @@ export function FleetTroubleshootClient({
 
   const handleOfflineSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    fetchOfflinePage(1)
+    fetchOfflinePage(1, { search: offlineSearch })
+  }
+
+  // 1-Click Real-Time Live Status Verification
+  const [checkingDeviceId, setCheckingDeviceId] = useState<number | null>(null)
+  const [liveVerifiedStatus, setLiveVerifiedStatus] = useState<
+    Record<number, { isOnline: boolean; message: string; time: string | null }>
+  >({})
+  const [liveBanner, setLiveBanner] = useState<{
+    type: "success" | "info" | "error"
+    message: string
+  } | null>(null)
+
+  const handleCheckLiveStatus = async (cartrackerId: number, vehicleName: string) => {
+    setCheckingDeviceId(cartrackerId)
+    setLiveBanner(null)
+    try {
+      const res = await verifyDeviceLiveStatus(cartrackerId)
+      setLiveVerifiedStatus((prev) => ({
+        ...prev,
+        [cartrackerId]: {
+          isOnline: res.isOnline,
+          message: res.message,
+          time: res.time,
+        },
+      }))
+
+      if (res.isOnline) {
+        setLiveBanner({
+          type: "success",
+          message: `🟢 ${vehicleName} is ONLINE (${res.onlineStatus.toUpperCase()})! Connected: ${res.time || "Just now"}. Automatically pruned from offline list.`,
+        })
+        setTimeout(() => {
+          setOfflineVehicles((prev) => prev.filter((v) => v.cartrackerId !== cartrackerId))
+          setOfflineTotal((prev) => Math.max(0, prev - 1))
+        }, 2200)
+      } else {
+        setLiveBanner({
+          type: "info",
+          message: `📡 ${vehicleName} is confirmed OFFLINE. Last heartbeat: ${res.time || "No recent signal"}.`,
+        })
+      }
+    } catch (err: any) {
+      setLiveBanner({
+        type: "error",
+        message: err.message || "Failed to verify live connection with CarTracker server.",
+      })
+    } finally {
+      setCheckingDeviceId(null)
+    }
   }
 
   // Live Batch Syncing Engine from CarTracker Nigeria
@@ -625,25 +688,27 @@ export function FleetTroubleshootClient({
                 <select
                   value={offlineDaysFilter}
                   onChange={(e) => {
-                    setOfflineDaysFilter(e.target.value)
-                    setTimeout(() => fetchOfflinePage(1), 0)
+                    const val = e.target.value
+                    setOfflineDaysFilter(val)
+                    fetchOfflinePage(1, { days: val })
                   }}
                   className="h-8 sm:h-9 border border-slate-200 rounded-lg px-2.5 text-[11px] sm:text-xs bg-white font-medium text-slate-800"
                 >
                   <option value="all">All Days Offline</option>
-                  <option value="90+">Critical Offline (&gt; 90 Days)</option>
-                  <option value="30-90">Long Offline (30 - 90 Days)</option>
-                  <option value="7-30">Medium Offline (7 - 30 Days)</option>
+                  <option value="<1">Within 24 Hours (&lt; 1 Day)</option>
                   <option value="1-7">Recent Offline (1 - 7 Days)</option>
-                  <option value="<1">Within 24 Hours</option>
+                  <option value="7-30">Medium Offline (7 - 30 Days)</option>
+                  <option value="30-90">Long Offline (30 - 90 Days)</option>
+                  <option value="90+">Critical Offline (&gt; 90 Days)</option>
                 </select>
 
                 {/* VTU Status Filter */}
                 <select
                   value={offlineVtuFilter}
                   onChange={(e) => {
-                    setOfflineVtuFilter(e.target.value)
-                    setTimeout(() => fetchOfflinePage(1), 0)
+                    const val = e.target.value
+                    setOfflineVtuFilter(val)
+                    fetchOfflinePage(1, { vtu: val })
                   }}
                   className="h-8 sm:h-9 border border-slate-200 rounded-lg px-2.5 text-[11px] sm:text-xs bg-white font-medium text-slate-800"
                 >
@@ -659,27 +724,61 @@ export function FleetTroubleshootClient({
                   <select
                     value={offlineNetworkFilter}
                     onChange={(e) => {
-                      setOfflineNetworkFilter(e.target.value)
-                      setTimeout(() => fetchOfflinePage(1), 0)
+                      const val = e.target.value
+                      setOfflineNetworkFilter(val)
+                      fetchOfflinePage(1, { network: val })
                     }}
                     className="flex-1 h-8 sm:h-9 border border-slate-200 rounded-lg px-2.5 text-[11px] sm:text-xs bg-white font-medium text-slate-800"
                   >
                     <option value="all">All Networks</option>
                     <option value="MTN">MTN</option>
                     <option value="Airtel">Airtel</option>
-                    <option value="GLO">GLO</option>
+                    <option value="Glo">Glo</option>
                     <option value="9mobile">9mobile</option>
                   </select>
 
                   <Button
                     type="submit"
-                    className="h-8 sm:h-9 px-3 bg-slate-900 hover:bg-slate-800 text-white font-bold text-[11px] sm:text-xs rounded-lg shrink-0"
+                    disabled={isLoadingOffline}
+                    className="h-8 sm:h-9 px-3 bg-slate-900 hover:bg-slate-800 text-white font-bold text-[11px] sm:text-xs rounded-lg shrink-0 inline-flex items-center gap-1"
                   >
-                    Filter
+                    {isLoadingOffline && <Loader2 className="w-3 h-3 animate-spin" />}
+                    <span>Filter</span>
                   </Button>
                 </div>
               </form>
             </div>
+
+            {/* Live Status Ping Banner */}
+            {liveBanner && (
+              <div
+                className={`p-3 rounded-xl sm:rounded-2xl border text-xs font-semibold flex items-center justify-between transition-all animate-fadeIn ${
+                  liveBanner.type === "success"
+                    ? "bg-emerald-50 border-emerald-300 text-emerald-900"
+                    : liveBanner.type === "error"
+                    ? "bg-rose-50 border-rose-300 text-rose-900"
+                    : "bg-indigo-50 border-indigo-200 text-indigo-900"
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  {liveBanner.type === "success" ? (
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                  ) : liveBanner.type === "error" ? (
+                    <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+                  ) : (
+                    <Radio className="w-4 h-4 text-indigo-600 shrink-0 animate-pulse" />
+                  )}
+                  <span>{liveBanner.message}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setLiveBanner(null)}
+                  className="text-slate-400 hover:text-slate-700 ml-2 p-1"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
 
             {/* Offline Vehicles Table (50 per page) */}
             <div className="border border-slate-200/90 rounded-xl sm:rounded-2xl overflow-hidden bg-white shadow-2xs">
@@ -784,15 +883,21 @@ export function FleetTroubleshootClient({
                                     ? "bg-rose-50 border-rose-200 text-rose-800"
                                     : v.daysOffline >= 7
                                     ? "bg-amber-50 border-amber-200 text-amber-800"
-                                    : "bg-yellow-50 border-yellow-200 text-yellow-800"
+                                    : v.daysOffline >= 1
+                                    ? "bg-yellow-50 border-yellow-200 text-yellow-800"
+                                    : "bg-emerald-50 border-emerald-200 text-emerald-800"
                                 }`}
                               >
                                 <span
                                   className={`w-1.5 h-1.5 rounded-full ${
-                                    v.daysOffline >= 30 ? "bg-rose-600 animate-pulse" : "bg-amber-500"
+                                    v.daysOffline >= 30
+                                      ? "bg-rose-600 animate-pulse"
+                                      : v.daysOffline >= 1
+                                      ? "bg-amber-500"
+                                      : "bg-emerald-600"
                                   }`}
                                 />
-                                {v.daysOffline}d offline
+                                {v.daysOffline === 0 ? "Today (<24h)" : `${v.daysOffline}d offline`}
                               </span>
                             </td>
 
@@ -850,6 +955,34 @@ export function FleetTroubleshootClient({
                             {/* Per-Vehicle Actions (NO BULK RECHARGE) */}
                             <td className="py-3 px-4 text-right">
                               <div className="flex items-center justify-end gap-1.5">
+                                {/* 1-Click Live Status Ping Button */}
+                                <button
+                                  type="button"
+                                  onClick={() => handleCheckLiveStatus(v.cartrackerId, v.name)}
+                                  disabled={checkingDeviceId === v.cartrackerId}
+                                  title="Ping real-time live status from CarTracker server"
+                                  className={`h-8 px-2 rounded-lg border text-xs font-semibold inline-flex items-center gap-1 transition-all ${
+                                    liveVerifiedStatus[v.cartrackerId]?.isOnline
+                                      ? "bg-emerald-500 text-white border-emerald-600 animate-pulse"
+                                      : liveVerifiedStatus[v.cartrackerId]
+                                      ? "bg-slate-100 text-slate-700 border-slate-300"
+                                      : "bg-white hover:bg-slate-50 text-slate-700 border-slate-200 shadow-2xs"
+                                  }`}
+                                >
+                                  {checkingDeviceId === v.cartrackerId ? (
+                                    <Loader2 className="w-3 h-3 animate-spin text-indigo-600" />
+                                  ) : (
+                                    <Radio className="w-3 h-3 text-indigo-600" />
+                                  )}
+                                  <span>
+                                    {checkingDeviceId === v.cartrackerId
+                                      ? "Pinging..."
+                                      : liveVerifiedStatus[v.cartrackerId]?.isOnline
+                                      ? "ONLINE"
+                                      : "Live Ping"}
+                                  </span>
+                                </button>
+
                                 <Button
                                   type="button"
                                   onClick={() =>
@@ -947,15 +1080,21 @@ export function FleetTroubleshootClient({
                                 ? "bg-rose-50 border-rose-200 text-rose-800"
                                 : v.daysOffline >= 7
                                 ? "bg-amber-50 border-amber-200 text-amber-800"
-                                : "bg-yellow-50 border-yellow-200 text-yellow-800"
+                                : v.daysOffline >= 1
+                                ? "bg-yellow-50 border-yellow-200 text-yellow-800"
+                                : "bg-emerald-50 border-emerald-200 text-emerald-800"
                             }`}
                           >
                             <span
                               className={`w-1.5 h-1.5 rounded-full ${
-                                v.daysOffline >= 30 ? "bg-rose-600 animate-pulse" : "bg-amber-500"
+                                v.daysOffline >= 30
+                                  ? "bg-rose-600 animate-pulse"
+                                  : v.daysOffline >= 1
+                                  ? "bg-amber-500"
+                                  : "bg-emerald-600"
                               }`}
                             />
-                            {v.daysOffline}d offline
+                            {v.daysOffline === 0 ? "Today (<24h)" : `${v.daysOffline}d offline`}
                           </span>
                         </div>
 
@@ -1031,6 +1170,34 @@ export function FleetTroubleshootClient({
                           </div>
 
                           <div className="flex items-center gap-1.5 shrink-0">
+                            {/* Mobile Live Ping Button */}
+                            <button
+                              type="button"
+                              onClick={() => handleCheckLiveStatus(v.cartrackerId, v.name)}
+                              disabled={checkingDeviceId === v.cartrackerId}
+                              title="Ping real-time live status from CarTracker server"
+                              className={`h-7 px-2 rounded-lg border text-[10px] font-semibold inline-flex items-center gap-1 transition-all ${
+                                liveVerifiedStatus[v.cartrackerId]?.isOnline
+                                  ? "bg-emerald-500 text-white border-emerald-600 animate-pulse"
+                                  : liveVerifiedStatus[v.cartrackerId]
+                                  ? "bg-slate-100 text-slate-700 border-slate-300"
+                                  : "bg-white hover:bg-slate-50 text-slate-700 border-slate-200"
+                              }`}
+                            >
+                              {checkingDeviceId === v.cartrackerId ? (
+                                <Loader2 className="w-2.5 h-2.5 animate-spin text-indigo-600" />
+                              ) : (
+                                <Radio className="w-2.5 h-2.5 text-indigo-600" />
+                              )}
+                              <span>
+                                {checkingDeviceId === v.cartrackerId
+                                  ? "..."
+                                  : liveVerifiedStatus[v.cartrackerId]?.isOnline
+                                  ? "ONLINE"
+                                  : "Ping"}
+                              </span>
+                            </button>
+
                             <Button
                               type="button"
                               onClick={() =>
@@ -1694,6 +1861,49 @@ export function FleetTroubleshootClient({
                 </span>
               )}
             </div>
+
+            {/* Live Connection Status & Verification */}
+            <div className="p-2.5 sm:p-3 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between text-xs">
+              <div className="flex items-center gap-2">
+                <span
+                  className={`w-2 sm:w-2.5 h-2 sm:h-2.5 rounded-full ${
+                    liveVerifiedStatus[targetVehicle.vehicleId]?.isOnline
+                      ? "bg-emerald-500 animate-ping"
+                      : "bg-rose-500 animate-pulse"
+                  }`}
+                />
+                <div>
+                  <div className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider">Live Tracker Status</div>
+                  <div className="font-bold text-slate-800 text-xs">
+                    {liveVerifiedStatus[targetVehicle.vehicleId]?.isOnline
+                      ? "🟢 ONLINE (Connected Just Now)"
+                      : liveVerifiedStatus[targetVehicle.vehicleId]
+                      ? "🔴 Confirmed Offline"
+                      : "Offline (Cached Telemetry)"}
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => handleCheckLiveStatus(targetVehicle.vehicleId, targetVehicle.vehicleName)}
+                disabled={checkingDeviceId === targetVehicle.vehicleId}
+                className="h-7 px-2.5 rounded-lg border border-indigo-200 bg-white hover:bg-indigo-50 text-indigo-700 text-[10px] sm:text-xs font-bold inline-flex items-center gap-1 shadow-2xs"
+              >
+                {checkingDeviceId === targetVehicle.vehicleId ? (
+                  <Loader2 className="w-3 h-3 animate-spin text-indigo-600" />
+                ) : (
+                  <Radio className="w-3 h-3 text-indigo-600" />
+                )}
+                <span>{checkingDeviceId === targetVehicle.vehicleId ? "Pinging..." : "Verify Live"}</span>
+              </button>
+            </div>
+
+            {liveVerifiedStatus[targetVehicle.vehicleId]?.isOnline && (
+              <div className="p-2.5 sm:p-3 bg-emerald-50 border border-emerald-300 rounded-xl text-emerald-900 text-xs font-semibold flex items-center gap-2 animate-fadeIn">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>Notice: This vehicle is currently <strong>ONLINE</strong>! Recharging may not be required.</span>
+              </div>
+            )}
 
             {/* Telecom Server Route Selector */}
             <div className="space-y-1">
