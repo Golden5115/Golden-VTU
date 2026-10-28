@@ -8,8 +8,12 @@ async function requireAdmin() {
   const session = await auth()
   if (!session?.user?.email) throw new Error("Unauthorized")
 
+  const sessionRole = (session.user as any)?.role
+  if (sessionRole === "ADMIN") return
+
   const user = await prisma.user.findUnique({
     where: { email: session.user.email },
+    select: { role: true },
   })
 
   if (user?.role !== "ADMIN") throw new Error("Unauthorized: Admin privileges required")

@@ -486,6 +486,34 @@ export async function purchaseData(
 }
 
 /**
+ * Helper to gracefully retry a database query if a cloud serverless socket dropped
+ */
+async function withPrismaRetry<T>(queryFn: () => Promise<T>, maxRetries = 2): Promise<T> {
+  let attempt = 0
+  while (attempt < maxRetries) {
+    try {
+      return await queryFn()
+    } catch (err: any) {
+      attempt++
+      const msg = String(err?.message || "")
+      const isConnectionDrop =
+        msg.includes("closed the connection") ||
+        msg.includes("Connection terminated") ||
+        msg.includes("ECONNRESET") ||
+        msg.includes("Connection lost") ||
+        msg.includes("terminating connection")
+      if (attempt < maxRetries && isConnectionDrop) {
+        console.warn(`[VTU Reconcile] Database connection reset, retrying query (attempt ${attempt}/${maxRetries})...`)
+        await new Promise((res) => setTimeout(res, 250 * attempt))
+        continue
+      }
+      throw err
+    }
+  }
+  return await queryFn()
+}
+
+/**
  * Automatically reconcile all PENDING transactions for a user (or globally) by querying
  * the telecom provider directly. If carrier marked it completed, updates DB to SUCCESS
  * and activates vehicle tracker telemetry. If carrier cancelled/refunded, refunds wallet.
@@ -499,18 +527,21 @@ export async function reconcilePendingTransactions(userId?: string) {
     const recentWindow = new Date(Date.now() - 48 * 60 * 60 * 1000)
     whereClause.createdAt = { gte: recentWindow }
 
-    const [pendingData, pendingAirtime] = await Promise.all([
+    const pendingData = await withPrismaRetry(() =>
       prisma.dataPurchase.findMany({
         where: whereClause,
         orderBy: { createdAt: "desc" },
         take: 20,
-      }),
+      })
+    )
+
+    const pendingAirtime = await withPrismaRetry(() =>
       prisma.airtimePurchase.findMany({
         where: whereClause,
         orderBy: { createdAt: "desc" },
         take: 20,
-      }),
-    ])
+      })
+    )
 
     if (pendingData.length === 0 && pendingAirtime.length === 0) {
       return { reconciled: 0 }
@@ -670,7 +701,7 @@ export async function reconcilePendingTransactions(userId?: string) {
 
     return { reconciled: reconciledCount }
   } catch (err: any) {
-    console.error("[ReconcilePending] Global error:", err.message)
+    console.warn("[ReconcilePending] Background reconciliation skipped due to temporary connection reset:", err.message)
     return { reconciled: 0 }
   }
 }

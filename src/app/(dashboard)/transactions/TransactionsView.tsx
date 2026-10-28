@@ -15,6 +15,10 @@ import {
   X,
   RotateCcw,
   Loader2,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
 } from "lucide-react"
 import { LiveStatusButton } from "@/components/vtu/LiveStatusButton"
 import { format12HourDateTime } from "@/lib/phone-utils"
@@ -39,6 +43,9 @@ export type UnifiedTx = {
 interface TransactionsViewProps {
   initialTransactions: UnifiedTx[]
   isAdmin: boolean
+  initialStartDate?: string
+  initialEndDate?: string
+  initialPreset?: DatePreset
 }
 
 type TypeFilter = "ALL" | "DEPOSIT" | "AIRTIME" | "DATA"
@@ -62,12 +69,24 @@ function getLagosDateString(d: Date | string): string {
   }
 }
 
-export function TransactionsView({ initialTransactions, isAdmin }: TransactionsViewProps) {
+export function TransactionsView({
+  initialTransactions,
+  isAdmin,
+  initialStartDate,
+  initialEndDate,
+  initialPreset,
+}: TransactionsViewProps) {
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("ALL")
   const [searchQuery, setSearchQuery] = useState("")
-  const [datePreset, setDatePreset] = useState<DatePreset>("ALL")
-  const [customStartDate, setCustomStartDate] = useState("")
-  const [customEndDate, setCustomEndDate] = useState("")
+  const [datePreset, setDatePreset] = useState<DatePreset>(
+    initialPreset || (initialStartDate || initialEndDate ? "CUSTOM" : "ALL")
+  )
+  const [customStartDate, setCustomStartDate] = useState(initialStartDate || "")
+  const [customEndDate, setCustomEndDate] = useState(initialEndDate || "")
+
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pageSize, setPageSize] = useState(50)
 
   // Calculate today's Nigerian date string: "YYYY-MM-DD"
   const todayLagos = useMemo(() => getLagosDateString(new Date()), [])
@@ -129,12 +148,22 @@ export function TransactionsView({ initialTransactions, isAdmin }: TransactionsV
     })
   }, [initialTransactions, typeFilter, searchQuery, datePreset, customStartDate, customEndDate, todayLagos, yesterdayLagos])
 
+  // Pagination calculations
+  const totalItems = filteredTransactions.length
+  const totalPages = Math.max(1, Math.ceil(totalItems / pageSize))
+  const safeCurrentPage = Math.min(Math.max(1, currentPage), totalPages)
+  const paginatedTransactions = useMemo(() => {
+    const start = (safeCurrentPage - 1) * pageSize
+    return filteredTransactions.slice(start, start + pageSize)
+  }, [filteredTransactions, safeCurrentPage, pageSize])
+
   const [isPending, startTransition] = useTransition()
   const isAnyFilterActive = typeFilter !== "ALL" || Boolean(searchQuery.trim()) || datePreset !== "ALL"
 
   const handleTabClick = (type: TypeFilter) => {
     startTransition(() => {
       setTypeFilter(type)
+      setCurrentPage(1)
     })
   }
 
@@ -145,6 +174,7 @@ export function TransactionsView({ initialTransactions, isAdmin }: TransactionsV
       setDatePreset("ALL")
       setCustomStartDate("")
       setCustomEndDate("")
+      setCurrentPage(1)
     })
   }
 
@@ -241,14 +271,20 @@ export function TransactionsView({ initialTransactions, isAdmin }: TransactionsV
               <input
                 type="text"
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value)
+                  setCurrentPage(1)
+                }}
                 placeholder="Search phone number (e.g. 0905...) or reference..."
                 className="w-full pl-9 pr-8 py-2 text-xs bg-slate-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white text-gray-900 transition-colors"
               />
               {searchQuery && (
                 <button
                   type="button"
-                  onClick={() => setSearchQuery("")}
+                  onClick={() => {
+                    setSearchQuery("")
+                    setCurrentPage(1)
+                  }}
                   className="absolute right-2.5 top-2.5 text-gray-400 hover:text-gray-600"
                 >
                   <X className="w-3.5 h-3.5" />
@@ -263,7 +299,10 @@ export function TransactionsView({ initialTransactions, isAdmin }: TransactionsV
                   <Calendar className="w-3.5 h-3.5 absolute left-3 top-2.5 text-gray-400" />
                   <select
                     value={datePreset}
-                    onChange={(e) => setDatePreset(e.target.value as DatePreset)}
+                    onChange={(e) => {
+                      setDatePreset(e.target.value as DatePreset)
+                      setCurrentPage(1)
+                    }}
                     className="w-full pl-8 pr-3 py-2 text-xs bg-slate-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-gray-800 font-medium"
                   >
                     <option value="ALL">All Dates</option>
@@ -291,7 +330,10 @@ export function TransactionsView({ initialTransactions, isAdmin }: TransactionsV
                 <input
                   type="date"
                   value={customStartDate}
-                  onChange={(e) => setCustomStartDate(e.target.value)}
+                  onChange={(e) => {
+                    setCustomStartDate(e.target.value)
+                    setCurrentPage(1)
+                  }}
                   className="px-2 py-1 bg-white border border-gray-300 rounded text-xs font-mono"
                 />
               </div>
@@ -300,7 +342,10 @@ export function TransactionsView({ initialTransactions, isAdmin }: TransactionsV
                 <input
                   type="date"
                   value={customEndDate}
-                  onChange={(e) => setCustomEndDate(e.target.value)}
+                  onChange={(e) => {
+                    setCustomEndDate(e.target.value)
+                    setCurrentPage(1)
+                  }}
                   className="px-2 py-1 bg-white border border-gray-300 rounded text-xs font-mono"
                 />
               </div>
@@ -310,6 +355,7 @@ export function TransactionsView({ initialTransactions, isAdmin }: TransactionsV
                   onClick={() => {
                     setCustomStartDate("")
                     setCustomEndDate("")
+                    setCurrentPage(1)
                   }}
                   className="text-[11px] text-rose-600 font-semibold hover:underline"
                 >
@@ -337,12 +383,17 @@ export function TransactionsView({ initialTransactions, isAdmin }: TransactionsV
                   : "All Transaction History"}
               </span>
             </CardTitle>
-            {isPending && (
-              <span className="text-xs font-semibold text-blue-600 flex items-center gap-1.5 animate-pulse">
-                <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                <span>Updating...</span>
+            <div className="flex items-center gap-2">
+              <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-slate-100 text-slate-800 border border-slate-200">
+                {totalItems} {totalItems === 1 ? "record" : "records"}
               </span>
-            )}
+              {isPending && (
+                <span className="text-xs font-semibold text-blue-600 flex items-center gap-1.5 animate-pulse">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  <span>Updating...</span>
+                </span>
+              )}
+            </div>
           </div>
         </CardHeader>
         <CardContent className="pt-4">
@@ -370,9 +421,83 @@ export function TransactionsView({ initialTransactions, isAdmin }: TransactionsV
             </div>
           ) : (
             <>
+              {/* Pagination Top Bar */}
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 pb-3 mb-3 border-b border-gray-100 text-xs">
+                <div className="flex items-center gap-2 text-gray-500">
+                  <span>
+                    Showing <strong className="text-gray-900 font-bold">{(safeCurrentPage - 1) * pageSize + 1}</strong>–
+                    <strong className="text-gray-900 font-bold">{Math.min(safeCurrentPage * pageSize, totalItems)}</strong> of{" "}
+                    <strong className="text-gray-900 font-bold">{totalItems}</strong>
+                  </span>
+                  <span className="text-gray-300">|</span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-gray-500">Per page:</span>
+                    <select
+                      value={pageSize}
+                      onChange={(e) => {
+                        setPageSize(Number(e.target.value))
+                        setCurrentPage(1)
+                      }}
+                      className="bg-slate-50 border border-gray-200 rounded px-1.5 py-0.5 text-xs text-gray-700 font-medium focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    >
+                      <option value={25}>25</option>
+                      <option value={50}>50</option>
+                      <option value={100}>100</option>
+                      <option value={250}>250</option>
+                    </select>
+                  </div>
+                </div>
+
+                {totalPages > 1 && (
+                  <div className="flex items-center gap-1 self-end sm:self-auto">
+                    <button
+                      type="button"
+                      onClick={() => setCurrentPage(1)}
+                      disabled={safeCurrentPage === 1}
+                      className="p-1.5 rounded-lg border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 disabled:opacity-30 disabled:pointer-events-none transition-colors"
+                      title="First page"
+                    >
+                      <ChevronsLeft className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                      disabled={safeCurrentPage === 1}
+                      className="px-2 py-1 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-30 disabled:pointer-events-none text-xs font-semibold flex items-center gap-0.5 transition-colors"
+                    >
+                      <ChevronLeft className="w-3.5 h-3.5" />
+                      <span>Prev</span>
+                    </button>
+
+                    <span className="px-2.5 py-1 text-xs font-bold text-gray-800 bg-slate-100 rounded-lg">
+                      {safeCurrentPage} / {totalPages}
+                    </span>
+
+                    <button
+                      type="button"
+                      onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                      disabled={safeCurrentPage === totalPages}
+                      className="px-2 py-1 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-30 disabled:pointer-events-none text-xs font-semibold flex items-center gap-0.5 transition-colors"
+                    >
+                      <span>Next</span>
+                      <ChevronRight className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCurrentPage(totalPages)}
+                      disabled={safeCurrentPage === totalPages}
+                      className="p-1.5 rounded-lg border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 disabled:opacity-30 disabled:pointer-events-none transition-colors"
+                      title="Last page"
+                    >
+                      <ChevronsRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                )}
+              </div>
+
               {/* Mobile Card List View (Visible on phones < 768px) */}
               <div className="space-y-3 md:hidden">
-                {filteredTransactions.map((tx) => {
+                {paginatedTransactions.map((tx) => {
                   const dt = format12HourDateTime(tx.date)
                   return (
                     <div
@@ -494,7 +619,7 @@ export function TransactionsView({ initialTransactions, isAdmin }: TransactionsV
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredTransactions.map((tx) => {
+                    {paginatedTransactions.map((tx) => {
                       const dt = format12HourDateTime(tx.date)
                       return (
                         <TableRow key={tx.id} className="hover:bg-slate-50/70">
@@ -609,6 +734,58 @@ export function TransactionsView({ initialTransactions, isAdmin }: TransactionsV
                   </TableBody>
                 </Table>
               </div>
+
+              {/* Bottom Pagination Bar */}
+              {totalPages > 1 && (
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-4 border-t border-gray-100 text-xs">
+                  <span className="text-gray-500">
+                    Showing <strong className="text-gray-900 font-bold">{(safeCurrentPage - 1) * pageSize + 1}</strong>–
+                    <strong className="text-gray-900 font-bold">{Math.min(safeCurrentPage * pageSize, totalItems)}</strong> of{" "}
+                    <strong className="text-gray-900 font-bold">{totalItems}</strong> records
+                  </span>
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => setCurrentPage(1)}
+                      disabled={safeCurrentPage === 1}
+                      className="p-1.5 rounded-lg border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 disabled:opacity-30 disabled:pointer-events-none transition-colors"
+                      title="First page"
+                    >
+                      <ChevronsLeft className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                      disabled={safeCurrentPage === 1}
+                      className="px-2.5 py-1.5 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-30 disabled:pointer-events-none text-xs font-semibold flex items-center gap-1 transition-colors"
+                    >
+                      <ChevronLeft className="w-3.5 h-3.5" />
+                      <span>Prev</span>
+                    </button>
+                    <span className="px-3 py-1.5 text-xs font-bold text-gray-800 bg-slate-100 rounded-lg">
+                      Page {safeCurrentPage} of {totalPages}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                      disabled={safeCurrentPage === totalPages}
+                      className="px-2.5 py-1.5 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-30 disabled:pointer-events-none text-xs font-semibold flex items-center gap-1 transition-colors"
+                    >
+                      <span>Next</span>
+                      <ChevronRight className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCurrentPage(totalPages)}
+                      disabled={safeCurrentPage === totalPages}
+                      className="p-1.5 rounded-lg border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 disabled:opacity-30 disabled:pointer-events-none transition-colors"
+                      title="Last page"
+                    >
+                      <ChevronsRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              )}
             </>
           )}
         </CardContent>

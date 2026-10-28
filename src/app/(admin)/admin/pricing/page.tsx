@@ -19,7 +19,9 @@ export default async function AdminPricingPage() {
     serverCode: s.serverCode,
   }))
 
-  const defaultServer = servers[0]
+  const defaultServer =
+    servers.find((s) => s.serverCode === "server-2" || s.identifier === "PAIRGATE") ||
+    servers[0]
   let initialPlans: any[] = []
 
   if (defaultServer) {

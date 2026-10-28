@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useTransition, useMemo } from "react"
+import { useState, useTransition, useMemo, useEffect } from "react"
 import { VtuDataPlan } from "@/services/providers/vtu-provider.interface"
 import {
   updatePlanPriceAction,
@@ -37,11 +37,33 @@ interface PricingManagerClientProps {
   customPriceCount: number
 }
 
-const NETWORK_BADGES: Record<string, { label: string; bg: string; text: string; border: string }> = {
+export const NETWORK_BADGES: Record<string, { label: string; bg: string; text: string; border: string }> = {
   "01": { label: "MTN", bg: "bg-amber-50", text: "text-amber-800", border: "border-amber-200" },
   "02": { label: "Glo", bg: "bg-emerald-50", text: "text-emerald-800", border: "border-emerald-200" },
   "03": { label: "9mobile", bg: "bg-green-50", text: "text-green-900", border: "border-green-200" },
   "04": { label: "Airtel", bg: "bg-rose-50", text: "text-rose-800", border: "border-rose-200" },
+}
+
+/**
+ * Robust normalizer for carrier network codes across various VTU APIs.
+ * Converts "1" | "01" | "MTN" -> "01", etc.
+ */
+export function normalizeNetworkId(net: string | undefined | null): string {
+  if (!net) return ""
+  const clean = String(net).trim().toLowerCase()
+  if (clean === "01" || clean === "1" || clean === "mtn") return "01"
+  if (clean === "02" || clean === "2" || clean === "glo" || clean === "globacom") return "02"
+  if (clean === "03" || clean === "3" || clean === "9mobile" || clean === "etisalat") return "03"
+  if (clean === "04" || clean === "4" || clean === "airtel") return "04"
+  return clean.padStart(2, "0")
+}
+
+/**
+ * Creates a unique composite key for a plan so duplicate numeric IDs across
+ * different networks (e.g. MTN plan 2 vs Glo plan 2) do not collide.
+ */
+export function getPlanCompositeKey(plan: { network?: string; id: string | number }): string {
+  return `${normalizeNetworkId(plan.network)}_${plan.id}`
 }
 
 export function PricingManagerClient({
@@ -66,11 +88,24 @@ export function PricingManagerClient({
   const [searchQuery, setSearchQuery] = useState("")
   const [filterCustomOnly, setFilterCustomOnly] = useState(false)
 
-  // Edit states for individual plans
+  // Edit states for individual plans (keyed by composite key: network_planId)
   const [priceInputs, setPriceInputs] = useState<Record<string, string>>({})
-  const [savingPlanId, setSavingPlanId] = useState<string | null>(null)
-  const [savedSuccessId, setSavedSuccessId] = useState<string | null>(null)
+  const [savingPlanKey, setSavingPlanKey] = useState<string | null>(null)
+  const [savedSuccessKey, setSavedSuccessKey] = useState<string | null>(null)
   const [customCount, setCustomCount] = useState(initialCustomCount)
+
+  // Sync state if server component re-renders with fresh plans or server
+  useEffect(() => {
+    if (initialPlans && initialPlans.length > 0) {
+      setPlans(initialPlans)
+    }
+  }, [initialPlans])
+
+  useEffect(() => {
+    if (initialServerId) {
+      setSelectedServerId(initialServerId)
+    }
+  }, [initialServerId])
 
   const currentServer = servers.find((s) => s.id === selectedServerId) || servers[0]
 
@@ -120,48 +155,52 @@ export function PricingManagerClient({
 
   // Save manual custom price for a specific plan
   async function handleSavePlanPrice(plan: VtuDataPlan) {
-    const inputVal = priceInputs[plan.id] ?? plan.price.toString()
+    const planKey = getPlanCompositeKey(plan)
+    const inputVal = priceInputs[planKey] ?? plan.price.toString()
     const parsedPrice = parseFloat(inputVal)
     if (isNaN(parsedPrice) || parsedPrice <= 0) {
       alert("Please enter a valid price amount greater than 0.")
       return
     }
 
-    setSavingPlanId(plan.id)
+    const net = normalizeNetworkId(plan.network)
+    setSavingPlanKey(planKey)
     try {
       await updatePlanPriceAction({
         provider: currentServer.identifier,
-        network: plan.network,
+        network: net,
         planId: plan.id,
         planName: plan.name,
         customPrice: parsedPrice,
       })
 
-      // Update in local state
+      // Update in local state: ONLY match both planId AND network to prevent cross-network pollution
       setPlans((prev) =>
         prev.map((p) =>
-          p.id === plan.id
+          p.id === plan.id && normalizeNetworkId(p.network) === net
             ? { ...p, price: Math.ceil(parsedPrice), isCustomPrice: true }
             : p
         )
       )
       setCustomCount((c) => c + 1)
-      setSavedSuccessId(plan.id)
-      setTimeout(() => setSavedSuccessId(null), 2500)
+      setSavedSuccessKey(planKey)
+      setTimeout(() => setSavedSuccessKey(null), 2500)
     } catch (err: any) {
       alert(err.message || "Failed to update plan price")
     } finally {
-      setSavingPlanId(null)
+      setSavingPlanKey(null)
     }
   }
 
   // Reset a custom price back to default markup
   async function handleResetPlanPrice(plan: VtuDataPlan) {
-    setSavingPlanId(plan.id)
+    const planKey = getPlanCompositeKey(plan)
+    const net = normalizeNetworkId(plan.network)
+    setSavingPlanKey(planKey)
     try {
       await resetPlanPriceAction({
         provider: currentServer.identifier,
-        network: plan.network,
+        network: net,
         planId: plan.id,
       })
 
@@ -173,30 +212,31 @@ export function PricingManagerClient({
       }
       setPriceInputs((prev) => {
         const next = { ...prev }
-        delete next[plan.id]
+        delete next[planKey]
         return next
       })
       setCustomCount((c) => Math.max(0, c - 1))
-      setSavedSuccessId(plan.id)
-      setTimeout(() => setSavedSuccessId(null), 2500)
+      setSavedSuccessKey(planKey)
+      setTimeout(() => setSavedSuccessKey(null), 2500)
     } catch (err: any) {
       alert(err.message || "Failed to reset plan price")
     } finally {
-      setSavingPlanId(null)
+      setSavingPlanKey(null)
     }
   }
 
-  // Filter plans
+  // Filter plans with network code normalization
   const filteredPlans = useMemo(() => {
     return plans.filter((p) => {
-      if (selectedNetwork !== "ALL" && p.network !== selectedNetwork) return false
+      const net = normalizeNetworkId(p.network)
+      if (selectedNetwork !== "ALL" && net !== selectedNetwork) return false
       if (filterCustomOnly && !p.isCustomPrice) return false
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase()
         return (
           p.name.toLowerCase().includes(q) ||
           p.id.toLowerCase().includes(q) ||
-          p.networkName.toLowerCase().includes(q) ||
+          (p.networkName && p.networkName.toLowerCase().includes(q)) ||
           (p.validity && p.validity.toLowerCase().includes(q))
         )
       }
@@ -314,6 +354,7 @@ export function PricingManagerClient({
         <div className="flex items-center gap-2 overflow-x-auto">
           {servers.map((s) => {
             const isSelected = s.id === selectedServerId
+            const isServer1 = s.serverCode === "server-1" || s.identifier === "CLUBKONNECT"
             return (
               <button
                 key={s.id}
@@ -322,11 +363,18 @@ export function PricingManagerClient({
                 className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap ${
                   isSelected
                     ? "bg-white text-slate-900 shadow-sm border border-slate-200"
+                    : isServer1
+                    ? "text-slate-400 bg-slate-200/50 hover:bg-slate-200/80"
                     : "text-slate-600 hover:text-slate-900 hover:bg-white/50"
                 }`}
               >
                 <Server className="w-3.5 h-3.5 text-blue-600" />
                 <span>{s.serverName}</span>
+                {isServer1 && (
+                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 border border-amber-200">
+                    Offline
+                  </span>
+                )}
                 <span className="text-[10px] opacity-60 uppercase font-mono">({s.identifier})</span>
               </button>
             )
@@ -348,9 +396,9 @@ export function PricingManagerClient({
           <button
             type="button"
             onClick={() => setSelectedNetwork("ALL")}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-colors ${
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-colors cursor-pointer ${
               selectedNetwork === "ALL"
-                ? "bg-slate-900 text-white border-slate-900"
+                ? "bg-slate-900 text-white border-slate-900 shadow-xs"
                 : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
             }`}
           >
@@ -359,16 +407,27 @@ export function PricingManagerClient({
 
           {["01", "04", "02", "03"].map((netId) => {
             const badge = NETWORK_BADGES[netId]
-            const count = plans.filter((p) => p.network === netId).length
+            const count = plans.filter((p) => normalizeNetworkId(p.network) === netId).length
             const isSelected = selectedNetwork === netId
+
+            // Dedicated network color styles when selected
+            const activeClass =
+              netId === "01"
+                ? "bg-amber-500 text-white border-amber-600 shadow-xs"
+                : netId === "04"
+                ? "bg-rose-600 text-white border-rose-700 shadow-xs"
+                : netId === "02"
+                ? "bg-emerald-600 text-white border-emerald-700 shadow-xs"
+                : "bg-green-700 text-white border-green-800 shadow-xs"
+
             return (
               <button
                 key={netId}
                 type="button"
                 onClick={() => setSelectedNetwork(netId)}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-colors whitespace-nowrap ${
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-colors whitespace-nowrap cursor-pointer ${
                   isSelected
-                    ? "bg-slate-900 text-white border-slate-900 shadow-xs"
+                    ? activeClass
                     : `bg-white ${badge.text} border-slate-200 hover:bg-slate-50`
                 }`}
               >
@@ -394,9 +453,9 @@ export function PricingManagerClient({
           <button
             type="button"
             onClick={() => setFilterCustomOnly(!filterCustomOnly)}
-            className={`px-3 py-2 rounded-xl text-xs font-bold border transition-colors flex items-center gap-1.5 whitespace-nowrap ${
+            className={`px-3 py-2 rounded-xl text-xs font-bold border transition-colors flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
               filterCustomOnly
-                ? "bg-blue-600 text-white border-blue-600"
+                ? "bg-blue-600 text-white border-blue-600 shadow-xs"
                 : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
             }`}
             title="Filter plans that have manual price overrides"
@@ -409,9 +468,54 @@ export function PricingManagerClient({
 
       {/* 5. Plans Table */}
       <div className="bg-white border border-slate-200 rounded-2xl shadow-xs overflow-hidden">
+        {/* Active Network / Count Indicator Bar */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-4 py-2.5 bg-slate-50 border-b border-slate-200 text-xs">
+          <div className="flex items-center gap-2">
+            <span className="font-semibold text-slate-700">
+              {selectedNetwork === "ALL" ? (
+                <>Showing all <strong className="text-slate-900">{filteredPlans.length}</strong> data bundles</>
+              ) : (
+                <>
+                  Showing <strong className="text-slate-900">{filteredPlans.length}</strong> {NETWORK_BADGES[selectedNetwork]?.label || selectedNetwork} data bundles
+                </>
+              )}
+            </span>
+            {filterCustomOnly && (
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-800">
+                Customized Only
+              </span>
+            )}
+            {searchQuery.trim() && (
+              <span className="text-slate-500 text-[11px]">
+                Matching &quot;{searchQuery}&quot;
+              </span>
+            )}
+          </div>
+          {selectedNetwork !== "ALL" && (
+            <button
+              type="button"
+              onClick={() => setSelectedNetwork("ALL")}
+              className="text-xs font-semibold text-blue-600 hover:text-blue-800 underline self-start sm:self-auto cursor-pointer"
+            >
+              Reset to All Networks
+            </button>
+          )}
+        </div>
+
         {filteredPlans.length === 0 ? (
-          <div className="p-8 text-center text-slate-500 text-xs sm:text-sm">
-            No data plans matched your current filter or search criteria.
+          <div className="p-8 text-center text-slate-500 text-xs sm:text-sm space-y-2">
+            <p>
+              No data plans matched your filter {selectedNetwork !== "ALL" ? `for ${NETWORK_BADGES[selectedNetwork]?.label || selectedNetwork}` : ""} on {currentServer.serverName}.
+            </p>
+            {selectedNetwork !== "ALL" && (
+              <button
+                type="button"
+                onClick={() => setSelectedNetwork("ALL")}
+                className="text-xs text-blue-600 hover:underline font-semibold cursor-pointer"
+              >
+                View all networks ({plans.length})
+              </button>
+            )}
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -428,8 +532,10 @@ export function PricingManagerClient({
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {filteredPlans.map((plan) => {
-                  const badge = NETWORK_BADGES[plan.network] || {
-                    label: plan.networkName,
+                  const planKey = getPlanCompositeKey(plan)
+                  const normNet = normalizeNetworkId(plan.network)
+                  const badge = NETWORK_BADGES[normNet] || {
+                    label: plan.networkName || normNet,
                     bg: "bg-slate-100",
                     text: "text-slate-700",
                     border: "border-slate-200",
@@ -437,12 +543,12 @@ export function PricingManagerClient({
                   const wholesale = plan.rawPrice ?? Math.max(0, plan.price - defaultMarkup)
                   const currentPrice = plan.price
                   const margin = currentPrice - wholesale
-                  const inputValue = priceInputs[plan.id] ?? currentPrice.toString()
-                  const isSaving = savingPlanId === plan.id
-                  const isSuccess = savedSuccessId === plan.id
+                  const inputValue = priceInputs[planKey] ?? currentPrice.toString()
+                  const isSaving = savingPlanKey === planKey
+                  const isSuccess = savedSuccessKey === planKey
 
                   return (
-                    <tr key={plan.id} className="hover:bg-slate-50/80 transition-colors">
+                    <tr key={planKey} className="hover:bg-slate-50/80 transition-colors">
                       {/* Network */}
                       <td className="py-3 px-4 whitespace-nowrap">
                         <span className={`px-2.5 py-1 rounded-md text-xs font-bold border ${badge.bg} ${badge.text} ${badge.border}`}>
@@ -491,7 +597,7 @@ export function PricingManagerClient({
                               onChange={(e) =>
                                 setPriceInputs((prev) => ({
                                   ...prev,
-                                  [plan.id]: e.target.value,
+                                  [planKey]: e.target.value,
                                 }))
                               }
                               className={`w-full pl-6 pr-2 py-1.5 text-xs sm:text-sm font-bold border rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-hidden ${
@@ -520,7 +626,7 @@ export function PricingManagerClient({
                             type="button"
                             onClick={() => handleSavePlanPrice(plan)}
                             disabled={isSaving}
-                            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1 ${
+                            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1 cursor-pointer ${
                               isSuccess
                                 ? "bg-emerald-600 text-white"
                                 : "bg-slate-900 hover:bg-slate-800 text-white"
@@ -542,7 +648,7 @@ export function PricingManagerClient({
                               type="button"
                               onClick={() => handleResetPlanPrice(plan)}
                               disabled={isSaving}
-                              className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                              className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
                               title="Reset to default automated markup"
                             >
                               <RotateCcw className="w-3.5 h-3.5" />

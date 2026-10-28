@@ -41,20 +41,19 @@ export async function applyCustomPricing(
 
     const customPriceMap = new Map<string, number>()
     for (const cp of customPrices) {
-      customPriceMap.set(`${cp.provider}_${cp.network}_${cp.planId}`, cp.customPrice)
-      customPriceMap.set(`${cp.network}_${cp.planId}`, cp.customPrice)
-      customPriceMap.set(cp.planId, cp.customPrice)
+      const net = String(cp.network).trim().padStart(2, "0")
+      customPriceMap.set(`${cp.provider}_${net}_${cp.planId}`, cp.customPrice)
+      customPriceMap.set(`${net}_${cp.planId}`, cp.customPrice)
     }
 
     return plans.map((plan) => {
-      const specificKey = `${providerIdentifier}_${plan.network}_${plan.id}`
-      const netKey = `${plan.network}_${plan.id}`
-      const directKey = plan.id
+      const net = String(plan.network).trim().padStart(2, "0")
+      const specificKey = `${providerIdentifier}_${net}_${plan.id}`
+      const netKey = `${net}_${plan.id}`
 
       const customPrice =
         customPriceMap.get(specificKey) ??
-        customPriceMap.get(netKey) ??
-        customPriceMap.get(directKey)
+        customPriceMap.get(netKey)
 
       const wholesale = plan.rawPrice ?? Math.max(0, plan.price - 100)
 

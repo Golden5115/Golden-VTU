@@ -5,32 +5,76 @@ import { NETWORKS, formatPlanDisplayName } from "@/lib/phone-utils"
 import { reconcilePendingTransactions } from "@/services/vtu.service"
 import { TransactionsView, UnifiedTx } from "./TransactionsView"
 
-export default async function TransactionsPage() {
+interface PageProps {
+  searchParams?: Promise<{
+    startDate?: string
+    endDate?: string
+    preset?: string
+  }>
+}
+
+export default async function TransactionsPage(props: PageProps) {
   const session = await auth()
   if (!session?.user?.id) redirect("/login")
+
+  const searchParams = props.searchParams ? await props.searchParams : {}
+  const { startDate, endDate, preset } = searchParams
 
   const isAdmin =
     (session.user as any)?.role === "ADMIN" ||
     session.user?.email?.toLowerCase() === "ayomide.ayoola6866@gmail.com"
 
-  // Automatically reconcile any pending carrier transactions before rendering
-  await reconcilePendingTransactions(session.user.id)
+  // Automatically reconcile any pending carrier transactions before rendering (safe fallback)
+  try {
+    await reconcilePendingTransactions(session.user.id)
+  } catch (err: any) {
+    console.error("[TransactionsPage] Reconcile warning:", err?.message || err)
+  }
+
+  // Parse Nigerian date strings (YYYY-MM-DD in WAT / UTC+1) into UTC Date boundaries
+  const dateFilter: any = {}
+  if (startDate && typeof startDate === "string") {
+    const [y, m, d] = startDate.split("-").map(Number)
+    if (!isNaN(y) && !isNaN(m) && !isNaN(d)) {
+      // 00:00:00 WAT = 23:00:00 UTC previous day (UTC-1)
+      dateFilter.gte = new Date(Date.UTC(y, m - 1, d, -1, 0, 0, 0))
+    }
+  }
+  if (endDate && typeof endDate === "string") {
+    const [y, m, d] = endDate.split("-").map(Number)
+    if (!isNaN(y) && !isNaN(m) && !isNaN(d)) {
+      // 23:59:59.999 WAT = 22:59:59.999 UTC same day
+      dateFilter.lte = new Date(Date.UTC(y, m - 1, d, 22, 59, 59, 999))
+    }
+  }
+
+  const hasDateFilter = Boolean(dateFilter.gte || dateFilter.lte)
 
   const [walletTxs, airtimeTxs, dataTxs] = await Promise.all([
     prisma.walletTransaction.findMany({
-      where: { userId: session.user.id, type: "CREDIT" },
+      where: {
+        userId: session.user.id,
+        type: "CREDIT",
+        ...(hasDateFilter ? { createdAt: dateFilter } : {}),
+      },
       orderBy: { createdAt: "desc" },
-      take: 250,
+      take: hasDateFilter ? 1000 : 500,
     }),
     prisma.airtimePurchase.findMany({
-      where: { userId: session.user.id },
+      where: {
+        userId: session.user.id,
+        ...(hasDateFilter ? { createdAt: dateFilter } : {}),
+      },
       orderBy: { createdAt: "desc" },
-      take: 250,
+      take: hasDateFilter ? 1500 : 1500,
     }),
     prisma.dataPurchase.findMany({
-      where: { userId: session.user.id },
+      where: {
+        userId: session.user.id,
+        ...(hasDateFilter ? { createdAt: dateFilter } : {}),
+      },
       orderBy: { createdAt: "desc" },
-      take: 250,
+      take: hasDateFilter ? 2500 : 2500,
     }),
   ])
 
@@ -91,7 +135,13 @@ export default async function TransactionsPage() {
         </p>
       </div>
 
-      <TransactionsView initialTransactions={unified} isAdmin={isAdmin} />
+      <TransactionsView
+        initialTransactions={unified}
+        isAdmin={isAdmin}
+        initialStartDate={typeof startDate === "string" ? startDate : undefined}
+        initialEndDate={typeof endDate === "string" ? endDate : undefined}
+        initialPreset={typeof preset === "string" ? (preset as any) : undefined}
+      />
     </div>
   )
 }

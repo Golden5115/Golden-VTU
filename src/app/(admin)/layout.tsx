@@ -15,11 +15,22 @@ export default async function AdminLayout({ children }: { children: ReactNode })
     redirect("/login")
   }
 
-  const user = await prisma.user.findUnique({
-    where: { email: session.user.email }
-  })
+  const sessionRole = (session.user as any)?.role
 
-  if (user?.role !== "ADMIN") {
+  let userRole: string | undefined = sessionRole
+  try {
+    const user = await prisma.user.findUnique({
+      where: { email: session.user.email },
+      select: { role: true },
+    })
+    if (user?.role) {
+      userRole = user.role
+    }
+  } catch (err: any) {
+    console.warn("[AdminLayout] Database connection error during role check, using verified session:", err?.message)
+  }
+
+  if (userRole !== "ADMIN") {
     redirect("/dashboard")
   }
 

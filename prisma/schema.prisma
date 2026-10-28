@@ -218,4 +218,44 @@ model SystemSetting {
   updatedAt DateTime @updatedAt
 }
 
+model OfflineVehicle {
+  id              String    @id @default(cuid())
+  cartrackerId    Int       @unique
+  name            String
+  plateNumber     String
+  imei            String    @default("")
+  rawSimNumber    String    @default("")
+  normalizedPhone String    @default("")
+  network         String?
+  deviceModel     String?   @default("")
+  clientName      String?   @default("")
+  clientEmail     String?   @default("")
+  clientPhone     String?   @default("")
+  protocol        String?   @default("")
+  speed           Float?    @default(0)
+  stopDuration    String?   @default("")
+  lastHeartbeat   DateTime?
+  daysOffline     Int       @default(0)
+
+  // Cached local VTU history
+  hasVtuRecord    Boolean   @default(false)
+  lastDataPlan    String?
+  lastDataAmount  Float?
+  lastDataDate    DateTime?
+  dataExpiryDate  DateTime?
+  vtuStatus       String    @default("NEVER_LOADED") // "EXPIRED" | "EXPIRING_SOON" | "ACTIVE" | "NEVER_LOADED"
+  lastAirtimeDate DateTime?
+
+  lastSyncAt      DateTime  @default(now())
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([daysOffline])
+  @@index([network])
+  @@index([vtuStatus])
+  @@index([normalizedPhone])
+  @@index([plateNumber])
+  @@index([imei])
+}
+
 

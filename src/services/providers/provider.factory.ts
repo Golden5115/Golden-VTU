@@ -102,6 +102,19 @@ export async function resolveServerAndProvider(serverId?: string): Promise<{
     })
   }
 
+  // While Server 1 (ClubKonnect) is offline, seamlessly route requests to Server 2 (Pairgate)
+  if (server && (server.serverCode === "server-1" || server.identifier === "CLUBKONNECT")) {
+    const backupServer = await prisma.provider.findFirst({
+      where: {
+        OR: [{ serverCode: "server-2" }, { identifier: "PAIRGATE" }],
+        status: true,
+      },
+    })
+    if (backupServer) {
+      server = backupServer
+    }
+  }
+
   if (!server) {
     // If no provider exists in DB, fallback to mock provider so app doesn't crash
     const mock = new MockProvider()

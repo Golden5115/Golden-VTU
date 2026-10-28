@@ -25,6 +25,8 @@ export default async function TrackersPage() {
     id: s.id,
     serverName: s.serverName,
     serverCode: s.serverCode,
+    providerName: s.providerName,
+    identifier: s.identifier,
     status: s.status,
     isDefault: s.isDefault,
     sortOrder: s.sortOrder,

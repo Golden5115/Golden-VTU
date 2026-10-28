@@ -10,6 +10,7 @@ import {
   CheckCircle2,
   XCircle,
   AlertTriangle,
+  AlertCircle,
   Clock,
   ShieldAlert,
   Loader2,
@@ -100,18 +101,28 @@ export function SimTroubleshootStation({
   // Navigation Mode: Single SIM vs Bulk Multi-SIM
   const [activeTab, setActiveTab] = useState<"single" | "bulk">("single")
 
-  // Shared Wallet Balance & Server Route
+  // Shared Wallet Balance & Server Route (Default to active Server 2 while Server 1 is offline)
+  const defaultServer =
+    servers.find((s) => s.serverCode === "server-2" || s.isDefault) ||
+    servers.find((s) => s.serverCode !== "server-1") ||
+    servers[0]
+
   const [walletBalance, setWalletBalance] = useState(initialWalletBalance)
-  const [selectedServerId, setSelectedServerId] = useState(servers[0]?.id || "")
+  const [selectedServerId, setSelectedServerId] = useState(defaultServer?.id || "")
   const [currentPlans, setCurrentPlans] = useState<any[]>(availablePlans)
   const [plansCache, setPlansCache] = useState<Record<string, any[]>>({
-    [servers[0]?.id || ""]: availablePlans,
+    [defaultServer?.id || ""]: availablePlans,
   })
   const [isSwitchingServer, setIsSwitchingServer] = useState(false)
 
-  const activeServer = servers.find((s) => s.id === selectedServerId) || servers[0]
+  const activeServer = servers.find((s) => s.id === selectedServerId) || defaultServer || servers[0]
 
   async function handleSelectServer(serverId: string) {
+    const target = servers.find((s) => s.id === serverId)
+    // Server 1 is offline and disabled until their API is restored
+    if (target?.serverCode === "server-1" || (target as any)?.identifier === "CLUBKONNECT") {
+      return
+    }
     if (serverId === selectedServerId) return
     setSelectedServerId(serverId)
     setSelectedPlanValue("")
@@ -758,41 +769,60 @@ export function SimTroubleshootStation({
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {servers.map((s, idx) => {
-            const isSelected = s.id === selectedServerId
-            const isServer2 = s.serverCode === "server-2" || idx === 1
+            const isServer2 = s.serverCode === "server-2" || idx === 1 || (s as any).identifier === "PAIRGATE"
+            const isServer1 = s.serverCode === "server-1" || (s as any).identifier === "CLUBKONNECT" || (!isServer2 && idx === 0)
+            const isOffline = isServer1 // Greyed out until active
+            const isSelected = s.id === selectedServerId && !isOffline
             const displayName = isServer2 ? "Server 2" : "Server 1"
-            const subtitle = isServer2 ? "Corporate Data Route" : "Standard Data Route"
+            const subtitle = isServer2
+              ? "Corporate Data Route (Active)"
+              : "Standard Data Route (Temporarily Offline)"
 
             return (
               <button
                 key={s.id}
                 type="button"
-                onClick={() => handleSelectServer(s.id)}
+                disabled={isOffline}
+                onClick={() => {
+                  if (!isOffline) handleSelectServer(s.id)
+                }}
                 className={`relative text-left p-3.5 rounded-xl border-2 transition-all flex flex-col justify-between ${
-                  isSelected
-                    ? isServer2
-                      ? "border-emerald-500 bg-emerald-50/50 ring-2 ring-emerald-500/20 shadow-xs"
-                      : "border-blue-600 bg-blue-50/50 ring-2 ring-blue-600/20 shadow-xs"
+                  isOffline
+                    ? "border-dashed border-slate-300 bg-slate-100/70 opacity-60 cursor-not-allowed select-none shadow-none"
+                    : isSelected
+                    ? "border-emerald-500 bg-emerald-50/50 ring-2 ring-emerald-500/20 shadow-xs"
                     : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50/60"
                 }`}
               >
                 <div className="flex items-start justify-between gap-2">
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
-                      <span className="font-bold text-sm text-gray-900">{displayName}</span>
+                      <span className={`font-bold text-sm ${isOffline ? "text-gray-500" : "text-gray-900"}`}>
+                        {displayName}
+                      </span>
+                      {isOffline ? (
+                        <span className="text-[10px] font-extrabold px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 border border-amber-200">
+                          Inactive
+                        </span>
+                      ) : (
+                        <span className="text-[10px] font-extrabold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 border border-emerald-200">
+                          Operational
+                        </span>
+                      )}
                     </div>
-                    <p className="text-[11px] text-gray-600 font-medium">
+                    <p className="text-[11px] text-gray-500 font-medium">
                       {subtitle}
                     </p>
                   </div>
 
                   <div className="shrink-0">
-                    {isSelected ? (
-                      <span
-                        className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold ${
-                          isServer2 ? "bg-emerald-600 text-white" : "bg-blue-600 text-white"
-                        }`}
-                      >
+                    {isOffline ? (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300">
+                        <AlertCircle className="w-3 h-3 text-amber-700" />
+                        Maintenance
+                      </span>
+                    ) : isSelected ? (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-600 text-white">
                         <Check className="w-3 h-3 stroke-[3]" />
                         Active Route
                       </span>
@@ -807,17 +837,25 @@ export function SimTroubleshootStation({
                 <div className="flex items-center gap-2 pt-2.5 mt-2 border-t border-slate-200/60 text-[10px]">
                   <span
                     className={`font-semibold ${
-                      isSelected
-                        ? isServer2
-                          ? "text-emerald-700"
-                          : "text-blue-700"
+                      isOffline
+                        ? "text-gray-400"
+                        : isSelected
+                        ? "text-emerald-700"
                         : "text-gray-500"
                     }`}
                   >
                     {isServer2 ? "Corporate Gifting & SME Plans" : "Standard SME Plans"}
                   </span>
                   <span className="text-gray-300">•</span>
-                  <span className="text-emerald-600 font-semibold">Active &amp; Ready</span>
+                  {isOffline ? (
+                    <span className="text-amber-700 font-semibold">
+                      Temporarily Inactive (Carrier Maintenance)
+                    </span>
+                  ) : (
+                    <span className="text-emerald-600 font-semibold">
+                      Active &amp; Ready
+                    </span>
+                  )}
                 </div>
               </button>
             )

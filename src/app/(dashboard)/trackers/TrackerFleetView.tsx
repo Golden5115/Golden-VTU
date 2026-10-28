@@ -848,14 +848,22 @@ export function TrackerFleetView({
                   <label className="text-xs font-semibold text-gray-700">Dispensing Server</label>
                   <select
                     name="serverId"
-                    defaultValue={servers[0]?.id}
+                    defaultValue={servers.find((s) => s.serverCode === "server-2" || s.isDefault)?.id || servers[0]?.id}
                     className="w-full border rounded-md px-3 py-2 text-sm mt-1 bg-white"
                   >
-                    {servers.map((s) => (
-                      <option key={s.id} value={s.id}>
-                        {s.serverName} ({s.providerName})
-                      </option>
-                    ))}
+                    {servers.map((s) => {
+                      const isOffline = s.serverCode === "server-1" || (s as any).identifier === "CLUBKONNECT"
+                      return (
+                        <option
+                          key={s.id}
+                          value={s.id}
+                          disabled={isOffline}
+                          className={isOffline ? "text-gray-400 bg-gray-100" : ""}
+                        >
+                          {s.serverName} ({s.providerName}) {isOffline ? "— [Temporarily Offline]" : "— [Active Route]"}
+                        </option>
+                      )
+                    })}
                   </select>
                 </div>
               )}
@@ -978,14 +986,22 @@ export function TrackerFleetView({
                   <label className="text-xs font-semibold text-gray-700">Dispensing Server</label>
                   <select
                     name="serverId"
-                    defaultValue={servers[0]?.id}
+                    defaultValue={servers.find((s) => s.serverCode === "server-2" || s.isDefault)?.id || servers[0]?.id}
                     className="w-full border rounded-md px-3 py-2 text-sm mt-1 bg-white"
                   >
-                    {servers.map((s) => (
-                      <option key={s.id} value={s.id}>
-                        {s.serverName} ({s.providerName})
-                      </option>
-                    ))}
+                    {servers.map((s) => {
+                      const isOffline = s.serverCode === "server-1" || (s as any).identifier === "CLUBKONNECT"
+                      return (
+                        <option
+                          key={s.id}
+                          value={s.id}
+                          disabled={isOffline}
+                          className={isOffline ? "text-gray-400 bg-gray-100" : ""}
+                        >
+                          {s.serverName} ({s.providerName}) {isOffline ? "— [Temporarily Offline]" : "— [Active Route]"}
+                        </option>
+                      )
+                    })}
                   </select>
                 </div>
               )}

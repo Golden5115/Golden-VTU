@@ -65,7 +65,11 @@ export default async function DashboardPage({
   }
 
   // Auto-reconcile any pending orders with telecom carrier
-  await reconcilePendingTransactions(userId)
+  try {
+    await reconcilePendingTransactions(userId)
+  } catch (err: any) {
+    console.warn("[DashboardPage] Reconcile pending skipped:", err?.message)
+  }
 
   const user = await prisma.user.findUnique({
     where: { id: session.user.id },

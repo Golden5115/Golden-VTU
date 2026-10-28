@@ -151,13 +151,22 @@ export async function checkSimHistory(rawPhone: string): Promise<SimDiagnosticHi
   if (lastDataRecord) {
     const daysAgo = getDaysAgo(lastDataRecord.createdAt)
     const purchaseTime = new Date(lastDataRecord.createdAt).getTime()
-    const validityDays = extractValidityDays(lastDataRecord.plan, 30)
+
+    const isServer1 =
+      lastDataRecord.serverId === "server1" ||
+      lastDataRecord.serverId === "cmrj56y3d0000hkn50a4bcy77" ||
+      lastDataRecord.provider?.toLowerCase().includes("clubkonnect") ||
+      lastDataRecord.serverName?.toLowerCase().includes("clubkonnect") ||
+      lastDataRecord.serverName?.toLowerCase().includes("server 1")
+
+    // Server 1 (ClubKonnect) data purchases expire in 7 days; Server 2 / others get normal 30 days
+    const validityDays = isServer1 ? 7 : extractValidityDays(lastDataRecord.plan, 30)
     const expiryTime = purchaseTime + validityDays * 24 * 60 * 60 * 1000
     const now = Date.now()
     const diffMs = expiryTime - now
     const daysUntilExpiry = Math.ceil(diffMs / (1000 * 60 * 60 * 24))
     const isExpired = diffMs <= 0
-    const isExpiringSoon = !isExpired && (validityDays <= 2 ? diffMs < 12 * 60 * 60 * 1000 : daysUntilExpiry <= 3)
+    const isExpiringSoon = !isExpired && (isServer1 ? daysUntilExpiry <= 2 : daysUntilExpiry <= 3)
 
     lastData = {
       id: lastDataRecord.id,

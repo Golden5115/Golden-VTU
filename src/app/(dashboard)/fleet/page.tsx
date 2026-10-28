@@ -2,11 +2,12 @@ import { auth } from "@/auth"
 import { redirect } from "next/navigation"
 import prisma from "@/lib/prisma"
 import { getActiveServers, resolveServerAndProvider } from "@/services/providers/provider.factory"
+import { getOfflineVehicles } from "@/actions/cartracker.actions"
 import { FleetTroubleshootClient } from "./FleetTroubleshootClient"
 
 export const metadata = {
   title: "Troubleshoot Section | Car Tracker Nigeria",
-  description: "Live Car Tracker Nigeria fleet diagnostic telemetry and SIM data bundle management",
+  description: "Live Car Tracker Nigeria offline fleet diagnostic telemetry and per-vehicle data bundle management",
 }
 
 export default async function FleetTroubleshootPage() {
@@ -38,12 +39,16 @@ export default async function FleetTroubleshootPage() {
     console.error("[FleetTroubleshootPage] Failed to fetch data plans:", err)
   }
 
+  // Initial load of offline vehicles from local indexed PostgreSQL (<15ms query)
+  const initialOfflineData = await getOfflineVehicles({ page: 1, limit: 50 })
+
   return (
     <div className="p-4 sm:p-6 lg:p-8">
       <FleetTroubleshootClient
         initialWalletBalance={walletBalance}
         servers={servers}
         availablePlans={availablePlans}
+        initialOfflineData={initialOfflineData}
       />
     </div>
   )

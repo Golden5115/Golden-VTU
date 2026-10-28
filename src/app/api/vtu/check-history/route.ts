@@ -143,14 +143,21 @@ export async function POST(request: NextRequest) {
       let lastData = null
       if (dataRecord) {
         const dAgo = getDaysAgo(dataRecord.createdAt)
-        const validityDays = extractValidityDays(dataRecord.plan, 30)
+        const isServer1 =
+          dataRecord.serverId === "server1" ||
+          dataRecord.serverId === "cmrj56y3d0000hkn50a4bcy77" ||
+          dataRecord.provider?.toLowerCase().includes("clubkonnect") ||
+          dataRecord.serverName?.toLowerCase().includes("clubkonnect") ||
+          dataRecord.serverName?.toLowerCase().includes("server 1")
+
+        const validityDays = isServer1 ? 7 : extractValidityDays(dataRecord.plan, 30)
         const purchaseTime = new Date(dataRecord.createdAt).getTime()
         const expiryTime = purchaseTime + validityDays * 24 * 60 * 60 * 1000
         const now = Date.now()
         const diffMs = expiryTime - now
         const daysUntilExpiry = Math.ceil(diffMs / (1000 * 60 * 60 * 24))
         const isExpired = diffMs <= 0
-        const isExpiringSoon = !isExpired && (validityDays <= 2 ? diffMs < 12 * 60 * 60 * 1000 : daysUntilExpiry <= 3)
+        const isExpiringSoon = !isExpired && (isServer1 ? daysUntilExpiry <= 2 : daysUntilExpiry <= 3)
 
         lastData = {
           id: dataRecord.id,
@@ -194,7 +201,14 @@ export async function POST(request: NextRequest) {
 
       if (contextRecord) {
         daysAgo = getDaysAgo(contextRecord.createdAt)
-        const validityDays = type === "data" ? extractValidityDays(contextRecord.plan, 30) : 30
+        const isServer1 =
+          contextRecord.serverId === "server1" ||
+          contextRecord.serverId === "cmrj56y3d0000hkn50a4bcy77" ||
+          contextRecord.provider?.toLowerCase().includes("clubkonnect") ||
+          contextRecord.serverName?.toLowerCase().includes("clubkonnect") ||
+          contextRecord.serverName?.toLowerCase().includes("server 1")
+
+        const validityDays = type === "data" ? (isServer1 ? 7 : extractValidityDays(contextRecord.plan, 30)) : 30
         isWithinMonth = daysAgo <= validityDays
         statusCategory = isWithinMonth ? "ALREADY_LOADED" : "DUE_FOR_RENEWAL"
         lastPurchase = {
@@ -309,14 +323,21 @@ export async function GET(request: NextRequest) {
     let lastData = null
     if (dataRecord) {
       const daysAgo = getDaysAgo(dataRecord.createdAt)
-      const validityDays = extractValidityDays(dataRecord.plan, 30)
+      const isServer1 =
+        dataRecord.serverId === "server1" ||
+        dataRecord.serverId === "cmrj56y3d0000hkn50a4bcy77" ||
+        dataRecord.provider?.toLowerCase().includes("clubkonnect") ||
+        dataRecord.serverName?.toLowerCase().includes("clubkonnect") ||
+        dataRecord.serverName?.toLowerCase().includes("server 1")
+
+      const validityDays = isServer1 ? 7 : extractValidityDays(dataRecord.plan, 30)
       const purchaseTime = new Date(dataRecord.createdAt).getTime()
       const expiryTime = purchaseTime + validityDays * 24 * 60 * 60 * 1000
       const now = Date.now()
       const diffMs = expiryTime - now
       const daysUntilExpiry = Math.ceil(diffMs / (1000 * 60 * 60 * 24))
       const isExpired = diffMs <= 0
-      const isExpiringSoon = !isExpired && (validityDays <= 2 ? diffMs < 12 * 60 * 60 * 1000 : daysUntilExpiry <= 3)
+      const isExpiringSoon = !isExpired && (isServer1 ? daysUntilExpiry <= 2 : daysUntilExpiry <= 3)
 
       lastData = {
         id: dataRecord.id,

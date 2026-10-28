@@ -36,10 +36,20 @@ export default async function AdminProvidersPage() {
             />
             <CardHeader className="flex flex-row items-start justify-between pb-2">
               <div className="space-y-1">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <CardTitle className="text-lg font-bold">
                     {provider.serverName}
                   </CardTitle>
+                  {provider.serverCode === "server-1" && (
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200">
+                      Temporarily Inactive
+                    </span>
+                  )}
+                  {provider.isDefault && (
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
+                      Primary Default
+                    </span>
+                  )}
                 </div>
                 <div className="flex items-center gap-2 pt-0.5">
                   <span className="text-[11px] font-bold px-2 py-0.5 rounded-md bg-primary/10 text-primary border border-primary/20">
