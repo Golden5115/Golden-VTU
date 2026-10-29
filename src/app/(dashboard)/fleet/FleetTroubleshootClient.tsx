@@ -194,7 +194,7 @@ export function FleetTroubleshootClient({
   // 1-Click Real-Time Live Status Verification
   const [checkingDeviceId, setCheckingDeviceId] = useState<number | null>(null)
   const [liveVerifiedStatus, setLiveVerifiedStatus] = useState<
-    Record<number, { isOnline: boolean; message: string; time: string | null }>
+    Record<number, { isOnline: boolean; onlineStatus?: string; message: string; time: string | null }>
   >({})
   const [liveBanner, setLiveBanner] = useState<{
     type: "success" | "info" | "error"
@@ -210,15 +210,17 @@ export function FleetTroubleshootClient({
         ...prev,
         [cartrackerId]: {
           isOnline: res.isOnline,
+          onlineStatus: res.onlineStatus,
           message: res.message,
           time: res.time,
         },
       }))
 
       if (res.isOnline) {
+        const statusLabel = res.onlineStatus === "online" ? "MOVING" : "ONLINE"
         setLiveBanner({
           type: "success",
-          message: `🟢 ${vehicleName} is ONLINE (${res.onlineStatus.toUpperCase()})! Connected: ${res.time || "Just now"}. Automatically pruned from offline list.`,
+          message: `🟢 ${vehicleName} is ${statusLabel} (${res.onlineStatus.toUpperCase()})! Connected: ${res.time || "Just now"}. Automatically pruned from offline list.`,
         })
         setTimeout(() => {
           setOfflineVehicles((prev) => prev.filter((v) => v.cartrackerId !== cartrackerId))
@@ -331,9 +333,41 @@ export function FleetTroubleshootClient({
     return Math.floor(diff / (1000 * 60 * 60 * 24))
   }
 
+  // Vehicle status helpers (Online/Moving: Green, Online/Parked/Ack: Yellow, Offline: Red)
+  const isVehicleConnected = (status: string | null | undefined) => {
+    const norm = (status || "").toLowerCase().trim()
+    return norm === "online" || norm === "ack"
+  }
+
+  const renderVehicleStatusBadge = (status: string | null | undefined) => {
+    const norm = (status || "").toLowerCase().trim()
+    if (norm === "online") {
+      return (
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300 shadow-2xs">
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+          Moving
+        </span>
+      )
+    }
+    if (norm === "ack") {
+      return (
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300 shadow-2xs">
+          <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+          Online
+        </span>
+      )
+    }
+    return (
+      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-200 shadow-2xs">
+        <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+        Offline
+      </span>
+    )
+  }
+
   // Customer Fleet Filter & Sorting State
   const [custSearch, setCustSearch] = useState("")
-  const [custStatusFilter, setCustStatusFilter] = useState("all") // "all" | "offline" | "online"
+  const [custStatusFilter, setCustStatusFilter] = useState("all") // "all" | "offline" | "online" | "moving"
   const [custDaysFilter, setCustDaysFilter] = useState("all") // "all" | "<1" | "1-7" | "7-30" | "30-90" | "90+"
   const [custVtuFilter, setCustVtuFilter] = useState("all") // "all" | "ACTIVE" | "EXPIRED" | "EXPIRING_SOON" | "NEVER_LOADED"
   const [custNetworkFilter, setCustNetworkFilter] = useState("all") // "all" | "MTN" | "Airtel" | "Glo" | "9mobile"
@@ -369,14 +403,16 @@ export function FleetTroubleshootClient({
     }
 
     if (custStatusFilter === "offline") {
-      result = result.filter((v) => v.onlineStatus !== "online")
+      result = result.filter((v) => !isVehicleConnected(v.onlineStatus))
     } else if (custStatusFilter === "online") {
-      result = result.filter((v) => v.onlineStatus === "online")
+      result = result.filter((v) => (v.onlineStatus || "").toLowerCase() === "ack")
+    } else if (custStatusFilter === "moving") {
+      result = result.filter((v) => (v.onlineStatus || "").toLowerCase() === "online")
     }
 
     if (custDaysFilter !== "all") {
       result = result.filter((v) => {
-        if (v.onlineStatus === "online") return false
+        if (isVehicleConnected(v.onlineStatus)) return false
         const d = getCustDaysOffline(v.lastHeartbeat)
         if (custDaysFilter === "<1") return d === 0
         if (custDaysFilter === "1-7") return d >= 1 && d <= 7
@@ -399,26 +435,26 @@ export function FleetTroubleshootClient({
 
     result.sort((a, b) => {
       if (custSortBy === "offline_first") {
-        const aOff = a.onlineStatus !== "online" ? 0 : 1
-        const bOff = b.onlineStatus !== "online" ? 0 : 1
+        const aOff = !isVehicleConnected(a.onlineStatus) ? 0 : 1
+        const bOff = !isVehicleConnected(b.onlineStatus) ? 0 : 1
         if (aOff !== bOff) return aOff - bOff
         return (a.plateNumber || a.name).localeCompare(b.plateNumber || b.name)
       }
       if (custSortBy === "online_first") {
-        const aOn = a.onlineStatus === "online" ? 0 : 1
-        const bOn = b.onlineStatus === "online" ? 0 : 1
+        const aOn = isVehicleConnected(a.onlineStatus) ? 0 : 1
+        const bOn = isVehicleConnected(b.onlineStatus) ? 0 : 1
         if (aOn !== bOn) return aOn - bOn
         return (a.plateNumber || a.name).localeCompare(b.plateNumber || b.name)
       }
       if (custSortBy === "daysOffline_desc") {
-        const dA = a.onlineStatus === "online" ? -1 : getCustDaysOffline(a.lastHeartbeat)
-        const dB = b.onlineStatus === "online" ? -1 : getCustDaysOffline(b.lastHeartbeat)
+        const dA = isVehicleConnected(a.onlineStatus) ? -1 : getCustDaysOffline(a.lastHeartbeat)
+        const dB = isVehicleConnected(b.onlineStatus) ? -1 : getCustDaysOffline(b.lastHeartbeat)
         if (dA !== dB) return dB - dA
         return (a.plateNumber || a.name).localeCompare(b.plateNumber || b.name)
       }
       if (custSortBy === "daysOffline_asc") {
-        const dA = a.onlineStatus === "online" ? 9999 : getCustDaysOffline(a.lastHeartbeat)
-        const dB = b.onlineStatus === "online" ? 9999 : getCustDaysOffline(b.lastHeartbeat)
+        const dA = isVehicleConnected(a.onlineStatus) ? 9999 : getCustDaysOffline(a.lastHeartbeat)
+        const dB = isVehicleConnected(b.onlineStatus) ? 9999 : getCustDaysOffline(b.lastHeartbeat)
         if (dA !== dB) return dA - dB
         return (a.plateNumber || a.name).localeCompare(b.plateNumber || b.name)
       }
@@ -509,6 +545,7 @@ export function FleetTroubleshootClient({
   // Default server route (Prefers Server 2 / Pairgate while Server 1 is offline)
   const defaultServer = servers.find((s) => s.isDefault) || servers.find((s) => s.id === "pairgate") || servers[0]
   const [modalServerId, setModalServerId] = useState(defaultServer?.id || "")
+  const [modalNetworkId, setModalNetworkId] = useState<string>("01")
   const [modalPlanValue, setModalPlanValue] = useState("")
   const [isDispensing, setIsDispensing] = useState(false)
   const [rechargeFeedback, setRechargeFeedback] = useState<{
@@ -533,6 +570,20 @@ export function FleetTroubleshootClient({
     setRechargeFeedback(null)
     setModalServerId(defaultServer?.id || servers[0]?.id || "")
     setModalPlanValue("")
+
+    // Auto-detect initial network ID, while allowing the user to freely change it
+    const detected = vehicle.phone ? detectNetwork(vehicle.phone) : null
+    let initialNetId = "01"
+    if (detected?.id) {
+      initialNetId = detected.id
+    } else if (vehicle.network) {
+      const up = vehicle.network.toUpperCase()
+      if (up.includes("AIRTEL")) initialNetId = "04"
+      else if (up.includes("GLO")) initialNetId = "02"
+      else if (up.includes("9MOBILE") || up.includes("ETISALAT")) initialNetId = "03"
+      else initialNetId = "01"
+    }
+    setModalNetworkId(initialNetId)
     setSingleRechargeModalOpen(true)
   }
 
@@ -541,9 +592,19 @@ export function FleetTroubleshootClient({
   const planPrice = Number(planPriceStr || 0)
   const planName = planValidity && !rawPlanName?.toLowerCase().includes("day") ? `${rawPlanName} (${planValidity})` : rawPlanName
 
-  // Resolve network ID for recharge
+  // Resolve detected network info for display
   const detectedNet = targetVehicle?.phone ? detectNetwork(targetVehicle.phone) : null
-  const targetNetworkId = detectedNet?.id || (targetVehicle?.network ? (NETWORK_COLORS[targetVehicle.network]?.label === "AIRTEL" ? "04" : NETWORK_COLORS[targetVehicle.network]?.label === "GLO" ? "02" : NETWORK_COLORS[targetVehicle.network]?.label === "9MOBILE" ? "03" : "01") : "01")
+
+  // Filter available plans for the selected network in the modal
+  const modalFilteredPlans = availablePlans.filter((p) => {
+    const pNet = String(p.network || "").trim()
+    const pNetName = String(p.networkName || "").toUpperCase().trim()
+    if (modalNetworkId === "01") return pNet === "01" || pNetName.includes("MTN")
+    if (modalNetworkId === "04") return pNet === "04" || pNetName.includes("AIRTEL")
+    if (modalNetworkId === "02") return pNet === "02" || pNetName.includes("GLO")
+    if (modalNetworkId === "03") return pNet === "03" || pNetName.includes("9MOBILE") || pNetName.includes("ETISALAT")
+    return false
+  })
 
   const handleExecuteSingleRecharge = async () => {
     if (!targetVehicle) return
@@ -565,7 +626,7 @@ export function FleetTroubleshootClient({
         vehicleId: targetVehicle.vehicleId,
         vehicleName: targetVehicle.vehicleName,
         phone: targetVehicle.phone,
-        networkId: targetNetworkId,
+        networkId: modalNetworkId,
         dataPlanId: planId,
         planName: planName || "1.0GB SME Data",
         amount: planPrice,
@@ -1656,7 +1717,8 @@ export function FleetTroubleshootClient({
                     >
                       <option value="all">All Connection Statuses</option>
                       <option value="offline">🔴 Offline Only</option>
-                      <option value="online">🟢 Online Only</option>
+                      <option value="online">🟡 Online Only</option>
+                      <option value="moving">🟢 Moving Only</option>
                     </select>
 
                     {/* Days Offline Filter */}
@@ -1882,8 +1944,10 @@ export function FleetTroubleshootClient({
                           </tr>
                         ) : (
                           filteredCustomerVehicles.map((v) => {
-                            const isOnline = v.onlineStatus === "online"
-                            const daysOff = isOnline ? 0 : getCustDaysOffline(v.lastHeartbeat)
+                            const isMoving = (v.onlineStatus || "").toLowerCase() === "online"
+                            const isParkedOnline = (v.onlineStatus || "").toLowerCase() === "ack"
+                            const isConnected = isMoving || isParkedOnline
+                            const daysOff = isConnected ? 0 : getCustDaysOffline(v.lastHeartbeat)
 
                             return (
                               <tr key={v.id} className="transition-colors hover:bg-slate-50/80">
@@ -1932,22 +1996,19 @@ export function FleetTroubleshootClient({
 
                                 {/* Live Status */}
                                 <td className="py-3 px-4">
-                                  <span
-                                    className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                                      isOnline
-                                        ? "bg-emerald-100 text-emerald-800"
-                                        : "bg-rose-100 text-rose-800"
-                                    }`}
-                                  >
-                                    {v.onlineStatus}
-                                  </span>
+                                  {renderVehicleStatusBadge(v.onlineStatus)}
                                 </td>
 
                                 {/* Days Offline */}
                                 <td className="py-3 px-4">
-                                  {isOnline ? (
+                                  {isMoving ? (
                                     <span className="text-[11px] text-emerald-600 font-semibold flex items-center gap-1">
                                       <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                                      Moving Now
+                                    </span>
+                                  ) : isParkedOnline ? (
+                                    <span className="text-[11px] text-amber-600 font-semibold flex items-center gap-1">
+                                      <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
                                       Live Now
                                     </span>
                                   ) : (
@@ -2107,8 +2168,10 @@ export function FleetTroubleshootClient({
                       </div>
                     ) : (
                       filteredCustomerVehicles.map((v) => {
-                        const isOnline = v.onlineStatus === "online"
-                        const daysOff = isOnline ? 0 : getCustDaysOffline(v.lastHeartbeat)
+                        const isMoving = (v.onlineStatus || "").toLowerCase() === "online"
+                        const isParkedOnline = (v.onlineStatus || "").toLowerCase() === "ack"
+                        const isConnected = isMoving || isParkedOnline
+                        const daysOff = isConnected ? 0 : getCustDaysOffline(v.lastHeartbeat)
 
                         return (
                           <div key={`m-cust-${v.id}`} className="p-3 bg-white hover:bg-slate-50/70 transition-colors space-y-2">
@@ -2136,16 +2199,8 @@ export function FleetTroubleshootClient({
                               </div>
 
                               <div className="flex flex-col items-end gap-1 shrink-0">
-                                <span
-                                  className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                                    isOnline
-                                      ? "bg-emerald-100 text-emerald-800"
-                                      : "bg-rose-100 text-rose-800"
-                                  }`}
-                                >
-                                  {v.onlineStatus}
-                                </span>
-                                {!isOnline && (
+                                {renderVehicleStatusBadge(v.onlineStatus)}
+                                {!isConnected && (
                                   <span className="text-[9px] font-bold text-slate-500">
                                     {daysOff === 0 ? "Today (<24h)" : `${daysOff}d offline`}
                                   </span>
@@ -2332,8 +2387,10 @@ export function FleetTroubleshootClient({
                     </thead>
                     <tbody className="divide-y divide-gray-100">
                       {liveVehicles.map((v) => {
-                        const isOnline = v.onlineStatus === "online"
-                        const daysOff = isOnline ? 0 : getCustDaysOffline(v.lastHeartbeat)
+                        const isMoving = (v.onlineStatus || "").toLowerCase() === "online"
+                        const isParkedOnline = (v.onlineStatus || "").toLowerCase() === "ack"
+                        const isConnected = isMoving || isParkedOnline
+                        const daysOff = isConnected ? 0 : getCustDaysOffline(v.lastHeartbeat)
 
                         return (
                           <tr key={v.id} className="transition-colors hover:bg-slate-50/80">
@@ -2381,16 +2438,8 @@ export function FleetTroubleshootClient({
                             {/* Live Status */}
                             <td className="py-3 px-4">
                               <div className="flex flex-col items-start gap-0.5">
-                                <span
-                                  className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                                    isOnline
-                                      ? "bg-emerald-100 text-emerald-800"
-                                      : "bg-rose-100 text-rose-800"
-                                  }`}
-                                >
-                                  {v.onlineStatus}
-                                </span>
-                                {!isOnline && (
+                                {renderVehicleStatusBadge(v.onlineStatus)}
+                                {!isConnected && (
                                   <span className="text-[10px] font-semibold text-slate-500">
                                     {daysOff === 0 ? "Today (<24h)" : `${daysOff}d offline`}
                                   </span>
@@ -2505,8 +2554,10 @@ export function FleetTroubleshootClient({
                 {/* Mobile Card List (Zero horizontal scrolling) */}
                 <div className="md:hidden divide-y divide-slate-100">
                   {liveVehicles.map((v) => {
-                    const isOnline = v.onlineStatus === "online"
-                    const daysOff = isOnline ? 0 : getCustDaysOffline(v.lastHeartbeat)
+                    const isMoving = (v.onlineStatus || "").toLowerCase() === "online"
+                    const isParkedOnline = (v.onlineStatus || "").toLowerCase() === "ack"
+                    const isConnected = isMoving || isParkedOnline
+                    const daysOff = isConnected ? 0 : getCustDaysOffline(v.lastHeartbeat)
 
                     return (
                       <div key={`m-dir-${v.id}`} className="p-3 bg-white hover:bg-slate-50/70 transition-colors space-y-2">
@@ -2534,16 +2585,8 @@ export function FleetTroubleshootClient({
                           </div>
 
                           <div className="flex flex-col items-end gap-1 shrink-0">
-                            <span
-                              className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                                isOnline
-                                  ? "bg-emerald-100 text-emerald-800"
-                                  : "bg-rose-100 text-rose-800"
-                              }`}
-                            >
-                              {v.onlineStatus}
-                            </span>
-                            {!isOnline && (
+                            {renderVehicleStatusBadge(v.onlineStatus)}
+                            {!isConnected && (
                               <span className="text-[9px] font-bold text-slate-500">
                                 {daysOff === 0 ? "Today (<24h)" : `${daysOff}d offline`}
                               </span>
@@ -2720,7 +2763,11 @@ export function FleetTroubleshootClient({
               <div className="flex items-center gap-2">
                 <span
                   className={`w-2 sm:w-2.5 h-2 sm:h-2.5 rounded-full ${
-                    liveVerifiedStatus[targetVehicle.vehicleId]?.isOnline
+                    liveVerifiedStatus[targetVehicle.vehicleId]?.onlineStatus === "online"
+                      ? "bg-emerald-500 animate-ping"
+                      : liveVerifiedStatus[targetVehicle.vehicleId]?.onlineStatus === "ack"
+                      ? "bg-amber-500"
+                      : liveVerifiedStatus[targetVehicle.vehicleId]?.isOnline
                       ? "bg-emerald-500 animate-ping"
                       : "bg-rose-500 animate-pulse"
                   }`}
@@ -2728,7 +2775,11 @@ export function FleetTroubleshootClient({
                 <div>
                   <div className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider">Live Tracker Status</div>
                   <div className="font-bold text-slate-800 text-xs">
-                    {liveVerifiedStatus[targetVehicle.vehicleId]?.isOnline
+                    {liveVerifiedStatus[targetVehicle.vehicleId]?.onlineStatus === "online"
+                      ? "🟢 MOVING (Live Telemetry)"
+                      : liveVerifiedStatus[targetVehicle.vehicleId]?.onlineStatus === "ack"
+                      ? "🟡 ONLINE (Connected / Parked)"
+                      : liveVerifiedStatus[targetVehicle.vehicleId]?.isOnline
                       ? "🟢 ONLINE (Connected Just Now)"
                       : liveVerifiedStatus[targetVehicle.vehicleId]
                       ? "🔴 Confirmed Offline"
@@ -2740,7 +2791,7 @@ export function FleetTroubleshootClient({
                 type="button"
                 onClick={() => handleCheckLiveStatus(targetVehicle.vehicleId, targetVehicle.vehicleName)}
                 disabled={checkingDeviceId === targetVehicle.vehicleId}
-                className="h-7 px-2.5 rounded-lg border border-indigo-200 bg-white hover:bg-indigo-50 text-indigo-700 text-[10px] sm:text-xs font-bold inline-flex items-center gap-1 shadow-2xs"
+                className="h-7 px-2.5 rounded-lg border border-indigo-200 bg-white hover:bg-indigo-50 text-indigo-700 text-[10px] sm:text-xs font-bold inline-flex items-center gap-1 shadow-2xs cursor-pointer"
               >
                 {checkingDeviceId === targetVehicle.vehicleId ? (
                   <Loader2 className="w-3 h-3 animate-spin text-indigo-600" />
@@ -2777,6 +2828,44 @@ export function FleetTroubleshootClient({
               </div>
             )}
 
+            {/* Telecom Network Selector */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <label className="text-[11px] sm:text-xs font-bold text-slate-700">Select Telecom Network *</label>
+                <span className="text-[10px] text-slate-500 font-medium">
+                  Auto-detected: <span className="font-bold text-slate-700">{detectedNet?.name || targetVehicle.network || "MTN"}</span>
+                </span>
+              </div>
+              <div className="grid grid-cols-4 gap-1.5 sm:gap-2">
+                {[
+                  { id: "01", name: "MTN", active: "ring-2 ring-amber-500 bg-amber-400 text-slate-950 font-black shadow-xs", dot: "bg-amber-500" },
+                  { id: "04", name: "Airtel", active: "ring-2 ring-rose-500 bg-rose-600 text-white font-black shadow-xs", dot: "bg-rose-500" },
+                  { id: "02", name: "Glo", active: "ring-2 ring-emerald-600 bg-emerald-600 text-white font-black shadow-xs", dot: "bg-emerald-500" },
+                  { id: "03", name: "9Mobile", active: "ring-2 ring-teal-600 bg-teal-700 text-white font-black shadow-xs", dot: "bg-teal-500" },
+                ].map((net) => {
+                  const isSelected = modalNetworkId === net.id
+                  return (
+                    <button
+                      key={net.id}
+                      type="button"
+                      onClick={() => {
+                        setModalNetworkId(net.id)
+                        setModalPlanValue("")
+                      }}
+                      className={`h-9 sm:h-10 rounded-xl border flex items-center justify-center gap-1.5 text-xs font-bold transition-all cursor-pointer ${
+                        isSelected
+                          ? net.active
+                          : "border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700"
+                      }`}
+                    >
+                      <span className={`w-2 h-2 rounded-full ${isSelected ? "bg-white" : net.dot}`} />
+                      <span>{net.name}</span>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+
             {/* Telecom Server Route Selector */}
             <div className="space-y-1">
               <label className="text-[11px] sm:text-xs font-bold text-slate-700">Telecom Server Route</label>
@@ -2795,14 +2884,19 @@ export function FleetTroubleshootClient({
 
             {/* Plan Selector */}
             <div className="space-y-1">
-              <label className="text-[11px] sm:text-xs font-bold text-slate-700">Select Data Bundle</label>
+              <div className="flex items-center justify-between">
+                <label className="text-[11px] sm:text-xs font-bold text-slate-700">Select Data Bundle *</label>
+                <span className="text-[10px] text-indigo-700 font-bold bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">
+                  {modalNetworkId === "01" ? "MTN Plans" : modalNetworkId === "04" ? "Airtel Plans" : modalNetworkId === "02" ? "Glo Plans" : "9Mobile Plans"}
+                </span>
+              </div>
               <select
                 value={modalPlanValue}
                 onChange={(e) => setModalPlanValue(e.target.value)}
                 className="w-full h-9 sm:h-10 border border-slate-200 rounded-xl px-2.5 sm:px-3 text-[11px] sm:text-xs bg-white font-semibold text-slate-800"
               >
                 <option value="">-- Choose Data Plan --</option>
-                {availablePlans.map((p) => {
+                {modalFilteredPlans.map((p) => {
                   const hasDuration = /day|month|week|daily|weekly|monthly|\(\d+/i.test(p.name)
                   const validityLabel = !hasDuration && p.validity ? ` (${p.validity})` : ""
                   return (
@@ -2811,11 +2905,30 @@ export function FleetTroubleshootClient({
                     </option>
                   )
                 })}
-                {availablePlans.length === 0 && (
+                {modalFilteredPlans.length === 0 && modalNetworkId === "01" && (
                   <>
-                    <option value="8::380::1.0GB SME (30 Days)::30 Days">1.0GB SME (30 Days) — ₦380 (Recommended)</option>
-                    <option value="7::245::500MB SME (30 Days)::30 Days">500MB SME (30 Days) — ₦245</option>
+                    <option value="14::380::500MB (CG) (30 Days)::30 Days">500MB (CG) (30 Days) — ₦380</option>
+                    <option value="8::380::1.0GB SME (30 Days)::30 Days">1.0GB SME (30 Days) — ₦380 (Recommended 30-Day Plan)</option>
                     <option value="9::660::2.0GB SME (30 Days)::30 Days">2.0GB SME (30 Days) — ₦660</option>
+                  </>
+                )}
+                {modalFilteredPlans.length === 0 && modalNetworkId === "04" && (
+                  <>
+                    <option value="89::380::500MB (CG) (30 Days)::30 Days">500MB (CG) (30 Days) — ₦380 (Recommended for Airtel Trackers)</option>
+                    <option value="90::500::1.0GB (CG) (30 Days)::30 Days">1.0GB (CG) (30 Days) — ₦500</option>
+                    <option value="91::1000::2.0GB (CG) (30 Days)::30 Days">2.0GB (CG) (30 Days) — ₦1,000</option>
+                  </>
+                )}
+                {modalFilteredPlans.length === 0 && modalNetworkId === "02" && (
+                  <>
+                    <option value="glo-500::380::500MB (Gifting) (30 Days)::30 Days">500MB (Gifting) (30 Days) — ₦380</option>
+                    <option value="glo-1000::500::1.0GB (Gifting) (30 Days)::30 Days">1.0GB (Gifting) (30 Days) — ₦500</option>
+                  </>
+                )}
+                {modalFilteredPlans.length === 0 && modalNetworkId === "03" && (
+                  <>
+                    <option value="9mob-500::380::500MB (SME) (30 Days)::30 Days">500MB (SME) (30 Days) — ₦380</option>
+                    <option value="9mob-1000::500::1.0GB (SME) (30 Days)::30 Days">1.0GB (SME) (30 Days) — ₦500</option>
                   </>
                 )}
               </select>
