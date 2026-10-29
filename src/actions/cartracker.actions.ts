@@ -361,18 +361,31 @@ export async function searchCustomerFleet(emailInput: string): Promise<CustomerF
       }
     }
 
-    // 2. Fetch the devices belonging to this customer
-    const devListRes = await fetch(
-      `${baseUrl}/admin/client/${matchedClient.id}/devices?lang=en&user_api_hash=${encodeURIComponent(token)}&limit=100`,
-      { cache: "no-store" }
-    )
+    // 2. Fetch all devices belonging to this customer (auto-paginated up to 1,000/page)
+    let devicesList: any[] = []
+    let page = 1
+    const perPageLimit = 1000
 
-    if (!devListRes.ok) {
-      throw new Error(`Failed to load devices for client ID ${matchedClient.id}`)
+    while (true) {
+      const devListRes = await fetch(
+        `${baseUrl}/admin/client/${matchedClient.id}/devices?lang=en&user_api_hash=${encodeURIComponent(token)}&page=${page}&limit=${perPageLimit}`,
+        { cache: "no-store" }
+      )
+
+      if (!devListRes.ok) {
+        throw new Error(`Failed to load devices for client ID ${matchedClient.id}`)
+      }
+
+      const devListData = await devListRes.json()
+      const batch: any[] = devListData?.data || []
+      devicesList.push(...batch)
+
+      const lastPage = devListData?.pagination?.last_page || 1
+      if (page >= lastPage || batch.length < perPageLimit) {
+        break
+      }
+      page++
     }
-
-    const devListData = await devListRes.json()
-    const devicesList: any[] = devListData?.data || []
 
     if (devicesList.length === 0) {
       return {
@@ -387,32 +400,43 @@ export async function searchCustomerFleet(emailInput: string): Promise<CustomerF
       }
     }
 
-    // 3. For each device, fetch detailed attributes and live telemetry in parallel
-    const fullDevices = await Promise.all(
-      devicesList.map(async (d) => {
-        try {
-          const [singleRes, telemetry] = await Promise.all([
-            fetch(
-              `${baseUrl}/admin/device/${d.id}?lang=en&user_api_hash=${encodeURIComponent(token)}`,
-              { cache: "no-store" }
-            )
-              .then((r) => (r.ok ? r.json() : null))
-              .catch(() => null),
-            fetchDeviceTelemetry(baseUrl, token, d.id),
-          ])
-          const devData = singleRes?.data || d
-          return {
-            ...devData,
-            telemetry,
+    // 3. For each device, fetch detailed attributes and live telemetry in concurrency-controlled chunks
+    const fullDevices: any[] = []
+    const CHUNK_SIZE = 25
+    for (let i = 0; i < devicesList.length; i += CHUNK_SIZE) {
+      const chunk = devicesList.slice(i, i + CHUNK_SIZE)
+      const chunkResults = await Promise.all(
+        chunk.map(async (d) => {
+          try {
+            const [singleRes, telemetry] = await Promise.all([
+              fetch(
+                `${baseUrl}/admin/device/${d.id}?lang=en&user_api_hash=${encodeURIComponent(token)}`,
+                { cache: "no-store" }
+              )
+                .then((r) => (r.ok ? r.json() : null))
+                .catch(() => null),
+              fetchDeviceTelemetry(baseUrl, token, d.id),
+            ])
+            const devData = singleRes?.data || d
+            return {
+              ...devData,
+              telemetry,
+            }
+          } catch (e) {
+            return d
           }
-        } catch (e) {
-          return d
-        }
-      })
-    )
+        })
+      )
+      fullDevices.push(...chunkResults)
+    }
 
-    // 4. Enrich each device with local VTU database history
-    const enrichedVehicles = await Promise.all(fullDevices.map(enrichDeviceWithVtu))
+    // 4. Enrich each device with local VTU database history in safe chunks
+    const enrichedVehicles: FleetTrackerDevice[] = []
+    for (let i = 0; i < fullDevices.length; i += CHUNK_SIZE) {
+      const chunk = fullDevices.slice(i, i + CHUNK_SIZE)
+      const res = await Promise.all(chunk.map(enrichDeviceWithVtu))
+      enrichedVehicles.push(...res)
+    }
 
     // Sort: Expired first, then Expiring soon, then Never loaded, then Active
     const statusOrder: Record<string, number> = {
@@ -1015,7 +1039,7 @@ export interface GetOfflineVehiclesParams {
   daysOfflineFilter?: string
   vtuStatusFilter?: string
   networkFilter?: string
-  sortBy?: "daysOffline_desc" | "daysOffline_asc" | "lastHeartbeat_desc" | "plate_asc"
+  sortBy?: "daysOffline_desc" | "daysOffline_asc" | "lastHeartbeat_desc" | "lastHeartbeat_asc" | "plate_asc" | "plate_desc"
 }
 
 export interface GetOfflineVehiclesResult {
@@ -1141,9 +1165,19 @@ export async function getOfflineVehicles(params: GetOfflineVehiclesParams = {}):
 
     // Sorting
     let orderBy: any = { daysOffline: "desc" }
-    if (params.sortBy === "daysOffline_asc") orderBy = { daysOffline: "asc" }
-    else if (params.sortBy === "lastHeartbeat_desc") orderBy = { lastHeartbeat: "desc" }
-    else if (params.sortBy === "plate_asc") orderBy = { plateNumber: "asc" }
+    if (params.sortBy === "daysOffline_asc") {
+      orderBy = { daysOffline: "asc" }
+    } else if (params.sortBy === "daysOffline_desc") {
+      orderBy = { daysOffline: "desc" }
+    } else if (params.sortBy === "lastHeartbeat_desc") {
+      orderBy = { lastHeartbeat: { sort: "desc", nulls: "last" } }
+    } else if (params.sortBy === "lastHeartbeat_asc") {
+      orderBy = { lastHeartbeat: { sort: "asc", nulls: "last" } }
+    } else if (params.sortBy === "plate_asc") {
+      orderBy = { plateNumber: "asc" }
+    } else if (params.sortBy === "plate_desc") {
+      orderBy = { plateNumber: "desc" }
+    }
 
     // -------------------------------------------------------------
     // DB QUOTA OPTIMIZATION: Cache summary metrics for 10 minutes

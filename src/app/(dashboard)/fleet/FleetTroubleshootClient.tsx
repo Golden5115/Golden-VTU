@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useTransition, useRef } from "react"
+import { useState, useTransition, useRef, useMemo } from "react"
 import Link from "next/link"
 import {
   Radio,
@@ -34,6 +34,9 @@ import {
   Sparkles,
   CloudDownload,
   CheckCircle,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -118,14 +121,17 @@ export function FleetTroubleshootClient({
     }
   )
 
-  // Offline Filters
+  // Offline Filters & Sorting
   const [offlineSearch, setOfflineSearch] = useState("")
   const [offlineDaysFilter, setOfflineDaysFilter] = useState("all")
   const [offlineVtuFilter, setOfflineVtuFilter] = useState("all")
   const [offlineNetworkFilter, setOfflineNetworkFilter] = useState("all")
+  const [offlineSortBy, setOfflineSortBy] = useState<
+    "daysOffline_desc" | "daysOffline_asc" | "lastHeartbeat_desc" | "lastHeartbeat_asc" | "plate_asc" | "plate_desc"
+  >("daysOffline_desc")
   const [isLoadingOffline, startOfflineTransition] = useTransition()
 
-  // Refetch offline vehicles with current filters
+  // Refetch offline vehicles with current filters and active sort
   const fetchOfflinePage = (
     pageNumber: number = 1,
     overrides?: {
@@ -133,12 +139,14 @@ export function FleetTroubleshootClient({
       days?: string
       vtu?: string
       network?: string
+      sort?: "daysOffline_desc" | "daysOffline_asc" | "lastHeartbeat_desc" | "lastHeartbeat_asc" | "plate_asc" | "plate_desc"
     }
   ) => {
     const s = overrides?.search !== undefined ? overrides.search : offlineSearch
     const d = overrides?.days !== undefined ? overrides.days : offlineDaysFilter
     const v = overrides?.vtu !== undefined ? overrides.vtu : offlineVtuFilter
     const n = overrides?.network !== undefined ? overrides.network : offlineNetworkFilter
+    const sort = overrides?.sort !== undefined ? overrides.sort : offlineSortBy
 
     startOfflineTransition(async () => {
       const res = await getOfflineVehicles({
@@ -148,6 +156,7 @@ export function FleetTroubleshootClient({
         daysOfflineFilter: d,
         vtuStatusFilter: v,
         networkFilter: n,
+        sortBy: sort,
       })
       if (res.success) {
         setOfflineVehicles(res.vehicles)
@@ -157,6 +166,24 @@ export function FleetTroubleshootClient({
         setOfflineSummary(res.summary)
       }
     })
+  }
+
+  const handleSortToggle = (column: "daysOffline" | "lastHeartbeat" | "plate") => {
+    let nextSort: "daysOffline_desc" | "daysOffline_asc" | "lastHeartbeat_desc" | "lastHeartbeat_asc" | "plate_asc" | "plate_desc"
+
+    if (column === "daysOffline") {
+      // Toggle between longest offline first (desc) and most recently offline first (asc)
+      nextSort = offlineSortBy === "daysOffline_desc" ? "daysOffline_asc" : "daysOffline_desc"
+    } else if (column === "lastHeartbeat") {
+      // Toggle between newest offline first (desc) and oldest offline first (asc)
+      nextSort = offlineSortBy === "lastHeartbeat_desc" ? "lastHeartbeat_asc" : "lastHeartbeat_desc"
+    } else {
+      // Toggle between plate A-Z (asc) and Z-A (desc)
+      nextSort = offlineSortBy === "plate_asc" ? "plate_desc" : "plate_asc"
+    }
+
+    setOfflineSortBy(nextSort)
+    fetchOfflinePage(1, { sort: nextSort })
   }
 
   const handleOfflineSearchSubmit = (e: React.FormEvent) => {
@@ -294,6 +321,129 @@ export function FleetTroubleshootClient({
   const [onlineSearchError, setOnlineSearchError] = useState<string | null>(null)
   const [hasSearchedOnline, setHasSearchedOnline] = useState(false)
 
+  // Helper to calculate days offline from a device's last heartbeat
+  const getCustDaysOffline = (lastHeartbeat?: string | null): number => {
+    if (!lastHeartbeat) return 999
+    const t = new Date(lastHeartbeat).getTime()
+    if (isNaN(t) || t <= 0) return 999
+    const diff = Date.now() - t
+    if (diff < 0) return 0
+    return Math.floor(diff / (1000 * 60 * 60 * 24))
+  }
+
+  // Customer Fleet Filter & Sorting State
+  const [custSearch, setCustSearch] = useState("")
+  const [custStatusFilter, setCustStatusFilter] = useState("all") // "all" | "offline" | "online"
+  const [custDaysFilter, setCustDaysFilter] = useState("all") // "all" | "<1" | "1-7" | "7-30" | "30-90" | "90+"
+  const [custVtuFilter, setCustVtuFilter] = useState("all") // "all" | "ACTIVE" | "EXPIRED" | "EXPIRING_SOON" | "NEVER_LOADED"
+  const [custNetworkFilter, setCustNetworkFilter] = useState("all") // "all" | "MTN" | "Airtel" | "Glo" | "9mobile"
+  const [custSortBy, setCustSortBy] = useState<
+    "offline_first" | "online_first" | "daysOffline_desc" | "daysOffline_asc" | "lastHeartbeat_desc" | "lastHeartbeat_asc" | "plate_asc" | "plate_desc"
+  >("offline_first")
+
+  const handleCustSortToggle = (col: "plate" | "status" | "daysOffline" | "heartbeat") => {
+    if (col === "plate") {
+      setCustSortBy((prev) => (prev === "plate_asc" ? "plate_desc" : "plate_asc"))
+    } else if (col === "status") {
+      setCustSortBy((prev) => (prev === "offline_first" ? "online_first" : "offline_first"))
+    } else if (col === "daysOffline") {
+      setCustSortBy((prev) => (prev === "daysOffline_desc" ? "daysOffline_asc" : "daysOffline_desc"))
+    } else if (col === "heartbeat") {
+      setCustSortBy((prev) => (prev === "lastHeartbeat_desc" ? "lastHeartbeat_asc" : "lastHeartbeat_desc"))
+    }
+  }
+
+  const filteredCustomerVehicles = useMemo(() => {
+    let result = [...liveVehicles]
+
+    const q = custSearch.trim().toLowerCase()
+    if (q) {
+      result = result.filter(
+        (v) =>
+          v.name.toLowerCase().includes(q) ||
+          v.plateNumber.toLowerCase().includes(q) ||
+          v.normalizedPhone.includes(q) ||
+          v.rawSimNumber.includes(q) ||
+          v.imei.includes(q)
+      )
+    }
+
+    if (custStatusFilter === "offline") {
+      result = result.filter((v) => v.onlineStatus !== "online")
+    } else if (custStatusFilter === "online") {
+      result = result.filter((v) => v.onlineStatus === "online")
+    }
+
+    if (custDaysFilter !== "all") {
+      result = result.filter((v) => {
+        if (v.onlineStatus === "online") return false
+        const d = getCustDaysOffline(v.lastHeartbeat)
+        if (custDaysFilter === "<1") return d === 0
+        if (custDaysFilter === "1-7") return d >= 1 && d <= 7
+        if (custDaysFilter === "7-30") return d > 7 && d <= 30
+        if (custDaysFilter === "30-90") return d > 30 && d <= 90
+        if (custDaysFilter === "90+") return d > 90
+        return true
+      })
+    }
+
+    if (custVtuFilter !== "all") {
+      result = result.filter((v) => v.vtuHistory.statusBadge === custVtuFilter)
+    }
+
+    if (custNetworkFilter !== "all") {
+      result = result.filter(
+        (v) => v.network?.name?.toLowerCase() === custNetworkFilter.toLowerCase()
+      )
+    }
+
+    result.sort((a, b) => {
+      if (custSortBy === "offline_first") {
+        const aOff = a.onlineStatus !== "online" ? 0 : 1
+        const bOff = b.onlineStatus !== "online" ? 0 : 1
+        if (aOff !== bOff) return aOff - bOff
+        return (a.plateNumber || a.name).localeCompare(b.plateNumber || b.name)
+      }
+      if (custSortBy === "online_first") {
+        const aOn = a.onlineStatus === "online" ? 0 : 1
+        const bOn = b.onlineStatus === "online" ? 0 : 1
+        if (aOn !== bOn) return aOn - bOn
+        return (a.plateNumber || a.name).localeCompare(b.plateNumber || b.name)
+      }
+      if (custSortBy === "daysOffline_desc") {
+        const dA = a.onlineStatus === "online" ? -1 : getCustDaysOffline(a.lastHeartbeat)
+        const dB = b.onlineStatus === "online" ? -1 : getCustDaysOffline(b.lastHeartbeat)
+        if (dA !== dB) return dB - dA
+        return (a.plateNumber || a.name).localeCompare(b.plateNumber || b.name)
+      }
+      if (custSortBy === "daysOffline_asc") {
+        const dA = a.onlineStatus === "online" ? 9999 : getCustDaysOffline(a.lastHeartbeat)
+        const dB = b.onlineStatus === "online" ? 9999 : getCustDaysOffline(b.lastHeartbeat)
+        if (dA !== dB) return dA - dB
+        return (a.plateNumber || a.name).localeCompare(b.plateNumber || b.name)
+      }
+      if (custSortBy === "lastHeartbeat_desc") {
+        const timeA = a.lastHeartbeat ? new Date(a.lastHeartbeat).getTime() : 0
+        const timeB = b.lastHeartbeat ? new Date(b.lastHeartbeat).getTime() : 0
+        return timeB - timeA
+      }
+      if (custSortBy === "lastHeartbeat_asc") {
+        const timeA = a.lastHeartbeat ? new Date(a.lastHeartbeat).getTime() : Infinity
+        const timeB = b.lastHeartbeat ? new Date(b.lastHeartbeat).getTime() : Infinity
+        return timeA - timeB
+      }
+      if (custSortBy === "plate_asc") {
+        return (a.plateNumber || a.name).localeCompare(b.plateNumber || b.name)
+      }
+      if (custSortBy === "plate_desc") {
+        return (b.plateNumber || b.name).localeCompare(a.plateNumber || a.name)
+      }
+      return 0
+    })
+
+    return result
+  }, [liveVehicles, custSearch, custStatusFilter, custDaysFilter, custVtuFilter, custNetworkFilter, custSortBy])
+
   // Handle Mode A: Email Search
   const handleSearchEmail = (e?: React.FormEvent) => {
     if (e) e.preventDefault()
@@ -351,6 +501,9 @@ export function FleetTroubleshootClient({
     phone: string
     network: string | null
     imei?: string
+    vtuStatus?: string
+    lastDataDate?: string | null
+    lastDataPlan?: string | null
   } | null>(null)
 
   // Default server route (Prefers Server 2 / Pairgate while Server 1 is offline)
@@ -372,6 +525,9 @@ export function FleetTroubleshootClient({
     phone: string
     network: string | null
     imei?: string
+    vtuStatus?: string
+    lastDataDate?: string | null
+    lastDataPlan?: string | null
   }) => {
     setTargetVehicle(vehicle)
     setRechargeFeedback(null)
@@ -671,8 +827,8 @@ export function FleetTroubleshootClient({
                 </div>
               </div>
 
-              {/* Filter inputs */}
-              <form onSubmit={handleOfflineSearchSubmit} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
+              {/* Filter inputs & Sort Order */}
+              <form onSubmit={handleOfflineSearchSubmit} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2 sm:gap-3">
                 {/* Search */}
                 <div className="relative">
                   <Search className="w-3.5 h-3.5 sm:w-4 sm:h-4 absolute left-2.5 top-2.5 text-slate-400" />
@@ -719,22 +875,41 @@ export function FleetTroubleshootClient({
                   <option value="ACTIVE">Data Active (Check Hardware/GPS)</option>
                 </select>
 
-                {/* Network Filter & Search Button */}
+                {/* Network Filter */}
+                <select
+                  value={offlineNetworkFilter}
+                  onChange={(e) => {
+                    const val = e.target.value
+                    setOfflineNetworkFilter(val)
+                    fetchOfflinePage(1, { network: val })
+                  }}
+                  className="h-8 sm:h-9 border border-slate-200 rounded-lg px-2.5 text-[11px] sm:text-xs bg-white font-medium text-slate-800"
+                >
+                  <option value="all">All Networks</option>
+                  <option value="MTN">MTN</option>
+                  <option value="Airtel">Airtel</option>
+                  <option value="Glo">Glo</option>
+                  <option value="9mobile">9mobile</option>
+                </select>
+
+                {/* Sort Order & Submit Button */}
                 <div className="flex items-center gap-2">
                   <select
-                    value={offlineNetworkFilter}
+                    value={offlineSortBy}
                     onChange={(e) => {
-                      const val = e.target.value
-                      setOfflineNetworkFilter(val)
-                      fetchOfflinePage(1, { network: val })
+                      const val = e.target.value as any
+                      setOfflineSortBy(val)
+                      fetchOfflinePage(1, { sort: val })
                     }}
-                    className="flex-1 h-8 sm:h-9 border border-slate-200 rounded-lg px-2.5 text-[11px] sm:text-xs bg-white font-medium text-slate-800"
+                    className="flex-1 h-8 sm:h-9 border border-slate-200 rounded-lg px-2 text-[11px] sm:text-xs bg-white font-medium text-slate-800"
+                    title="Sort order for offline vehicles"
                   >
-                    <option value="all">All Networks</option>
-                    <option value="MTN">MTN</option>
-                    <option value="Airtel">Airtel</option>
-                    <option value="Glo">Glo</option>
-                    <option value="9mobile">9mobile</option>
+                    <option value="daysOffline_desc">⏱️ Longest Offline</option>
+                    <option value="daysOffline_asc">⚡ Recent Offline</option>
+                    <option value="lastHeartbeat_desc">📅 Last Heartbeat (Newest)</option>
+                    <option value="lastHeartbeat_asc">📅 Last Heartbeat (Oldest)</option>
+                    <option value="plate_asc">🔤 Plate (A - Z)</option>
+                    <option value="plate_desc">🔤 Plate (Z - A)</option>
                   </select>
 
                   <Button
@@ -787,11 +962,68 @@ export function FleetTroubleshootClient({
                 <table className="w-full text-left text-xs">
                   <thead className="bg-slate-50 border-b border-slate-100 text-slate-500 font-semibold">
                     <tr>
-                      <th className="py-3 px-4">Vehicle & Plate</th>
+                      <th
+                        onClick={() => handleSortToggle("plate")}
+                        className="py-3 px-4 cursor-pointer select-none hover:bg-slate-100/90 transition-colors group"
+                        title="Click to sort by Vehicle / Plate"
+                      >
+                        <div className="flex items-center gap-1.5">
+                          <span>Vehicle & Plate</span>
+                          {offlineSortBy === "plate_asc" ? (
+                            <ArrowUp className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                          ) : offlineSortBy === "plate_desc" ? (
+                            <ArrowDown className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                          ) : (
+                            <ArrowUpDown className="w-3 h-3 text-slate-300 group-hover:text-slate-500 shrink-0" />
+                          )}
+                        </div>
+                      </th>
                       <th className="py-3 px-4">Tracker SIM</th>
                       <th className="py-3 px-4">Tracker IMEI</th>
-                      <th className="py-3 px-4">Offline Duration</th>
-                      <th className="py-3 px-4">Last Heartbeat</th>
+                      <th
+                        onClick={() => handleSortToggle("daysOffline")}
+                        className="py-3 px-4 cursor-pointer select-none hover:bg-slate-100/90 transition-colors group"
+                        title="Click to sort by duration offline (Longest ⇄ Most Recent)"
+                      >
+                        <div className="flex items-center gap-1.5">
+                          <span>Offline Duration</span>
+                          {offlineSortBy === "daysOffline_desc" ? (
+                            <span className="inline-flex items-center gap-0.5 text-indigo-600 font-bold text-[10px]">
+                              <ArrowDown className="w-3.5 h-3.5 shrink-0" />
+                              <span>Longest</span>
+                            </span>
+                          ) : offlineSortBy === "daysOffline_asc" ? (
+                            <span className="inline-flex items-center gap-0.5 text-indigo-600 font-bold text-[10px]">
+                              <ArrowUp className="w-3.5 h-3.5 shrink-0" />
+                              <span>Recent</span>
+                            </span>
+                          ) : (
+                            <ArrowUpDown className="w-3 h-3 text-slate-300 group-hover:text-slate-500 shrink-0" />
+                          )}
+                        </div>
+                      </th>
+                      <th
+                        onClick={() => handleSortToggle("lastHeartbeat")}
+                        className="py-3 px-4 cursor-pointer select-none hover:bg-slate-100/90 transition-colors group"
+                        title="Click to sort by time went offline (Newest ⇄ Oldest)"
+                      >
+                        <div className="flex items-center gap-1.5">
+                          <span>Last Heartbeat</span>
+                          {offlineSortBy === "lastHeartbeat_desc" ? (
+                            <span className="inline-flex items-center gap-0.5 text-indigo-600 font-bold text-[10px]">
+                              <ArrowDown className="w-3.5 h-3.5 shrink-0" />
+                              <span>Newest</span>
+                            </span>
+                          ) : offlineSortBy === "lastHeartbeat_asc" ? (
+                            <span className="inline-flex items-center gap-0.5 text-indigo-600 font-bold text-[10px]">
+                              <ArrowUp className="w-3.5 h-3.5 shrink-0" />
+                              <span>Oldest</span>
+                            </span>
+                          ) : (
+                            <ArrowUpDown className="w-3 h-3 text-slate-300 group-hover:text-slate-500 shrink-0" />
+                          )}
+                        </div>
+                      </th>
                       <th className="py-3 px-4">VTU Data Health</th>
                       <th className="py-3 px-4 text-right">Individual Action</th>
                     </tr>
@@ -923,18 +1155,43 @@ export function FleetTroubleshootClient({
                                     <XCircle className="w-3 h-3 text-rose-600" />
                                     Data Expired
                                   </span>
-                                  {v.lastDataPlan && (
-                                    <div className="text-[10px] text-slate-500 mt-0.5 truncate max-w-[130px]">
+                                  {v.lastDataDate ? (
+                                    <div className="mt-1 text-[10px] leading-tight">
+                                      <div className="font-semibold text-slate-700">
+                                        {new Date(v.lastDataDate).toLocaleDateString()} • {new Date(v.lastDataDate).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                                      </div>
+                                      {v.lastDataPlan && (
+                                        <div className="text-[10px] text-slate-500 truncate max-w-[150px] mt-0.5">
+                                          {v.lastDataPlan}
+                                        </div>
+                                      )}
+                                    </div>
+                                  ) : v.lastDataPlan ? (
+                                    <div className="text-[10px] text-slate-500 mt-0.5 truncate max-w-[150px]">
                                       {v.lastDataPlan}
                                     </div>
-                                  )}
+                                  ) : null}
                                 </div>
                               )}
                               {v.vtuStatus === "EXPIRING_SOON" && (
-                                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200 inline-flex items-center gap-1">
-                                  <AlertTriangle className="w-3 h-3 text-amber-600" />
-                                  Expiring Soon
-                                </span>
+                                <div>
+                                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200 inline-flex items-center gap-1">
+                                    <AlertTriangle className="w-3 h-3 text-amber-600" />
+                                    Expiring Soon
+                                  </span>
+                                  {v.lastDataDate && (
+                                    <div className="mt-1 text-[10px] leading-tight">
+                                      <div className="font-semibold text-slate-700">
+                                        {new Date(v.lastDataDate).toLocaleDateString()} • {new Date(v.lastDataDate).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                                      </div>
+                                      {v.lastDataPlan && (
+                                        <div className="text-[10px] text-slate-500 truncate max-w-[150px] mt-0.5">
+                                          {v.lastDataPlan}
+                                        </div>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
                               )}
                               {v.vtuStatus === "ACTIVE" && (
                                 <div>
@@ -942,7 +1199,20 @@ export function FleetTroubleshootClient({
                                     <CheckCircle className="w-3 h-3 text-emerald-600" />
                                     Active Data
                                   </span>
-                                  <div className="text-[10px] text-emerald-700 mt-0.5">Check GPS Hardware</div>
+                                  {v.lastDataDate ? (
+                                    <div className="mt-1 text-[10px] leading-tight">
+                                      <div className="font-semibold text-slate-700">
+                                        {new Date(v.lastDataDate).toLocaleDateString()} • {new Date(v.lastDataDate).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                                      </div>
+                                      {v.lastDataPlan && (
+                                        <div className="text-[10px] text-slate-500 truncate max-w-[150px] mt-0.5">
+                                          {v.lastDataPlan}
+                                        </div>
+                                      )}
+                                    </div>
+                                  ) : (
+                                    <div className="text-[10px] text-emerald-700 mt-0.5">Check GPS Hardware</div>
+                                  )}
                                 </div>
                               )}
                               {v.vtuStatus === "NEVER_LOADED" && (
@@ -993,6 +1263,9 @@ export function FleetTroubleshootClient({
                                       phone: v.normalizedPhone || v.rawSimNumber,
                                       network: v.network,
                                       imei: v.imei,
+                                      vtuStatus: v.vtuStatus,
+                                      lastDataDate: v.lastDataDate,
+                                      lastDataPlan: v.lastDataPlan,
                                     })
                                   }
                                   className="h-8 px-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-lg shadow-2xs inline-flex items-center gap-1"
@@ -1208,6 +1481,9 @@ export function FleetTroubleshootClient({
                                   phone: v.normalizedPhone || v.rawSimNumber,
                                   network: v.network,
                                   imei: v.imei,
+                                  vtuStatus: v.vtuStatus,
+                                  lastDataDate: v.lastDataDate,
+                                  lastDataPlan: v.lastDataPlan,
                                 })
                               }
                               className="h-7 px-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[10px] rounded-lg inline-flex items-center gap-1 shadow-2xs"
@@ -1231,6 +1507,20 @@ export function FleetTroubleshootClient({
                             </button>
                           </div>
                         </div>
+
+                        {/* Data Added Info (Mobile) */}
+                        {v.lastDataDate && (
+                          <div className="mt-1 pt-1 border-t border-slate-100 text-[10px] leading-tight">
+                            <div className="font-semibold text-slate-700">
+                              {new Date(v.lastDataDate).toLocaleDateString()} • {new Date(v.lastDataDate).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                            </div>
+                            {v.lastDataPlan && (
+                              <div className="text-[10px] text-slate-500 truncate mt-0.5">
+                                {v.lastDataPlan}
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
                     )
                   })
@@ -1334,66 +1624,609 @@ export function FleetTroubleshootClient({
 
             {/* Render Live Vehicles for Customer */}
             {liveVehicles.length > 0 && (
-              <div className="border border-slate-200/90 rounded-xl sm:rounded-2xl overflow-hidden bg-white shadow-2xs">
-                {/* Desktop Table View */}
-                <div className="hidden md:block overflow-x-auto">
-                  <table className="w-full text-left text-xs">
-                    <thead className="bg-slate-50 border-b border-slate-100 text-slate-500 font-semibold">
-                      <tr>
-                        <th className="py-3 px-4">Vehicle & Plate</th>
-                        <th className="py-3 px-4">Tracker SIM</th>
-                        <th className="py-3 px-4">IMEI</th>
-                        <th className="py-3 px-4">Live Status</th>
-                        <th className="py-3 px-4">VTU Health</th>
-                        <th className="py-3 px-4 text-right">Individual Action</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100">
-                      {liveVehicles.map((v) => (
-                        <tr key={v.id} className="transition-colors hover:bg-slate-50/80">
-                          <td className="py-3 px-4 font-bold text-slate-900">
-                            <div>{v.name}</div>
-                            {v.plateNumber && (
-                              <span className="font-mono font-bold text-[10px] px-1.5 py-0.2 rounded bg-slate-100 text-slate-700 border">
-                                {v.plateNumber}
-                              </span>
-                            )}
-                          </td>
-                          <td className="py-3 px-4 font-mono font-semibold">
-                            {v.normalizedPhone || v.rawSimNumber}
-                            {v.network && (
-                              <span className="ml-1 text-[10px] px-1 rounded bg-slate-100 text-slate-600">
-                                {v.network.name}
-                              </span>
-                            )}
-                          </td>
-                          <td className="py-3 px-4 font-mono text-slate-600">{v.imei}</td>
-                          <td className="py-3 px-4">
-                            <span
-                              className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                                v.onlineStatus === "online"
-                                  ? "bg-emerald-100 text-emerald-800"
-                                  : "bg-rose-100 text-rose-800"
-                              }`}
-                            >
-                              {v.onlineStatus}
-                            </span>
-                          </td>
-                          <td className="py-3 px-4">
-                            <span
-                              className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                                v.vtuHistory.statusBadge === "ACTIVE"
-                                  ? "bg-emerald-100 text-emerald-800"
-                                  : v.vtuHistory.statusBadge === "EXPIRED"
-                                  ? "bg-rose-100 text-rose-800"
-                                  : "bg-slate-100 text-slate-600"
-                              }`}
-                            >
-                              {v.vtuHistory.statusBadge}
-                            </span>
-                          </td>
-                          <td className="py-3 px-4 text-right">
-                            <div className="flex items-center justify-end gap-1.5">
+              <div className="space-y-3">
+                {/* 5-Column Filter & Sorting Bar */}
+                <div className="bg-slate-50/90 p-3 sm:p-4 rounded-xl border border-slate-200/90 space-y-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2 sm:gap-2.5">
+                    {/* Search Input */}
+                    <div className="relative">
+                      <Search className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-slate-400" />
+                      <Input
+                        placeholder="Filter vehicle, plate, SIM, IMEI..."
+                        value={custSearch}
+                        onChange={(e) => setCustSearch(e.target.value)}
+                        className="pl-8 pr-7 h-8 sm:h-9 text-[11px] sm:text-xs bg-white border-slate-200"
+                      />
+                      {custSearch && (
+                        <button
+                          type="button"
+                          onClick={() => setCustSearch("")}
+                          className="absolute right-2.5 top-2 sm:top-2.5 text-slate-400 hover:text-slate-600"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Connection Status Filter */}
+                    <select
+                      value={custStatusFilter}
+                      onChange={(e) => setCustStatusFilter(e.target.value)}
+                      className="h-8 sm:h-9 border border-slate-200 rounded-lg px-2.5 text-[11px] sm:text-xs bg-white font-medium text-slate-800"
+                    >
+                      <option value="all">All Connection Statuses</option>
+                      <option value="offline">🔴 Offline Only</option>
+                      <option value="online">🟢 Online Only</option>
+                    </select>
+
+                    {/* Days Offline Filter */}
+                    <select
+                      value={custDaysFilter}
+                      onChange={(e) => setCustDaysFilter(e.target.value)}
+                      className="h-8 sm:h-9 border border-slate-200 rounded-lg px-2.5 text-[11px] sm:text-xs bg-white font-medium text-slate-800"
+                    >
+                      <option value="all">All Days Offline</option>
+                      <option value="<1">Within 24 Hours (&lt; 1 Day)</option>
+                      <option value="1-7">Recent Offline (1 - 7 Days)</option>
+                      <option value="7-30">Medium Offline (7 - 30 Days)</option>
+                      <option value="30-90">Long Offline (30 - 90 Days)</option>
+                      <option value="90+">Critical Offline (&gt; 90 Days)</option>
+                    </select>
+
+                    {/* VTU Status Filter */}
+                    <select
+                      value={custVtuFilter}
+                      onChange={(e) => setCustVtuFilter(e.target.value)}
+                      className="h-8 sm:h-9 border border-slate-200 rounded-lg px-2.5 text-[11px] sm:text-xs bg-white font-medium text-slate-800"
+                    >
+                      <option value="all">All VTU Statuses</option>
+                      <option value="EXPIRED">Data Expired (Needs Top-up)</option>
+                      <option value="EXPIRING_SOON">Expiring Soon (≤3 Days)</option>
+                      <option value="NEVER_LOADED">Never Loaded via VTU</option>
+                      <option value="ACTIVE">Data Active</option>
+                    </select>
+
+                    {/* Network Filter */}
+                    <select
+                      value={custNetworkFilter}
+                      onChange={(e) => setCustNetworkFilter(e.target.value)}
+                      className="h-8 sm:h-9 border border-slate-200 rounded-lg px-2.5 text-[11px] sm:text-xs bg-white font-medium text-slate-800"
+                    >
+                      <option value="all">All Networks</option>
+                      <option value="MTN">MTN</option>
+                      <option value="Airtel">Airtel</option>
+                      <option value="Glo">Glo</option>
+                      <option value="9mobile">9mobile</option>
+                    </select>
+                  </div>
+
+                  {/* Sub-bar: Sort Selector & Results Counter */}
+                  <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-slate-200/60 text-xs">
+                    <div className="flex items-center gap-2 text-slate-600">
+                      <span className="font-semibold text-[11px] sm:text-xs">
+                        Showing <span className="text-indigo-600 font-bold">{filteredCustomerVehicles.length}</span> of {liveVehicles.length} vehicles
+                      </span>
+                      {(custSearch || custStatusFilter !== "all" || custDaysFilter !== "all" || custVtuFilter !== "all" || custNetworkFilter !== "all" || custSortBy !== "offline_first") && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setCustSearch("")
+                            setCustStatusFilter("all")
+                            setCustDaysFilter("all")
+                            setCustVtuFilter("all")
+                            setCustNetworkFilter("all")
+                            setCustSortBy("offline_first")
+                          }}
+                          className="text-[11px] sm:text-xs text-rose-600 hover:text-rose-700 font-semibold underline underline-offset-2 ml-1"
+                        >
+                          Reset Filters
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <span className="text-[11px] text-slate-500 font-medium">Sort by:</span>
+                      <select
+                        value={custSortBy}
+                        onChange={(e) => setCustSortBy(e.target.value as any)}
+                        className="h-7 sm:h-8 border border-slate-200 rounded-lg px-2 text-[11px] sm:text-xs bg-white font-medium text-slate-800"
+                      >
+                        <option value="offline_first">🔴 Offline First</option>
+                        <option value="online_first">🟢 Online First</option>
+                        <option value="daysOffline_desc">⏱️ Longest Offline</option>
+                        <option value="daysOffline_asc">⚡ Recent Offline</option>
+                        <option value="lastHeartbeat_desc">📅 Last Heartbeat (Newest)</option>
+                        <option value="lastHeartbeat_asc">📅 Last Heartbeat (Oldest)</option>
+                        <option value="plate_asc">🔤 Plate (A - Z)</option>
+                        <option value="plate_desc">🔤 Plate (Z - A)</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Table Container */}
+                <div className="border border-slate-200/90 rounded-xl sm:rounded-2xl overflow-hidden bg-white shadow-2xs">
+                  {/* Desktop Table View */}
+                  <div className="hidden md:block overflow-x-auto">
+                    <table className="w-full text-left text-xs">
+                      <thead className="bg-slate-50 border-b border-slate-100 text-slate-500 font-semibold select-none">
+                        <tr>
+                          {/* Vehicle & Plate with clickable sort */}
+                          <th
+                            onClick={() => handleCustSortToggle("plate")}
+                            className="py-3 px-4 cursor-pointer hover:bg-slate-100/70 transition-colors group"
+                            title="Click to sort by Vehicle Plate / Name"
+                          >
+                            <div className="flex items-center gap-1.5">
+                              <span>Vehicle & Plate</span>
+                              {custSortBy === "plate_asc" ? (
+                                <span className="inline-flex items-center gap-0.5 text-indigo-600 font-bold text-[10px]">
+                                  <ArrowUp className="w-3.5 h-3.5 shrink-0" />
+                                  <span>A-Z</span>
+                                </span>
+                              ) : custSortBy === "plate_desc" ? (
+                                <span className="inline-flex items-center gap-0.5 text-indigo-600 font-bold text-[10px]">
+                                  <ArrowDown className="w-3.5 h-3.5 shrink-0" />
+                                  <span>Z-A</span>
+                                </span>
+                              ) : (
+                                <ArrowUpDown className="w-3 h-3 text-slate-300 group-hover:text-slate-500 shrink-0" />
+                              )}
+                            </div>
+                          </th>
+
+                          <th className="py-3 px-4">Tracker SIM</th>
+                          <th className="py-3 px-4">IMEI</th>
+
+                          {/* Live Status with clickable sort */}
+                          <th
+                            onClick={() => handleCustSortToggle("status")}
+                            className="py-3 px-4 cursor-pointer hover:bg-slate-100/70 transition-colors group"
+                            title="Click to toggle Offline First / Online First"
+                          >
+                            <div className="flex items-center gap-1.5">
+                              <span>Live Status</span>
+                              {custSortBy === "offline_first" ? (
+                                <span className="inline-flex items-center gap-0.5 text-rose-600 font-bold text-[10px]">
+                                  <ArrowDown className="w-3.5 h-3.5 shrink-0" />
+                                  <span>Offline 1st</span>
+                                </span>
+                              ) : custSortBy === "online_first" ? (
+                                <span className="inline-flex items-center gap-0.5 text-emerald-600 font-bold text-[10px]">
+                                  <ArrowUp className="w-3.5 h-3.5 shrink-0" />
+                                  <span>Online 1st</span>
+                                </span>
+                              ) : (
+                                <ArrowUpDown className="w-3 h-3 text-slate-300 group-hover:text-slate-500 shrink-0" />
+                              )}
+                            </div>
+                          </th>
+
+                          {/* Days Offline with clickable sort */}
+                          <th
+                            onClick={() => handleCustSortToggle("daysOffline")}
+                            className="py-3 px-4 cursor-pointer hover:bg-slate-100/70 transition-colors group"
+                            title="Click to sort by Days Offline"
+                          >
+                            <div className="flex items-center gap-1.5">
+                              <span>Days Offline</span>
+                              {custSortBy === "daysOffline_desc" ? (
+                                <span className="inline-flex items-center gap-0.5 text-indigo-600 font-bold text-[10px]">
+                                  <ArrowDown className="w-3.5 h-3.5 shrink-0" />
+                                  <span>Longest</span>
+                                </span>
+                              ) : custSortBy === "daysOffline_asc" ? (
+                                <span className="inline-flex items-center gap-0.5 text-indigo-600 font-bold text-[10px]">
+                                  <ArrowUp className="w-3.5 h-3.5 shrink-0" />
+                                  <span>Recent</span>
+                                </span>
+                              ) : (
+                                <ArrowUpDown className="w-3 h-3 text-slate-300 group-hover:text-slate-500 shrink-0" />
+                              )}
+                            </div>
+                          </th>
+
+                          {/* Last Heartbeat with clickable sort */}
+                          <th
+                            onClick={() => handleCustSortToggle("heartbeat")}
+                            className="py-3 px-4 cursor-pointer hover:bg-slate-100/70 transition-colors group"
+                            title="Click to sort by Last Heartbeat"
+                          >
+                            <div className="flex items-center gap-1.5">
+                              <span>Last Heartbeat</span>
+                              {custSortBy === "lastHeartbeat_desc" ? (
+                                <span className="inline-flex items-center gap-0.5 text-indigo-600 font-bold text-[10px]">
+                                  <ArrowDown className="w-3.5 h-3.5 shrink-0" />
+                                  <span>Newest</span>
+                                </span>
+                              ) : custSortBy === "lastHeartbeat_asc" ? (
+                                <span className="inline-flex items-center gap-0.5 text-indigo-600 font-bold text-[10px]">
+                                  <ArrowUp className="w-3.5 h-3.5 shrink-0" />
+                                  <span>Oldest</span>
+                                </span>
+                              ) : (
+                                <ArrowUpDown className="w-3 h-3 text-slate-300 group-hover:text-slate-500 shrink-0" />
+                              )}
+                            </div>
+                          </th>
+
+                          <th className="py-3 px-4">VTU Data Health</th>
+                          <th className="py-3 px-4 text-right">Individual Action</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {filteredCustomerVehicles.length === 0 ? (
+                          <tr>
+                            <td colSpan={8} className="py-12 text-center text-slate-500">
+                              <Database className="w-8 h-8 mx-auto text-slate-300 mb-2" />
+                              <div className="text-sm font-bold text-slate-800">No Matching Vehicles Found</div>
+                              <p className="text-xs text-slate-400 mt-1 max-w-md mx-auto">
+                                No vehicles in this customer account match the selected filters or search term.
+                              </p>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => {
+                                  setCustSearch("")
+                                  setCustStatusFilter("all")
+                                  setCustDaysFilter("all")
+                                  setCustVtuFilter("all")
+                                  setCustNetworkFilter("all")
+                                  setCustSortBy("offline_first")
+                                }}
+                                className="mt-3 h-8 text-xs font-semibold"
+                              >
+                                Reset All Filters
+                              </Button>
+                            </td>
+                          </tr>
+                        ) : (
+                          filteredCustomerVehicles.map((v) => {
+                            const isOnline = v.onlineStatus === "online"
+                            const daysOff = isOnline ? 0 : getCustDaysOffline(v.lastHeartbeat)
+
+                            return (
+                              <tr key={v.id} className="transition-colors hover:bg-slate-50/80">
+                                {/* Vehicle & Plate */}
+                                <td className="py-3 px-4 font-bold text-slate-900">
+                                  <div className="flex items-center gap-1.5">
+                                    <Car className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                                    <span>{v.name}</span>
+                                  </div>
+                                  {v.plateNumber ? (
+                                    <span className="inline-block mt-0.5 font-mono font-bold text-[10px] px-1.5 py-0.2 rounded bg-slate-100 text-slate-700 border border-slate-200">
+                                      {v.plateNumber}
+                                    </span>
+                                  ) : (
+                                    <span className="text-[10px] text-slate-400 italic">No plate</span>
+                                  )}
+                                </td>
+
+                                {/* Tracker SIM */}
+                                <td className="py-3 px-4">
+                                  <div className="flex items-center gap-1.5 font-mono font-semibold text-slate-800">
+                                    <span>{v.normalizedPhone || v.rawSimNumber || "No SIM"}</span>
+                                    {(v.normalizedPhone || v.rawSimNumber) && (
+                                      <button
+                                        type="button"
+                                        onClick={() => handleCopy(v.normalizedPhone || v.rawSimNumber)}
+                                        className="text-slate-400 hover:text-indigo-600"
+                                      >
+                                        {copiedText === (v.normalizedPhone || v.rawSimNumber) ? (
+                                          <Check className="w-3 h-3 text-emerald-600" />
+                                        ) : (
+                                          <Copy className="w-3 h-3" />
+                                        )}
+                                      </button>
+                                    )}
+                                  </div>
+                                  {v.network && (
+                                    <span className="inline-block mt-0.5 px-1.5 py-0.2 rounded text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
+                                      {v.network.name}
+                                    </span>
+                                  )}
+                                </td>
+
+                                {/* IMEI */}
+                                <td className="py-3 px-4 font-mono text-slate-600 text-[11px]">{v.imei || "—"}</td>
+
+                                {/* Live Status */}
+                                <td className="py-3 px-4">
+                                  <span
+                                    className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                      isOnline
+                                        ? "bg-emerald-100 text-emerald-800"
+                                        : "bg-rose-100 text-rose-800"
+                                    }`}
+                                  >
+                                    {v.onlineStatus}
+                                  </span>
+                                </td>
+
+                                {/* Days Offline */}
+                                <td className="py-3 px-4">
+                                  {isOnline ? (
+                                    <span className="text-[11px] text-emerald-600 font-semibold flex items-center gap-1">
+                                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                                      Live Now
+                                    </span>
+                                  ) : (
+                                    <span
+                                      className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-xs font-bold border ${
+                                        daysOff >= 90
+                                          ? "bg-rose-100 border-rose-300 text-rose-900"
+                                          : daysOff >= 30
+                                          ? "bg-rose-50 border-rose-200 text-rose-800"
+                                          : daysOff >= 7
+                                          ? "bg-amber-50 border-amber-200 text-amber-800"
+                                          : daysOff >= 1
+                                          ? "bg-yellow-50 border-yellow-200 text-yellow-800"
+                                          : "bg-emerald-50 border-emerald-200 text-emerald-800"
+                                      }`}
+                                    >
+                                      <span
+                                        className={`w-1.5 h-1.5 rounded-full ${
+                                          daysOff >= 30
+                                            ? "bg-rose-600 animate-pulse"
+                                            : daysOff >= 1
+                                            ? "bg-amber-500"
+                                            : "bg-emerald-600"
+                                        }`}
+                                      />
+                                      {daysOff === 0 ? "Today (<24h)" : `${daysOff}d offline`}
+                                    </span>
+                                  )}
+                                </td>
+
+                                {/* Last Heartbeat */}
+                                <td className="py-3 px-4">
+                                  {v.lastHeartbeat ? (
+                                    <div className="text-slate-700">
+                                      <div>{new Date(v.lastHeartbeat).toLocaleDateString()}</div>
+                                      <div className="text-[10px] text-slate-400">
+                                        {new Date(v.lastHeartbeat).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <span className="text-[11px] text-slate-400 italic">No signal</span>
+                                  )}
+                                </td>
+
+                                {/* VTU Health: Clean Two-Line Date Format */}
+                                <td className="py-3 px-4">
+                                  <span
+                                    className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                      v.vtuHistory.statusBadge === "ACTIVE"
+                                        ? "bg-emerald-100 text-emerald-800 border border-emerald-200"
+                                        : v.vtuHistory.statusBadge === "EXPIRED"
+                                        ? "bg-rose-100 text-rose-800 border border-rose-200"
+                                        : v.vtuHistory.statusBadge === "EXPIRING_SOON"
+                                        ? "bg-amber-100 text-amber-800 border border-amber-200"
+                                        : "bg-slate-100 text-slate-600 border border-slate-200"
+                                    }`}
+                                  >
+                                    {v.vtuHistory.statusBadge === "ACTIVE"
+                                      ? "Data Active"
+                                      : v.vtuHistory.statusBadge === "EXPIRED"
+                                      ? "Data Expired"
+                                      : v.vtuHistory.statusBadge === "EXPIRING_SOON"
+                                      ? "Expiring Soon"
+                                      : "Never Loaded"}
+                                  </span>
+
+                                  {v.vtuHistory.lastDataDate ? (
+                                    <div className="mt-1 text-[10px] leading-tight">
+                                      <div className="font-semibold text-slate-700">
+                                        {new Date(v.vtuHistory.lastDataDate).toLocaleDateString()} •{" "}
+                                        {new Date(v.vtuHistory.lastDataDate).toLocaleTimeString([], {
+                                          hour: "2-digit",
+                                          minute: "2-digit",
+                                        })}
+                                      </div>
+                                      {v.vtuHistory.lastDataPlan && (
+                                        <div className="text-[10px] text-slate-500 truncate max-w-[150px] mt-0.5">
+                                          {v.vtuHistory.lastDataPlan}
+                                        </div>
+                                      )}
+                                    </div>
+                                  ) : v.vtuHistory.lastDataPlan ? (
+                                    <div className="text-[10px] text-slate-500 mt-0.5 truncate max-w-[150px]">
+                                      {v.vtuHistory.lastDataPlan}
+                                    </div>
+                                  ) : null}
+                                </td>
+
+                                {/* Action Buttons */}
+                                <td className="py-3 px-4 text-right">
+                                  <div className="flex items-center justify-end gap-1.5">
+                                    <Button
+                                      type="button"
+                                      onClick={() =>
+                                        openSingleRechargeModal({
+                                          vehicleId: v.id,
+                                          vehicleName: v.name,
+                                          plateNumber: v.plateNumber,
+                                          phone: v.normalizedPhone || v.rawSimNumber,
+                                          network: v.network?.name || null,
+                                          imei: v.imei,
+                                          vtuStatus: v.vtuHistory.statusBadge,
+                                          lastDataDate: v.vtuHistory.lastDataDate,
+                                          lastDataPlan: v.vtuHistory.lastDataPlan,
+                                        })
+                                      }
+                                      className="h-8 px-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-lg inline-flex items-center gap-1 shadow-xs"
+                                    >
+                                      <Zap className="w-3 h-3 text-amber-300" />
+                                      <span>Recharge</span>
+                                    </Button>
+
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        openSimHistoryModal({
+                                          name: v.name,
+                                          plate: v.plateNumber,
+                                          phone: v.normalizedPhone || v.rawSimNumber,
+                                        })
+                                      }
+                                      className="h-8 px-2 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold"
+                                    >
+                                      History
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            )
+                          })
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Mobile Card List (Zero horizontal scrolling) */}
+                  <div className="md:hidden divide-y divide-slate-100">
+                    {filteredCustomerVehicles.length === 0 ? (
+                      <div className="p-6 text-center text-slate-500">
+                        <Database className="w-8 h-8 mx-auto text-slate-300 mb-2" />
+                        <div className="text-xs font-bold text-slate-800">No Matching Vehicles Found</div>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => {
+                            setCustSearch("")
+                            setCustStatusFilter("all")
+                            setCustDaysFilter("all")
+                            setCustVtuFilter("all")
+                            setCustNetworkFilter("all")
+                            setCustSortBy("offline_first")
+                          }}
+                          className="mt-2.5 h-7 text-[11px] font-semibold"
+                        >
+                          Reset Filters
+                        </Button>
+                      </div>
+                    ) : (
+                      filteredCustomerVehicles.map((v) => {
+                        const isOnline = v.onlineStatus === "online"
+                        const daysOff = isOnline ? 0 : getCustDaysOffline(v.lastHeartbeat)
+
+                        return (
+                          <div key={`m-cust-${v.id}`} className="p-3 bg-white hover:bg-slate-50/70 transition-colors space-y-2">
+                            {/* Top: Name & Plate + Online/Offline Status */}
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="min-w-0 flex-1">
+                                <div className="font-bold text-xs text-slate-900 truncate flex items-center gap-1.5">
+                                  <Car className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                                  <span className="truncate">{v.name}</span>
+                                </div>
+                                <div className="flex items-center gap-1.5 mt-0.5">
+                                  {v.plateNumber ? (
+                                    <span className="font-mono font-bold text-[10px] px-1.5 py-0.2 rounded bg-slate-100 text-slate-700 border border-slate-200">
+                                      {v.plateNumber}
+                                    </span>
+                                  ) : (
+                                    <span className="text-[10px] text-slate-400 italic">No plate</span>
+                                  )}
+                                  {v.imei && (
+                                    <span className="font-mono text-[10px] text-slate-400 truncate max-w-[120px]">
+                                      IMEI: {v.imei}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+
+                              <div className="flex flex-col items-end gap-1 shrink-0">
+                                <span
+                                  className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                    isOnline
+                                      ? "bg-emerald-100 text-emerald-800"
+                                      : "bg-rose-100 text-rose-800"
+                                  }`}
+                                >
+                                  {v.onlineStatus}
+                                </span>
+                                {!isOnline && (
+                                  <span className="text-[9px] font-bold text-slate-500">
+                                    {daysOff === 0 ? "Today (<24h)" : `${daysOff}d offline`}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Mid: SIM, Network, VTU Health */}
+                            <div className="flex items-start justify-between gap-2 pt-1.5 border-t border-slate-100 text-[11px]">
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center gap-1.5">
+                                  {v.network && (
+                                    <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-slate-100 text-slate-700 border border-slate-200 shrink-0">
+                                      {v.network.name}
+                                    </span>
+                                  )}
+                                  <span className="font-mono font-semibold text-slate-800 truncate text-[11px]">
+                                    {v.normalizedPhone || v.rawSimNumber || "No SIM"}
+                                  </span>
+                                  {(v.normalizedPhone || v.rawSimNumber) && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleCopy(v.normalizedPhone || v.rawSimNumber)}
+                                      className="text-slate-400 hover:text-indigo-600 shrink-0"
+                                    >
+                                      {copiedText === (v.normalizedPhone || v.rawSimNumber) ? (
+                                        <Check className="w-3 h-3 text-emerald-600" />
+                                      ) : (
+                                        <Copy className="w-3 h-3" />
+                                      )}
+                                    </button>
+                                  )}
+                                </div>
+                                {v.lastHeartbeat && (
+                                  <div className="text-[10px] text-slate-400 mt-0.5">
+                                    Heartbeat: {new Date(v.lastHeartbeat).toLocaleDateString()} {new Date(v.lastHeartbeat).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                                  </div>
+                                )}
+                              </div>
+
+                              <div className="shrink-0 text-right">
+                                <span
+                                  className={`px-1.5 py-0.5 rounded-full text-[9px] font-bold ${
+                                    v.vtuHistory.statusBadge === "ACTIVE"
+                                      ? "bg-emerald-100 text-emerald-800"
+                                      : v.vtuHistory.statusBadge === "EXPIRED"
+                                      ? "bg-rose-100 text-rose-800"
+                                      : v.vtuHistory.statusBadge === "EXPIRING_SOON"
+                                      ? "bg-amber-100 text-amber-800"
+                                      : "bg-slate-100 text-slate-600"
+                                  }`}
+                                >
+                                  {v.vtuHistory.statusBadge === "ACTIVE"
+                                    ? "Data Active"
+                                    : v.vtuHistory.statusBadge === "EXPIRED"
+                                    ? "Data Expired"
+                                    : v.vtuHistory.statusBadge === "EXPIRING_SOON"
+                                    ? "Expiring Soon"
+                                    : "Never Loaded"}
+                                </span>
+                                {v.vtuHistory.lastDataDate && (
+                                  <div className="mt-0.5 text-[9px] text-slate-600 leading-tight">
+                                    <div>
+                                      {new Date(v.vtuHistory.lastDataDate).toLocaleDateString()} •{" "}
+                                      {new Date(v.vtuHistory.lastDataDate).toLocaleTimeString([], {
+                                        hour: "2-digit",
+                                        minute: "2-digit",
+                                      })}
+                                    </div>
+                                    {v.vtuHistory.lastDataPlan && (
+                                      <div className="text-slate-500 font-semibold truncate max-w-[130px] mt-0.5">
+                                        {v.vtuHistory.lastDataPlan}
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Bottom: Action buttons */}
+                            <div className="flex items-center justify-end gap-1.5 pt-1 border-t border-slate-100">
                               <Button
                                 type="button"
                                 onClick={() =>
@@ -1404,11 +2237,14 @@ export function FleetTroubleshootClient({
                                     phone: v.normalizedPhone || v.rawSimNumber,
                                     network: v.network?.name || null,
                                     imei: v.imei,
+                                    vtuStatus: v.vtuHistory.statusBadge,
+                                    lastDataDate: v.vtuHistory.lastDataDate,
+                                    lastDataPlan: v.vtuHistory.lastDataPlan,
                                   })
                                 }
-                                className="h-8 px-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-lg inline-flex items-center gap-1"
+                                className="h-7 px-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[10px] rounded-lg inline-flex items-center gap-1 shadow-2xs"
                               >
-                                <Zap className="w-3 h-3 text-amber-300" />
+                                <Zap className="w-2.5 h-2.5 text-amber-300" />
                                 <span>Recharge</span>
                               </Button>
 
@@ -1421,133 +2257,16 @@ export function FleetTroubleshootClient({
                                     phone: v.normalizedPhone || v.rawSimNumber,
                                   })
                                 }
-                                className="h-8 px-2 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold"
+                                className="h-7 px-2 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-[10px] font-semibold"
                               >
                                 History
                               </button>
                             </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-
-                {/* Mobile Card List (Zero horizontal scrolling) */}
-                <div className="md:hidden divide-y divide-slate-100">
-                  {liveVehicles.map((v) => (
-                    <div key={`m-cust-${v.id}`} className="p-3 bg-white hover:bg-slate-50/70 transition-colors space-y-2">
-                      {/* Top: Name & Plate + Online/Offline Status */}
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0 flex-1">
-                          <div className="font-bold text-xs text-slate-900 truncate flex items-center gap-1.5">
-                            <Car className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
-                            <span className="truncate">{v.name}</span>
                           </div>
-                          <div className="flex items-center gap-1.5 mt-0.5">
-                            {v.plateNumber ? (
-                              <span className="font-mono font-bold text-[10px] px-1.5 py-0.2 rounded bg-slate-100 text-slate-700 border border-slate-200">
-                                {v.plateNumber}
-                              </span>
-                            ) : (
-                              <span className="text-[10px] text-slate-400 italic">No plate</span>
-                            )}
-                            {v.imei && (
-                              <span className="font-mono text-[10px] text-slate-400 truncate max-w-[120px]">
-                                IMEI: {v.imei}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-
-                        <span
-                          className={`shrink-0 px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                            v.onlineStatus === "online"
-                              ? "bg-emerald-100 text-emerald-800"
-                              : "bg-rose-100 text-rose-800"
-                          }`}
-                        >
-                          {v.onlineStatus}
-                        </span>
-                      </div>
-
-                      {/* Mid: SIM, Network, VTU Health */}
-                      <div className="flex items-center justify-between gap-2 pt-1.5 border-t border-slate-100 text-[11px]">
-                        <div className="flex items-center gap-1.5 min-w-0">
-                          {v.network && (
-                            <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-slate-100 text-slate-700 border border-slate-200 shrink-0">
-                              {v.network.name}
-                            </span>
-                          )}
-                          <span className="font-mono font-semibold text-slate-800 truncate text-[11px]">
-                            {v.normalizedPhone || v.rawSimNumber || "No SIM"}
-                          </span>
-                          {(v.normalizedPhone || v.rawSimNumber) && (
-                            <button
-                              type="button"
-                              onClick={() => handleCopy(v.normalizedPhone || v.rawSimNumber)}
-                              className="text-slate-400 hover:text-indigo-600 shrink-0"
-                            >
-                              {copiedText === (v.normalizedPhone || v.rawSimNumber) ? (
-                                <Check className="w-3 h-3 text-emerald-600" />
-                              ) : (
-                                <Copy className="w-3 h-3" />
-                              )}
-                            </button>
-                          )}
-                        </div>
-
-                        <div className="shrink-0">
-                          <span
-                            className={`px-1.5 py-0.5 rounded-full text-[9px] font-bold ${
-                              v.vtuHistory.statusBadge === "ACTIVE"
-                                ? "bg-emerald-100 text-emerald-800"
-                                : v.vtuHistory.statusBadge === "EXPIRED"
-                                ? "bg-rose-100 text-rose-800"
-                                : "bg-slate-100 text-slate-600"
-                            }`}
-                          >
-                            {v.vtuHistory.statusBadge}
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* Bottom: Action buttons */}
-                      <div className="flex items-center justify-end gap-1.5 pt-1 border-t border-slate-100">
-                        <Button
-                          type="button"
-                          onClick={() =>
-                            openSingleRechargeModal({
-                              vehicleId: v.id,
-                              vehicleName: v.name,
-                              plateNumber: v.plateNumber,
-                              phone: v.normalizedPhone || v.rawSimNumber,
-                              network: v.network?.name || null,
-                              imei: v.imei,
-                            })
-                          }
-                          className="h-7 px-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[10px] rounded-lg inline-flex items-center gap-1 shadow-2xs"
-                        >
-                          <Zap className="w-2.5 h-2.5 text-amber-300" />
-                          <span>Recharge</span>
-                        </Button>
-
-                        <button
-                          type="button"
-                          onClick={() =>
-                            openSimHistoryModal({
-                              name: v.name,
-                              plate: v.plateNumber,
-                              phone: v.normalizedPhone || v.rawSimNumber,
-                            })
-                          }
-                          className="h-7 px-2 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-[10px] font-semibold"
-                        >
-                          History
-                        </button>
-                      </div>
-                    </div>
-                  ))}
+                        )
+                      })
+                    )}
+                  </div>
                 </div>
               </div>
             )}
@@ -1606,210 +2325,344 @@ export function FleetTroubleshootClient({
                         <th className="py-3 px-4">Tracker SIM</th>
                         <th className="py-3 px-4">IMEI</th>
                         <th className="py-3 px-4">Live Status</th>
-                        <th className="py-3 px-4">VTU Health</th>
+                        <th className="py-3 px-4">Last Heartbeat</th>
+                        <th className="py-3 px-4">VTU Data Health</th>
                         <th className="py-3 px-4 text-right">Individual Action</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
-                      {liveVehicles.map((v) => (
-                        <tr key={v.id} className="transition-colors hover:bg-slate-50/80">
-                          <td className="py-3 px-4 font-bold text-slate-900">
-                            <div>{v.name}</div>
-                            {v.plateNumber && (
-                              <span className="font-mono font-bold text-[10px] px-1.5 py-0.2 rounded bg-slate-100 text-slate-700 border">
-                                {v.plateNumber}
-                              </span>
-                            )}
-                          </td>
-                          <td className="py-3 px-4 font-mono font-semibold">
-                            {v.normalizedPhone || v.rawSimNumber}
-                            {v.network && (
-                              <span className="ml-1 text-[10px] px-1 rounded bg-slate-100 text-slate-600">
-                                {v.network.name}
-                              </span>
-                            )}
-                          </td>
-                          <td className="py-3 px-4 font-mono text-slate-600">{v.imei}</td>
-                          <td className="py-3 px-4">
-                            <span
-                              className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                                v.onlineStatus === "online"
-                                  ? "bg-emerald-100 text-emerald-800"
-                                  : "bg-rose-100 text-rose-800"
-                              }`}
-                            >
-                              {v.onlineStatus}
-                            </span>
-                          </td>
-                          <td className="py-3 px-4">
-                            <span
-                              className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                                v.vtuHistory.statusBadge === "ACTIVE"
-                                  ? "bg-emerald-100 text-emerald-800"
-                                  : v.vtuHistory.statusBadge === "EXPIRED"
-                                  ? "bg-rose-100 text-rose-800"
-                                  : "bg-slate-100 text-slate-600"
-                              }`}
-                            >
-                              {v.vtuHistory.statusBadge}
-                            </span>
-                          </td>
-                          <td className="py-3 px-4 text-right">
-                            <div className="flex items-center justify-end gap-1.5">
-                              <Button
-                                type="button"
-                                onClick={() =>
-                                  openSingleRechargeModal({
-                                    vehicleId: v.id,
-                                    vehicleName: v.name,
-                                    plateNumber: v.plateNumber,
-                                    phone: v.normalizedPhone || v.rawSimNumber,
-                                    network: v.network?.name || null,
-                                    imei: v.imei,
-                                  })
-                                }
-                                className="h-8 px-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-lg inline-flex items-center gap-1"
-                              >
-                                <Zap className="w-3 h-3 text-amber-300" />
-                                <span>Recharge</span>
-                              </Button>
+                      {liveVehicles.map((v) => {
+                        const isOnline = v.onlineStatus === "online"
+                        const daysOff = isOnline ? 0 : getCustDaysOffline(v.lastHeartbeat)
 
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  openSimHistoryModal({
-                                    name: v.name,
-                                    plate: v.plateNumber,
-                                    phone: v.normalizedPhone || v.rawSimNumber,
-                                  })
-                                }
-                                className="h-8 px-2 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold"
+                        return (
+                          <tr key={v.id} className="transition-colors hover:bg-slate-50/80">
+                            {/* Vehicle & Plate */}
+                            <td className="py-3 px-4 font-bold text-slate-900">
+                              <div className="flex items-center gap-1.5">
+                                <Car className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                                <span>{v.name}</span>
+                              </div>
+                              {v.plateNumber && (
+                                <span className="inline-block mt-0.5 font-mono font-bold text-[10px] px-1.5 py-0.2 rounded bg-slate-100 text-slate-700 border border-slate-200">
+                                  {v.plateNumber}
+                                </span>
+                              )}
+                            </td>
+
+                            {/* Tracker SIM */}
+                            <td className="py-3 px-4">
+                              <div className="flex items-center gap-1.5 font-mono font-semibold text-slate-800">
+                                <span>{v.normalizedPhone || v.rawSimNumber}</span>
+                                {(v.normalizedPhone || v.rawSimNumber) && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleCopy(v.normalizedPhone || v.rawSimNumber)}
+                                    className="text-slate-400 hover:text-indigo-600"
+                                  >
+                                    {copiedText === (v.normalizedPhone || v.rawSimNumber) ? (
+                                      <Check className="w-3 h-3 text-emerald-600" />
+                                    ) : (
+                                      <Copy className="w-3 h-3" />
+                                    )}
+                                  </button>
+                                )}
+                              </div>
+                              {v.network && (
+                                <span className="inline-block mt-0.5 px-1.5 py-0.2 rounded text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
+                                  {v.network.name}
+                                </span>
+                              )}
+                            </td>
+
+                            {/* IMEI */}
+                            <td className="py-3 px-4 font-mono text-slate-600 text-[11px]">{v.imei || "—"}</td>
+
+                            {/* Live Status */}
+                            <td className="py-3 px-4">
+                              <div className="flex flex-col items-start gap-0.5">
+                                <span
+                                  className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                    isOnline
+                                      ? "bg-emerald-100 text-emerald-800"
+                                      : "bg-rose-100 text-rose-800"
+                                  }`}
+                                >
+                                  {v.onlineStatus}
+                                </span>
+                                {!isOnline && (
+                                  <span className="text-[10px] font-semibold text-slate-500">
+                                    {daysOff === 0 ? "Today (<24h)" : `${daysOff}d offline`}
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+
+                            {/* Last Heartbeat */}
+                            <td className="py-3 px-4">
+                              {v.lastHeartbeat ? (
+                                <div className="text-slate-700">
+                                  <div>{new Date(v.lastHeartbeat).toLocaleDateString()}</div>
+                                  <div className="text-[10px] text-slate-400">
+                                    {new Date(v.lastHeartbeat).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                                  </div>
+                                </div>
+                              ) : (
+                                <span className="text-[11px] text-slate-400 italic">No signal</span>
+                              )}
+                            </td>
+
+                            {/* VTU Data Health */}
+                            <td className="py-3 px-4">
+                              <span
+                                className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                  v.vtuHistory.statusBadge === "ACTIVE"
+                                    ? "bg-emerald-100 text-emerald-800 border border-emerald-200"
+                                    : v.vtuHistory.statusBadge === "EXPIRED"
+                                    ? "bg-rose-100 text-rose-800 border border-rose-200"
+                                    : v.vtuHistory.statusBadge === "EXPIRING_SOON"
+                                    ? "bg-amber-100 text-amber-800 border border-amber-200"
+                                    : "bg-slate-100 text-slate-600 border border-slate-200"
+                                }`}
                               >
-                                History
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
+                                {v.vtuHistory.statusBadge === "ACTIVE"
+                                  ? "Data Active"
+                                  : v.vtuHistory.statusBadge === "EXPIRED"
+                                  ? "Data Expired"
+                                  : v.vtuHistory.statusBadge === "EXPIRING_SOON"
+                                  ? "Expiring Soon"
+                                  : "Never Loaded"}
+                              </span>
+
+                              {v.vtuHistory.lastDataDate ? (
+                                <div className="mt-1 text-[10px] leading-tight">
+                                  <div className="font-semibold text-slate-700">
+                                    {new Date(v.vtuHistory.lastDataDate).toLocaleDateString()} •{" "}
+                                    {new Date(v.vtuHistory.lastDataDate).toLocaleTimeString([], {
+                                      hour: "2-digit",
+                                      minute: "2-digit",
+                                    })}
+                                  </div>
+                                  {v.vtuHistory.lastDataPlan && (
+                                    <div className="text-[10px] text-slate-500 truncate max-w-[150px] mt-0.5">
+                                      {v.vtuHistory.lastDataPlan}
+                                    </div>
+                                  )}
+                                </div>
+                              ) : v.vtuHistory.lastDataPlan ? (
+                                <div className="text-[10px] text-slate-500 mt-0.5 truncate max-w-[150px]">
+                                  {v.vtuHistory.lastDataPlan}
+                                </div>
+                              ) : null}
+                            </td>
+
+                            {/* Action Buttons */}
+                            <td className="py-3 px-4 text-right">
+                              <div className="flex items-center justify-end gap-1.5">
+                                <Button
+                                  type="button"
+                                  onClick={() =>
+                                    openSingleRechargeModal({
+                                      vehicleId: v.id,
+                                      vehicleName: v.name,
+                                      plateNumber: v.plateNumber,
+                                      phone: v.normalizedPhone || v.rawSimNumber,
+                                      network: v.network?.name || null,
+                                      imei: v.imei,
+                                      vtuStatus: v.vtuHistory.statusBadge,
+                                      lastDataDate: v.vtuHistory.lastDataDate,
+                                      lastDataPlan: v.vtuHistory.lastDataPlan,
+                                    })
+                                  }
+                                  className="h-8 px-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-lg inline-flex items-center gap-1 shadow-xs"
+                                >
+                                  <Zap className="w-3 h-3 text-amber-300" />
+                                  <span>Recharge</span>
+                                </Button>
+
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    openSimHistoryModal({
+                                      name: v.name,
+                                      plate: v.plateNumber,
+                                      phone: v.normalizedPhone || v.rawSimNumber,
+                                    })
+                                  }
+                                  className="h-8 px-2 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold"
+                                >
+                                  History
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        )
+                      })}
                     </tbody>
                   </table>
                 </div>
 
                 {/* Mobile Card List (Zero horizontal scrolling) */}
                 <div className="md:hidden divide-y divide-slate-100">
-                  {liveVehicles.map((v) => (
-                    <div key={`m-dir-${v.id}`} className="p-3 bg-white hover:bg-slate-50/70 transition-colors space-y-2">
-                      {/* Top: Name & Plate + Online/Offline Status */}
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0 flex-1">
-                          <div className="font-bold text-xs text-slate-900 truncate flex items-center gap-1.5">
-                            <Car className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
-                            <span className="truncate">{v.name}</span>
-                          </div>
-                          <div className="flex items-center gap-1.5 mt-0.5">
-                            {v.plateNumber ? (
-                              <span className="font-mono font-bold text-[10px] px-1.5 py-0.2 rounded bg-slate-100 text-slate-700 border border-slate-200">
-                                {v.plateNumber}
-                              </span>
-                            ) : (
-                              <span className="text-[10px] text-slate-400 italic">No plate</span>
-                            )}
-                            {v.imei && (
-                              <span className="font-mono text-[10px] text-slate-400 truncate max-w-[120px]">
-                                IMEI: {v.imei}
-                              </span>
-                            )}
-                          </div>
-                        </div>
+                  {liveVehicles.map((v) => {
+                    const isOnline = v.onlineStatus === "online"
+                    const daysOff = isOnline ? 0 : getCustDaysOffline(v.lastHeartbeat)
 
-                        <span
-                          className={`shrink-0 px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                            v.onlineStatus === "online"
-                              ? "bg-emerald-100 text-emerald-800"
-                              : "bg-rose-100 text-rose-800"
-                          }`}
-                        >
-                          {v.onlineStatus}
-                        </span>
-                      </div>
-
-                      {/* Mid: SIM, Network, VTU Health */}
-                      <div className="flex items-center justify-between gap-2 pt-1.5 border-t border-slate-100 text-[11px]">
-                        <div className="flex items-center gap-1.5 min-w-0">
-                          {v.network && (
-                            <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-slate-100 text-slate-700 border border-slate-200 shrink-0">
-                              {v.network.name}
-                            </span>
-                          )}
-                          <span className="font-mono font-semibold text-slate-800 truncate text-[11px]">
-                            {v.normalizedPhone || v.rawSimNumber || "No SIM"}
-                          </span>
-                          {(v.normalizedPhone || v.rawSimNumber) && (
-                            <button
-                              type="button"
-                              onClick={() => handleCopy(v.normalizedPhone || v.rawSimNumber)}
-                              className="text-slate-400 hover:text-indigo-600 shrink-0"
-                            >
-                              {copiedText === (v.normalizedPhone || v.rawSimNumber) ? (
-                                <Check className="w-3 h-3 text-emerald-600" />
+                    return (
+                      <div key={`m-dir-${v.id}`} className="p-3 bg-white hover:bg-slate-50/70 transition-colors space-y-2">
+                        {/* Top: Name & Plate + Online/Offline Status */}
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0 flex-1">
+                            <div className="font-bold text-xs text-slate-900 truncate flex items-center gap-1.5">
+                              <Car className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                              <span className="truncate">{v.name}</span>
+                            </div>
+                            <div className="flex items-center gap-1.5 mt-0.5">
+                              {v.plateNumber ? (
+                                <span className="font-mono font-bold text-[10px] px-1.5 py-0.2 rounded bg-slate-100 text-slate-700 border border-slate-200">
+                                  {v.plateNumber}
+                                </span>
                               ) : (
-                                <Copy className="w-3 h-3" />
+                                <span className="text-[10px] text-slate-400 italic">No plate</span>
                               )}
-                            </button>
-                          )}
+                              {v.imei && (
+                                <span className="font-mono text-[10px] text-slate-400 truncate max-w-[120px]">
+                                  IMEI: {v.imei}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="flex flex-col items-end gap-1 shrink-0">
+                            <span
+                              className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                isOnline
+                                  ? "bg-emerald-100 text-emerald-800"
+                                  : "bg-rose-100 text-rose-800"
+                              }`}
+                            >
+                              {v.onlineStatus}
+                            </span>
+                            {!isOnline && (
+                              <span className="text-[9px] font-bold text-slate-500">
+                                {daysOff === 0 ? "Today (<24h)" : `${daysOff}d offline`}
+                              </span>
+                            )}
+                          </div>
                         </div>
 
-                        <div className="shrink-0">
-                          <span
-                            className={`px-1.5 py-0.5 rounded-full text-[9px] font-bold ${
-                              v.vtuHistory.statusBadge === "ACTIVE"
-                                ? "bg-emerald-100 text-emerald-800"
+                        {/* Mid: SIM, Network, VTU Health */}
+                        <div className="flex items-start justify-between gap-2 pt-1.5 border-t border-slate-100 text-[11px]">
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-1.5">
+                              {v.network && (
+                                <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-slate-100 text-slate-700 border border-slate-200 shrink-0">
+                                  {v.network.name}
+                                </span>
+                              )}
+                              <span className="font-mono font-semibold text-slate-800 truncate text-[11px]">
+                                {v.normalizedPhone || v.rawSimNumber || "No SIM"}
+                              </span>
+                              {(v.normalizedPhone || v.rawSimNumber) && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleCopy(v.normalizedPhone || v.rawSimNumber)}
+                                  className="text-slate-400 hover:text-indigo-600 shrink-0"
+                                >
+                                  {copiedText === (v.normalizedPhone || v.rawSimNumber) ? (
+                                    <Check className="w-3 h-3 text-emerald-600" />
+                                  ) : (
+                                    <Copy className="w-3 h-3" />
+                                  )}
+                                </button>
+                              )}
+                            </div>
+                            {v.lastHeartbeat && (
+                              <div className="text-[10px] text-slate-400 mt-0.5">
+                                Heartbeat: {new Date(v.lastHeartbeat).toLocaleDateString()} {new Date(v.lastHeartbeat).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="shrink-0 text-right">
+                            <span
+                              className={`px-1.5 py-0.5 rounded-full text-[9px] font-bold ${
+                                v.vtuHistory.statusBadge === "ACTIVE"
+                                  ? "bg-emerald-100 text-emerald-800"
+                                  : v.vtuHistory.statusBadge === "EXPIRED"
+                                  ? "bg-rose-100 text-rose-800"
+                                  : v.vtuHistory.statusBadge === "EXPIRING_SOON"
+                                  ? "bg-amber-100 text-amber-800"
+                                  : "bg-slate-100 text-slate-600"
+                              }`}
+                            >
+                              {v.vtuHistory.statusBadge === "ACTIVE"
+                                ? "Data Active"
                                 : v.vtuHistory.statusBadge === "EXPIRED"
-                                ? "bg-rose-100 text-rose-800"
-                                : "bg-slate-100 text-slate-600"
-                            }`}
+                                ? "Data Expired"
+                                : v.vtuHistory.statusBadge === "EXPIRING_SOON"
+                                ? "Expiring Soon"
+                                : "Never Loaded"}
+                            </span>
+                            {v.vtuHistory.lastDataDate && (
+                              <div className="mt-0.5 text-[9px] text-slate-600 leading-tight">
+                                <div>
+                                  {new Date(v.vtuHistory.lastDataDate).toLocaleDateString()} •{" "}
+                                  {new Date(v.vtuHistory.lastDataDate).toLocaleTimeString([], {
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                  })}
+                                </div>
+                                {v.vtuHistory.lastDataPlan && (
+                                  <div className="text-slate-500 font-semibold truncate max-w-[130px] mt-0.5">
+                                    {v.vtuHistory.lastDataPlan}
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Bottom: Action buttons */}
+                        <div className="flex items-center justify-end gap-1.5 pt-1 border-t border-slate-100">
+                          <Button
+                            type="button"
+                            onClick={() =>
+                              openSingleRechargeModal({
+                                vehicleId: v.id,
+                                vehicleName: v.name,
+                                plateNumber: v.plateNumber,
+                                phone: v.normalizedPhone || v.rawSimNumber,
+                                network: v.network?.name || null,
+                                imei: v.imei,
+                                vtuStatus: v.vtuHistory.statusBadge,
+                                lastDataDate: v.vtuHistory.lastDataDate,
+                                lastDataPlan: v.vtuHistory.lastDataPlan,
+                              })
+                            }
+                            className="h-7 px-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[10px] rounded-lg inline-flex items-center gap-1 shadow-2xs"
                           >
-                            {v.vtuHistory.statusBadge}
-                          </span>
+                            <Zap className="w-2.5 h-2.5 text-amber-300" />
+                            <span>Recharge</span>
+                          </Button>
+
+                          <button
+                            type="button"
+                            onClick={() =>
+                              openSimHistoryModal({
+                                name: v.name,
+                                plate: v.plateNumber,
+                                phone: v.normalizedPhone || v.rawSimNumber,
+                              })
+                            }
+                            className="h-7 px-2 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-[10px] font-semibold"
+                          >
+                            History
+                          </button>
                         </div>
                       </div>
-
-                      {/* Bottom: Action buttons */}
-                      <div className="flex items-center justify-end gap-1.5 pt-1 border-t border-slate-100">
-                        <Button
-                          type="button"
-                          onClick={() =>
-                            openSingleRechargeModal({
-                              vehicleId: v.id,
-                              vehicleName: v.name,
-                              plateNumber: v.plateNumber,
-                              phone: v.normalizedPhone || v.rawSimNumber,
-                              network: v.network?.name || null,
-                              imei: v.imei,
-                            })
-                          }
-                          className="h-7 px-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[10px] rounded-lg inline-flex items-center gap-1 shadow-2xs"
-                        >
-                          <Zap className="w-2.5 h-2.5 text-amber-300" />
-                          <span>Recharge</span>
-                        </Button>
-
-                        <button
-                          type="button"
-                          onClick={() =>
-                            openSimHistoryModal({
-                              name: v.name,
-                              plate: v.plateNumber,
-                              phone: v.normalizedPhone || v.rawSimNumber,
-                            })
-                          }
-                          className="h-7 px-2 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-[10px] font-semibold"
-                        >
-                          History
-                        </button>
-                      </div>
-                    </div>
-                  ))}
+                    )
+                  })}
                 </div>
               </div>
             )}
@@ -1902,6 +2755,25 @@ export function FleetTroubleshootClient({
               <div className="p-2.5 sm:p-3 bg-emerald-50 border border-emerald-300 rounded-xl text-emerald-900 text-xs font-semibold flex items-center gap-2 animate-fadeIn">
                 <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
                 <span>Notice: This vehicle is currently <strong>ONLINE</strong>! Recharging may not be required.</span>
+              </div>
+            )}
+
+            {targetVehicle.lastDataDate && targetVehicle.vtuStatus === "ACTIVE" && (
+              <div className="p-2.5 bg-amber-50 border border-amber-200 rounded-xl text-amber-900 text-xs flex items-center justify-between animate-fadeIn">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                  <div>
+                    <div className="font-semibold text-slate-800">
+                      {new Date(targetVehicle.lastDataDate).toLocaleDateString()} • {new Date(targetVehicle.lastDataDate).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                    </div>
+                    {targetVehicle.lastDataPlan && (
+                      <div className="text-[11px] text-slate-500">{targetVehicle.lastDataPlan}</div>
+                    )}
+                  </div>
+                </div>
+                <span className="text-[10px] font-bold text-amber-800 bg-amber-100/80 px-2 py-0.5 rounded border border-amber-300/60 shrink-0">
+                  Active Data
+                </span>
               </div>
             )}
 
