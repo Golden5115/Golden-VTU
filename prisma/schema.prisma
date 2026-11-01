@@ -158,6 +158,7 @@ model VehicleTracker {
   lastDataRef        String?
   dataValidityDays   Int?             @default(30)
   dataExpiryDate     DateTime?        // Calculated timestamp when data is expected to run out
+  autoRenew          Boolean          @default(true)
 
   createdAt          DateTime         @default(now())
   updatedAt          DateTime         @updatedAt
@@ -245,6 +246,7 @@ model OfflineVehicle {
   dataExpiryDate  DateTime?
   vtuStatus       String    @default("NEVER_LOADED") // "EXPIRED" | "EXPIRING_SOON" | "ACTIVE" | "NEVER_LOADED"
   lastAirtimeDate DateTime?
+  autoRenew       Boolean   @default(true)
 
   lastSyncAt      DateTime  @default(now())
   createdAt       DateTime  @default(now())
@@ -256,6 +258,32 @@ model OfflineVehicle {
   @@index([normalizedPhone])
   @@index([plateNumber])
   @@index([imei])
+}
+
+model ScheduledRenewal {
+  id                String    @id @default(cuid())
+  userId            String
+  phone             String
+  network           String
+  planId            String
+  planName          String
+  cycle             Int       @default(2) // Cycle 2 of 2
+  scheduledDate     DateTime
+  executedDate      DateTime?
+  status            String    @default("PENDING") // PENDING, SUCCESS, FAILED, CANCELLED
+  firstPurchaseRef  String?
+  secondPurchaseRef String?
+  serverId          String?
+  serverName        String?
+  vehicleId         String?
+  vehicleName       String?
+  error             String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([scheduledDate])
+  @@index([status])
+  @@index([phone])
 }
 
 

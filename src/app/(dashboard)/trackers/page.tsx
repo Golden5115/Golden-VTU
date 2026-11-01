@@ -23,9 +23,13 @@ export default async function TrackersPage() {
   const rawServers = await getActiveServers()
   const servers = rawServers.map((s) => ({
     id: s.id,
-    serverName: s.serverName,
+    serverName: (s.serverName || "Server")
+      .replace(/\s*\([^)]*\)/g, "")
+      .replace(/clubkonnect|pairgate|smecloud|sme\s*cloud|nellobyte|autobiz|demopaysub/gi, "")
+      .trim() || "Server",
     serverCode: s.serverCode,
-    providerName: s.providerName,
+    providerName: (s.providerName || "Gateway")
+      .replace(/clubkonnect|pairgate|smecloud|sme\s*cloud|nellobyte|autobiz|demopaysub/gi, "Gateway"),
     identifier: s.identifier,
     status: s.status,
     isDefault: s.isDefault,

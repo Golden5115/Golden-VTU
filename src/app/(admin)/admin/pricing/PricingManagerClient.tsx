@@ -375,7 +375,6 @@ export function PricingManagerClient({
                     Offline
                   </span>
                 )}
-                <span className="text-[10px] opacity-60 uppercase font-mono">({s.identifier})</span>
               </button>
             )
           })}

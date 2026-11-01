@@ -92,7 +92,7 @@ export async function purchaseAirtime(
         status: "PENDING",
         providerReference: null,
         serverId: server.id,
-        serverName: server.serverName,
+        serverName: (server.serverName || "Server 1").replace(/\s*\([^)]*\)/g, "").replace(/clubkonnect|pairgate|smecloud|sme\s*cloud|nellobyte|autobiz|demopaysub/gi, "").trim() || "Server 1",
         provider: provider.identifier,
         trackerId: trackerId || null,
       },
@@ -223,19 +223,27 @@ export async function purchaseAirtime(
         /wallet\s*(?:is\s*)?low/i.test(rawMsg) ||
         /balance\s*(?:is\s*)?(?:too\s*)?low/i.test(rawMsg)
 
-      if (isInsufficientBalance || !rawMsg || rawMsg.toLowerCase().includes("carrier processing error")) {
-        throw new Error(
-          `Transaction failed on ${server.serverName}. Your wallet has been automatically refunded.`
-        )
-      }
+      const cleanServerName = (server.serverName || "Telecom Server")
+        .replace(/\s*\([^)]*\)/g, "")
+        .replace(/clubkonnect|pairgate|smecloud|sme\s*cloud|nellobyte|autobiz|demopaysub/gi, "")
+        .trim() || "Telecom Server"
 
       const cleanErrorMsg = rawMsg
         .replace(/clubkonnect/gi, "Telecom Carrier")
         .replace(/pairgate/gi, "Telecom Carrier")
+        .replace(/sme\s*cloud(?:\.io)?/gi, "Telecom Carrier")
+        .replace(/smecloud(?:\.io)?/gi, "Telecom Carrier")
         .replace(/nellobyte/gi, "Network Gateway")
+        .replace(/autobiz(?:_vending_index\.php)?/gi, "Carrier Gateway")
+
+      if (isInsufficientBalance || !rawMsg || rawMsg.toLowerCase().includes("carrier processing error")) {
+        throw new Error(
+          `Transaction failed on ${cleanServerName}. Your wallet has been automatically refunded.`
+        )
+      }
 
       throw new Error(
-        `Transaction failed on ${server.serverName}. Your wallet has been automatically refunded. (${cleanErrorMsg})`
+        `Transaction failed on ${cleanServerName}. Your wallet has been automatically refunded. (${cleanErrorMsg})`
       )
     }
   })
@@ -330,7 +338,7 @@ export async function purchaseData(
         status: "PENDING",
         providerReference: null,
         serverId: server.id,
-        serverName: server.serverName,
+        serverName: (server.serverName || "Server").replace(/\s*\([^)]*\)/g, "").replace(/clubkonnect|pairgate|smecloud|sme\s*cloud|nellobyte|autobiz|demopaysub/gi, "").trim() || "Server",
         provider: provider.identifier,
         trackerId: trackerId || null,
       },
@@ -416,22 +424,98 @@ export async function purchaseData(
             data: { status: "SUCCESS" },
           })
 
+          const isBiWeeklyPlan =
+            dataPlanId === "6403" ||
+            /twice\s*a\s*month|bi-weekly/i.test(planName || "")
+
+          // For the 100MB Twice a Month plan, Cycle 1 lasts 14 days, and Cycle 2 is scheduled for 14 days later
+          const effectiveDays = isBiWeeklyPlan ? 14 : validityDays
+          const expiryDate = new Date(Date.now() + effectiveDays * 24 * 60 * 60 * 1000)
+
+          if (isBiWeeklyPlan) {
+            // Schedule the second 100MB cycle for 14 days later (prepaid, 0 naira wallet deduction)
+            const scheduledDate = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000)
+            const cleanSrvName = (server.serverName || "Server 3").replace(/\s*\([^)]*\)/g, "").replace(/clubkonnect|pairgate|smecloud|sme\s*cloud|nellobyte|autobiz|demopaysub/gi, "").trim() || "Server 3"
+
+            if ((tx as any).scheduledRenewal?.create) {
+              await (tx as any).scheduledRenewal.create({
+                data: {
+                  userId,
+                  phone,
+                  network: networkId,
+                  planId: dataPlanId,
+                  planName: "MTN 100MB (Cycle 2 of 2 - Bi-Weekly Auto-Renew)",
+                  cycle: 2,
+                  scheduledDate,
+                  status: "PENDING",
+                  firstPurchaseRef: reference,
+                  serverId: server.id,
+                  serverName: cleanSrvName,
+                  vehicleId: trackerId || null,
+                },
+              })
+            } else {
+              // Direct SQL fallback if Prisma Client instance in dev hasn't reloaded the new model delegate
+              const srId = `sr_${Date.now()}_${Math.random().toString(36).substring(7)}`
+              await tx.$executeRawUnsafe(
+                `INSERT INTO "ScheduledRenewal" ("id", "userId", "phone", "network", "planId", "planName", "cycle", "scheduledDate", "status", "firstPurchaseRef", "serverId", "serverName", "vehicleId", "createdAt", "updatedAt")
+                 VALUES ($1, $2, $3, $4, $5, $6, 2, $7, 'PENDING', $8, $9, $10, $11, NOW(), NOW())`,
+                srId,
+                userId,
+                phone,
+                networkId,
+                dataPlanId,
+                "MTN 100MB (Cycle 2 of 2 - Bi-Weekly Auto-Renew)",
+                scheduledDate,
+                reference,
+                server.id,
+                cleanSrvName,
+                trackerId || null
+              )
+            }
+
+            // Update plan label in dataPurchase to reflect cycle 1 of 2
+            await tx.dataPurchase.update({
+              where: { id: purchase.id },
+              data: {
+                plan: "MTN 100MB Twice a Month (Cycle 1 of 2)",
+              },
+            })
+          }
+
           // Update Vehicle Tracker last data top-up details and calculate expiry
           if (trackerId) {
-            const expiryDate = new Date(Date.now() + validityDays * 24 * 60 * 60 * 1000)
             await tx.vehicleTracker.update({
               where: { id: trackerId },
               data: {
                 lastDataDate: new Date(),
-                lastDataPlan: planName || dataPlanId,
+                lastDataPlan: isBiWeeklyPlan ? "MTN 100MB Twice a Month (Cycle 1 of 2)" : (planName || dataPlanId),
                 lastDataAmount: amount,
                 lastDataRef: reference,
-                dataValidityDays: validityDays,
+                dataValidityDays: effectiveDays,
                 dataExpiryDate: expiryDate,
                 status: "ACTIVE",
               },
             })
           }
+
+          // Also update OfflineVehicle cached VTU record if phone matches
+          await tx.offlineVehicle.updateMany({
+            where: {
+              OR: [
+                { normalizedPhone: phone },
+                { rawSimNumber: phone },
+              ],
+            },
+            data: {
+              vtuStatus: "ACTIVE",
+              lastDataPlan: isBiWeeklyPlan ? "MTN 100MB Twice a Month (Cycle 1 of 2)" : (planName || dataPlanId),
+              lastDataAmount: amount,
+              lastDataDate: new Date(),
+              dataExpiryDate: expiryDate,
+              hasVtuRecord: true,
+            },
+          })
         }
       }, TX_OPTIONS)
 
@@ -467,19 +551,27 @@ export async function purchaseData(
         /wallet\s*(?:is\s*)?low/i.test(rawMsg) ||
         /balance\s*(?:is\s*)?(?:too\s*)?low/i.test(rawMsg)
 
-      if (isInsufficientBalance || !rawMsg || rawMsg.toLowerCase().includes("carrier processing error")) {
-        throw new Error(
-          `Transaction failed on ${server.serverName}. Your wallet has been automatically refunded.`
-        )
-      }
+      const cleanServerName = (server.serverName || "Telecom Server")
+        .replace(/\s*\([^)]*\)/g, "")
+        .replace(/clubkonnect|pairgate|smecloud|sme\s*cloud|nellobyte|autobiz|demopaysub/gi, "")
+        .trim() || "Telecom Server"
 
       const cleanErrorMsg = rawMsg
         .replace(/clubkonnect/gi, "Telecom Carrier")
         .replace(/pairgate/gi, "Telecom Carrier")
+        .replace(/sme\s*cloud(?:\.io)?/gi, "Telecom Carrier")
+        .replace(/smecloud(?:\.io)?/gi, "Telecom Carrier")
         .replace(/nellobyte/gi, "Network Gateway")
+        .replace(/autobiz(?:_vending_index\.php)?/gi, "Carrier Gateway")
+
+      if (isInsufficientBalance || !rawMsg || rawMsg.toLowerCase().includes("carrier processing error")) {
+        throw new Error(
+          `Transaction failed on ${cleanServerName}. Your wallet has been automatically refunded.`
+        )
+      }
 
       throw new Error(
-        `Transaction failed on ${server.serverName}. Your wallet has been automatically refunded. (${cleanErrorMsg})`
+        `Transaction failed on ${cleanServerName}. Your wallet has been automatically refunded. (${cleanErrorMsg})`
       )
     }
   })

@@ -23,7 +23,10 @@ export default async function FleetTroubleshootPage() {
   const rawServers = await getActiveServers()
   const servers = rawServers.map((s) => ({
     id: s.id,
-    serverName: s.serverName,
+    serverName: (s.serverName || "Server")
+      .replace(/\s*\([^)]*\)/g, "")
+      .replace(/clubkonnect|pairgate|smecloud|sme\s*cloud|nellobyte|autobiz|demopaysub/gi, "")
+      .trim() || "Server",
     serverCode: s.serverCode,
     status: s.status,
     isDefault: s.isDefault,

@@ -73,7 +73,14 @@ export function AdminProviderActions({ provider }: { provider: ProviderProps }) 
           ) : (
             <AlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
           )}
-          <span className="break-all">{testResult.message}</span>
+          <span className="break-all">
+            {String(testResult.message || "")
+              .replace(/sme\s*cloud(?:\.io)?/gi, "Server 3 Gateway")
+              .replace(/smecloud(?:\.io)?/gi, "Server 3 Gateway")
+              .replace(/pairgate/gi, "Server 2 Gateway")
+              .replace(/clubkonnect/gi, "Server 1 Gateway")
+              .replace(/autobiz(?:_vending_index\.php)?/gi, "Telecom Gateway")}
+          </span>
         </div>
       )}
 

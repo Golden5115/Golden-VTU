@@ -134,6 +134,14 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    const cleanServerName = (name?: string | null, sId?: string | null) => {
+      if (!name) return sId ? "Server" : "Server 1"
+      return name
+        .replace(/\s*\([^)]*\)/g, "")
+        .replace(/clubkonnect|pairgate|smecloud|sme\s*cloud|nellobyte|autobiz|demopaysub/gi, "")
+        .trim() || (sId ? "Server" : "Server 1")
+    }
+
     const results: PhoneHistoryItem[] = uniquePhones.map((phone) => {
       const net = detectNetwork(phone)
       const dataRecord = latestDataMap.get(phone)
@@ -170,7 +178,7 @@ export async function POST(request: NextRequest) {
           daysUntilExpiry,
           isExpired,
           isExpiringSoon,
-          serverName: dataRecord.serverName || (dataRecord.serverId ? "Server" : "Server 1"),
+          serverName: cleanServerName(dataRecord.serverName, dataRecord.serverId),
           provider: dataRecord.provider || "CLUBKONNECT",
         }
       }
@@ -186,7 +194,7 @@ export async function POST(request: NextRequest) {
           daysAgo: aAgo,
           amount: airtimeRecord.amount,
           status: airtimeRecord.status,
-          serverName: airtimeRecord.serverName || (airtimeRecord.serverId ? "Server" : "Server 1"),
+          serverName: cleanServerName(airtimeRecord.serverName, airtimeRecord.serverId),
           provider: airtimeRecord.provider || "CLUBKONNECT",
         }
       }
@@ -222,7 +230,7 @@ export async function POST(request: NextRequest) {
           amount: contextRecord.amount,
           status: contextRecord.status,
           type: type === "data" ? "DATA" : "AIRTIME",
-          serverName: contextRecord.serverName || (contextRecord.serverId ? "Server" : "Server 1"),
+          serverName: cleanServerName(contextRecord.serverName, contextRecord.serverId),
           provider: contextRecord.provider || "CLUBKONNECT",
         }
       } else if (type === "data" && airtimeRecord) {
@@ -238,7 +246,7 @@ export async function POST(request: NextRequest) {
           amount: airtimeRecord.amount,
           status: airtimeRecord.status,
           type: "AIRTIME",
-          serverName: airtimeRecord.serverName || (airtimeRecord.serverId ? "Server" : "Server 1"),
+          serverName: cleanServerName(airtimeRecord.serverName, airtimeRecord.serverId),
           provider: airtimeRecord.provider || "CLUBKONNECT",
         }
       } else if (type === "airtime" && dataRecord) {

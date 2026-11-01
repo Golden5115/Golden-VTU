@@ -345,7 +345,10 @@ export async function queryDirectCarrierStatus(referenceOrOrderId: string) {
     const cleanRemark = String(live.remark || "")
       .replace(/clubkonnect/gi, "Carrier Gateway")
       .replace(/pairgate/gi, "Carrier Gateway")
+      .replace(/sme\s*cloud(?:\.io)?/gi, "Carrier Gateway")
+      .replace(/smecloud(?:\.io)?/gi, "Carrier Gateway")
       .replace(/nellobyte/gi, "Network Provider")
+      .replace(/autobiz(?:_vending_index\.php)?/gi, "Carrier Gateway")
 
     const sanitizedData = {
       orderId: live.orderId,

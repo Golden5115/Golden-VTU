@@ -4,12 +4,28 @@ import { AdminProviderActions } from "./AdminProviderActions"
 import { AddProviderModal } from "./AddProviderModal"
 import { Server, Zap, Shield, Key } from "lucide-react"
 
+import { ServerReserveManager } from "./ServerReserveManager"
+import { getServer3ReserveTelemetry } from "@/services/auto-renew.service"
+
 export const dynamic = "force-dynamic"
 
 export default async function AdminProvidersPage() {
-  const providers = await prisma.provider.findMany({
-    orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
-  })
+  const [providers, reserveSettings] = await Promise.all([
+    prisma.provider.findMany({
+      orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+    }),
+    getServer3ReserveTelemetry().catch((err) => {
+      console.warn("[AdminProvidersPage] Telemetry fallback:", err)
+      return {
+        liveBalance: 0,
+        minReserve: 3000,
+        pendingCount: 0,
+        totalScheduledCost: 0,
+        requiredTotalBalance: 3000,
+        scheduledList: [],
+      }
+    }),
+  ])
 
   return (
     <div className="space-y-6">
@@ -25,6 +41,16 @@ export default async function AdminProvidersPage() {
         </div>
         <AddProviderModal nextServerNumber={providers.length + 1} />
       </div>
+
+      {/* Server 3 Minimum Reserve Balance & Automated Renewal Safety */}
+      <ServerReserveManager
+        initialLiveBalance={reserveSettings.liveBalance}
+        initialMinReserve={reserveSettings.minReserve}
+        initialPendingCount={reserveSettings.pendingCount}
+        initialTotalScheduledCost={reserveSettings.totalScheduledCost || 0}
+        initialRequiredTotalBalance={reserveSettings.requiredTotalBalance || reserveSettings.minReserve}
+        initialScheduledList={reserveSettings.scheduledList || []}
+      />
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         {providers.map((provider: any) => (
@@ -92,6 +118,26 @@ export default async function AdminProvidersPage() {
                   </p>
                 </div>
 
+                {(provider.serverCode === "server-3" || provider.identifier === "SMECLOUD") && (
+                  <div className="rounded-xl bg-indigo-50/80 border border-indigo-200/80 p-3 space-y-1.5 text-xs">
+                    <div className="flex items-center justify-between font-bold text-indigo-900">
+                      <span className="flex items-center gap-1.5">
+                        <Zap className="w-3.5 h-3.5 text-indigo-600" />
+                        Bi-Weekly Renewal Route
+                      </span>
+                      <span className="text-[10px] bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold px-1.5 py-0.5 rounded-full">Active</span>
+                    </div>
+                    <div className="text-[11px] text-slate-600 flex justify-between pt-0.5">
+                      <span>Reserve Floor:</span>
+                      <span className="font-mono font-bold text-indigo-700">₦{reserveSettings.minReserve.toLocaleString()}</span>
+                    </div>
+                    <div className="text-[11px] text-slate-600 flex justify-between">
+                      <span>Scheduled SIMs:</span>
+                      <span className="font-mono font-bold text-amber-700">{reserveSettings.pendingCount} SIM{reserveSettings.pendingCount === 1 ? "" : "s"}</span>
+                    </div>
+                  </div>
+                )}
+
                 <div className="border-t pt-3">
                   <AdminProviderActions
                     provider={{
@@ -112,7 +158,7 @@ export default async function AdminProvidersPage() {
             <div className="space-y-1">
               <h3 className="text-base font-semibold">No VTU API Servers Configured</h3>
               <p className="text-xs text-muted-foreground max-w-sm mx-auto">
-                Click &quot;Add VTU Server&quot; above to connect ClubKonnect, VTPass, Husmodata, or a Sandbox test server.
+                Click &quot;Add VTU Server&quot; above to connect an additional telecom carrier server or Sandbox test gateway.
               </p>
             </div>
           </div>

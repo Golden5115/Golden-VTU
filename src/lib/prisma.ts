@@ -103,8 +103,11 @@ declare global {
   var prismaGlobal: undefined | ReturnType<typeof prismaClientSingleton>
 }
 
-// Invalidate stale in-memory dev singleton if offlineVehicle model is missing
-if (globalThis.prismaGlobal && !(globalThis.prismaGlobal as any).offlineVehicle) {
+// Invalidate stale in-memory dev singleton if offlineVehicle or scheduledRenewal model is missing
+if (
+  globalThis.prismaGlobal &&
+  (!(globalThis.prismaGlobal as any).offlineVehicle || !(globalThis.prismaGlobal as any).scheduledRenewal)
+) {
   globalThis.prismaGlobal = undefined
 }
 

@@ -272,7 +272,9 @@ export function AirtimeForm({
                   }`}
                 >
                   <div className="flex items-center justify-between w-full">
-                    <span className="font-bold truncate">{srv.serverName}</span>
+                    <span className="font-bold truncate">
+                      {srv.serverName.replace(/\s*\([^)]*\)/g, "").replace(/clubkonnect|pairgate|smecloud|sme\s*cloud|nellobyte|autobiz|demopaysub/gi, "").trim() || "Server"}
+                    </span>
                     <span
                       className={`w-2 h-2 rounded-full ${
                         isActive ? "bg-green-300 animate-pulse" : "bg-green-500"

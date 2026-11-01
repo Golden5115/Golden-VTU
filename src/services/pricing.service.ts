@@ -67,7 +67,17 @@ export async function applyCustomPricing(
         }
       }
 
-      // 2. Otherwise apply wholesale cost + default admin markup
+      // 2. Plan 6403 defaults to ₦400 (2x ₦150 bi-weekly cycles) if not yet customized
+      if (plan.id === "6403") {
+        return {
+          ...plan,
+          rawPrice: wholesale,
+          price: 400,
+          isCustomPrice: false,
+        }
+      }
+
+      // 3. Otherwise apply wholesale cost + default admin markup
       const finalPrice = wholesale > 0 ? Math.ceil(wholesale + defaultMarkup) : plan.price
       return {
         ...plan,

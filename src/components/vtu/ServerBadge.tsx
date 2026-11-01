@@ -16,28 +16,28 @@ export function parseServerDetails(serverName?: string | null, provider?: string
   const sName = (serverName || "").trim().toLowerCase()
   const pName = (provider || "").trim().toUpperCase()
 
-  if (sName.includes("server 1") || sName.includes("server-1") || pName === "CLUBKONNECT") {
+  if (sName.includes("server 1") || sName.includes("server-1") || pName === "CLUBKONNECT" || sName.includes("clubkonnect")) {
     return {
       label: "Server 1",
       colorClass: "bg-amber-50 text-amber-800 border-amber-200/90",
     }
   }
 
-  if (sName.includes("server 2") || sName.includes("server-2") || pName === "PAIRGATE") {
+  if (sName.includes("server 2") || sName.includes("server-2") || pName === "PAIRGATE" || sName.includes("pairgate")) {
     return {
       label: "Server 2",
       colorClass: "bg-purple-50 text-purple-800 border-purple-200/90",
     }
   }
 
-  if (sName.includes("server 3") || sName.includes("server-3")) {
+  if (sName.includes("server 3") || sName.includes("server-3") || pName === "SMECLOUD" || sName.includes("smecloud") || sName.includes("sme cloud")) {
     return {
       label: "Server 3",
       colorClass: "bg-sky-50 text-sky-800 border-sky-200/90",
     }
   }
 
-  if (sName.includes("server 4") || sName.includes("server-4")) {
+  if (sName.includes("server 4") || sName.includes("server-4") || pName === "DEMOPAYSUB" || sName.includes("demopaysub")) {
     return {
       label: "Server 4",
       colorClass: "bg-teal-50 text-teal-800 border-teal-200/90",
@@ -45,8 +45,12 @@ export function parseServerDetails(serverName?: string | null, provider?: string
   }
 
   if (serverName) {
+    const cleaned = serverName
+      .replace(/\s*\([^)]*\)/g, "")
+      .replace(/clubkonnect|pairgate|smecloud|sme\s*cloud|nellobyte|autobiz|demopaysub/gi, "")
+      .trim() || "Server"
     return {
-      label: serverName,
+      label: cleaned,
       colorClass: "bg-blue-50 text-blue-800 border-blue-200/90",
     }
   }

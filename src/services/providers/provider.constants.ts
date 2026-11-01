@@ -67,6 +67,17 @@ export const SUPPORTED_PROVIDER_TEMPLATES: ProviderTemplate[] = [
     apiKeyLabel: "Bearer API Key",
   },
   {
+    identifier: "SMECLOUD",
+    name: "SMECloud",
+    defaultBaseUrl: "https://smecloud.io/autobiz_vending_index.php",
+    requiresUserId: false,
+    requiresApiKey: true,
+    requiresSecretKey: false,
+    requiresPublicKey: false,
+    description: "SMECloud Telecom API (Auto-Renewing 1-Month Bundles, Bearer Token)",
+    apiKeyLabel: "Bearer API Key",
+  },
+  {
     identifier: "MOCK",
     name: "Sandbox / Demo Server",
     defaultBaseUrl: "https://sandbox.local",

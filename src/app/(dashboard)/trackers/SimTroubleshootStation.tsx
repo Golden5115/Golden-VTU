@@ -767,14 +767,17 @@ export function SimTroubleshootStation({
           )}
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {servers.map((s, idx) => {
-            const isServer2 = s.serverCode === "server-2" || idx === 1 || (s as any).identifier === "PAIRGATE"
-            const isServer1 = s.serverCode === "server-1" || (s as any).identifier === "CLUBKONNECT" || (!isServer2 && idx === 0)
+            const isServer3 = s.serverCode === "server-3" || idx === 2 || (s as any).identifier === "SMECLOUD" || (s.serverName || "").toLowerCase().includes("server 3")
+            const isServer2 = s.serverCode === "server-2" || idx === 1 || (s as any).identifier === "PAIRGATE" || (s.serverName || "").toLowerCase().includes("server 2")
+            const isServer1 = s.serverCode === "server-1" || (s as any).identifier === "CLUBKONNECT" || (!isServer2 && !isServer3 && idx === 0)
             const isOffline = isServer1 // Greyed out until active
             const isSelected = s.id === selectedServerId && !isOffline
-            const displayName = isServer2 ? "Server 2" : "Server 1"
-            const subtitle = isServer2
+            const displayName = isServer3 ? "Server 3" : isServer2 ? "Server 2" : isServer1 ? "Server 1" : (s.serverName || `Server ${idx + 1}`).replace(/\s*\([^)]*\)/g, "").replace(/clubkonnect|pairgate|smecloud|sme\s*cloud|nellobyte|autobiz|demopaysub/gi, "").trim() || `Server ${idx + 1}`
+            const subtitle = isServer3
+              ? "Tracker Special Route (Active)"
+              : isServer2
               ? "Corporate Data Route (Active)"
               : "Standard Data Route (Temporarily Offline)"
 

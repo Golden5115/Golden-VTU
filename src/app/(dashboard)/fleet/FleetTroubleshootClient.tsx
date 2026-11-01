@@ -595,8 +595,34 @@ export function FleetTroubleshootClient({
   // Resolve detected network info for display
   const detectedNet = targetVehicle?.phone ? detectNetwork(targetVehicle.phone) : null
 
+  // Dynamic server-specific plans cache
+  const [serverPlansCache, setServerPlansCache] = useState<Record<string, any[]>>({})
+  const [isLoadingServerPlans, setIsLoadingServerPlans] = useState(false)
+
+  const handleModalServerChange = async (newServerId: string) => {
+    setModalServerId(newServerId)
+    setModalPlanValue("")
+    if (serverPlansCache[newServerId]) return
+
+    setIsLoadingServerPlans(true)
+    try {
+      const res = await fetch(`/api/servers/${newServerId}/plans`)
+      const data = await res.json()
+      if (data.success && Array.isArray(data.plans)) {
+        setServerPlansCache((prev) => ({ ...prev, [newServerId]: data.plans }))
+      }
+    } catch (err) {
+      console.error("[FleetTroubleshoot] Failed to load plans for server:", err)
+    } finally {
+      setIsLoadingServerPlans(false)
+    }
+  }
+
+  // Active plans pool for the selected server
+  const currentServerPlans = serverPlansCache[modalServerId] || availablePlans
+
   // Filter available plans for the selected network in the modal
-  const modalFilteredPlans = availablePlans.filter((p) => {
+  const modalFilteredPlans = currentServerPlans.filter((p: any) => {
     const pNet = String(p.network || "").trim()
     const pNetName = String(p.networkName || "").toUpperCase().trim()
     if (modalNetworkId === "01") return pNet === "01" || pNetName.includes("MTN")
@@ -2868,17 +2894,30 @@ export function FleetTroubleshootClient({
 
             {/* Telecom Server Route Selector */}
             <div className="space-y-1">
-              <label className="text-[11px] sm:text-xs font-bold text-slate-700">Telecom Server Route</label>
+              <div className="flex items-center justify-between">
+                <label className="text-[11px] sm:text-xs font-bold text-slate-700">Telecom Server Route</label>
+                {isLoadingServerPlans && (
+                  <span className="text-[10px] text-indigo-600 font-semibold flex items-center gap-1">
+                    <Loader2 className="w-2.5 h-2.5 animate-spin" /> Loading plans...
+                  </span>
+                )}
+              </div>
               <select
                 value={modalServerId}
-                onChange={(e) => setModalServerId(e.target.value)}
+                onChange={(e) => handleModalServerChange(e.target.value)}
                 className="w-full h-9 sm:h-10 border border-slate-200 rounded-xl px-2.5 sm:px-3 text-[11px] sm:text-xs bg-white font-semibold text-slate-800"
               >
-                {servers.map((s, idx) => (
-                  <option key={s.id} value={s.id}>
-                    Server {idx + 1} ({s.serverName}) {s.isDefault ? "— (Active Default)" : ""}
-                  </option>
-                ))}
+                {servers.map((s, idx) => {
+                  const cleanName = (s.serverName || `Server ${idx + 1}`)
+                    .replace(/\s*\([^)]*\)/g, "")
+                    .replace(/clubkonnect|pairgate|smecloud|sme\s*cloud|nellobyte|autobiz|demopaysub/gi, "")
+                    .trim() || `Server ${idx + 1}`
+                  return (
+                    <option key={s.id} value={s.id}>
+                      {cleanName} {s.isDefault ? "— (Active Default)" : ""}
+                    </option>
+                  )
+                })}
               </select>
             </div>
 
@@ -2907,6 +2946,9 @@ export function FleetTroubleshootClient({
                 })}
                 {modalFilteredPlans.length === 0 && modalNetworkId === "01" && (
                   <>
+                    <option value="6403::400::MTN 100MB Twice a Month (Bi-Weekly Auto-Renew)::30 Days">MTN 100MB Twice a Month (2x Bi-Weekly) — ₦400 (Recommended Tracker Plan)</option>
+                    <option value="1223::380::MTN 500MB Monthly (Transfer)::30 Days">MTN 500MB Monthly (Transfer) — ₦380 (1-Month Auto-Renewing)</option>
+                    <option value="1224::580::MTN 1GB Monthly (Transfer)::30 Days">MTN 1GB Monthly (Transfer) — ₦580 (30-Day Plan)</option>
                     <option value="14::380::500MB (CG) (30 Days)::30 Days">500MB (CG) (30 Days) — ₦380</option>
                     <option value="8::380::1.0GB SME (30 Days)::30 Days">1.0GB SME (30 Days) — ₦380 (Recommended 30-Day Plan)</option>
                     <option value="9::660::2.0GB SME (30 Days)::30 Days">2.0GB SME (30 Days) — ₦660</option>

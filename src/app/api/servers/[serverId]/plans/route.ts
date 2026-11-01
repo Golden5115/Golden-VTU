@@ -18,7 +18,10 @@ export async function GET(
       success: true,
       server: {
         id: server.id,
-        serverName: server.serverName,
+        serverName: (server.serverName || "Server")
+          .replace(/\s*\([^)]*\)/g, "")
+          .replace(/clubkonnect|pairgate|smecloud|sme\s*cloud|nellobyte|autobiz|demopaysub/gi, "")
+          .trim() || "Server",
         serverCode: server.serverCode,
       },
       plans,

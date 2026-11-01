@@ -4,6 +4,7 @@ import { ClubKonnectProvider } from "./clubkonnect.provider"
 import { VtpassProvider } from "./vtpass.provider"
 import { HusmodataProvider } from "./husmodata.provider"
 import { PairgateProvider } from "./pairgate.provider"
+import { SmeCloudProvider } from "./smecloud.provider"
 import { MockProvider } from "./mock.provider"
 
 export * from "./provider.constants"
@@ -14,6 +15,8 @@ export function createProviderInstance(identifier: string): IVtuProvider {
       return new ClubKonnectProvider()
     case "PAIRGATE":
       return new PairgateProvider()
+    case "SMECLOUD":
+      return new SmeCloudProvider()
     case "VTPASS":
       return new VtpassProvider()
     case "DEMOPAYSUB":

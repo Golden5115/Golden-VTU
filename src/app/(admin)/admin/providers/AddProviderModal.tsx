@@ -24,9 +24,9 @@ export function AddProviderModal({ nextServerNumber = 2 }: { nextServerNumber?: 
   )
 
   const [formData, setFormData] = useState({
-    serverName: `Server ${nextServerNumber} (${SUPPORTED_PROVIDER_TEMPLATES[1].name})`,
+    serverName: `Server ${nextServerNumber}`,
     serverCode: `server-${nextServerNumber}`,
-    providerName: SUPPORTED_PROVIDER_TEMPLATES[1].name,
+    providerName: `Server ${nextServerNumber} Gateway`,
     identifier: SUPPORTED_PROVIDER_TEMPLATES[1].identifier,
     baseUrl: SUPPORTED_PROVIDER_TEMPLATES[1].defaultBaseUrl,
     apiKey: "",
@@ -39,10 +39,10 @@ export function AddProviderModal({ nextServerNumber = 2 }: { nextServerNumber?: 
     setSelectedTemplate(template)
     setFormData((prev) => ({
       ...prev,
-      providerName: template.name,
+      providerName: `Server ${nextServerNumber} Gateway`,
       identifier: template.identifier,
       baseUrl: template.defaultBaseUrl,
-      serverName: `Server ${nextServerNumber} (${template.name})`,
+      serverName: `Server ${nextServerNumber}`,
       serverCode: `server-${nextServerNumber}`,
     }))
   }
@@ -138,7 +138,7 @@ export function AddProviderModal({ nextServerNumber = 2 }: { nextServerNumber?: 
             <Label className="text-xs font-semibold">Server Display Name (Shown to users)</Label>
             <Input
               required
-              placeholder="e.g., Server 2 (VTPass Corporate)"
+              placeholder="e.g., Server 2"
               value={formData.serverName}
               onChange={(e) => setFormData({ ...formData, serverName: e.target.value })}
             />

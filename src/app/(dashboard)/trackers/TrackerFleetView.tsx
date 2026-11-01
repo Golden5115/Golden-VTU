@@ -860,7 +860,7 @@ export function TrackerFleetView({
                           disabled={isOffline}
                           className={isOffline ? "text-gray-400 bg-gray-100" : ""}
                         >
-                          {s.serverName} ({s.providerName}) {isOffline ? "— [Temporarily Offline]" : "— [Active Route]"}
+                          {s.serverName.replace(/\s*\([^)]*\)/g, "").replace(/clubkonnect|pairgate|smecloud|sme\s*cloud|nellobyte|autobiz|demopaysub/gi, "").trim() || "Server"} {isOffline ? "— [Temporarily Offline]" : "— [Active Route]"}
                         </option>
                       )
                     })}
@@ -998,7 +998,7 @@ export function TrackerFleetView({
                           disabled={isOffline}
                           className={isOffline ? "text-gray-400 bg-gray-100" : ""}
                         >
-                          {s.serverName} ({s.providerName}) {isOffline ? "— [Temporarily Offline]" : "— [Active Route]"}
+                          {s.serverName.replace(/\s*\([^)]*\)/g, "").replace(/clubkonnect|pairgate|smecloud|sme\s*cloud|nellobyte|autobiz|demopaysub/gi, "").trim() || "Server"} {isOffline ? "— [Temporarily Offline]" : "— [Active Route]"}
                         </option>
                       )
                     })}

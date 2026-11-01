@@ -589,7 +589,7 @@ export class ClubKonnectProvider implements IVtuProvider {
     } catch (err: any) {
       return {
         success: false,
-        message: err.message || "Failed to connect to ClubKonnect.",
+        message: String(err.message || "Failed to connect to Server 1 Gateway.").replace(/clubkonnect/gi, "Server 1 Gateway"),
       }
     }
   }

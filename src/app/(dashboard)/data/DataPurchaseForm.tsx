@@ -315,7 +315,9 @@ export function DataPurchaseForm({
                   }`}
                 >
                   <div className="flex items-center justify-between w-full">
-                    <span className="font-bold truncate">{srv.serverName}</span>
+                    <span className="font-bold truncate">
+                      {srv.serverName.replace(/\s*\([^)]*\)/g, "").replace(/clubkonnect|pairgate|smecloud|sme\s*cloud|nellobyte|autobiz|demopaysub/gi, "").trim() || "Server"}
+                    </span>
                     <span
                       className={`w-2 h-2 rounded-full ${
                         isActive ? "bg-green-300 animate-pulse" : "bg-green-500"
@@ -533,7 +535,7 @@ export function DataPurchaseForm({
                 />
               </div>
 
-              {/* 4. Bypass number validator (ClubKonnect Ported SIM Support) */}
+              {/* 4. Bypass number validator (Ported SIM Support) */}
               <div
                 className={`p-3.5 rounded-xl border transition-all duration-200 ${
                   bypassSimCheck

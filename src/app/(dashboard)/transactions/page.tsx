@@ -104,7 +104,10 @@ export default async function TransactionsPage(props: PageProps) {
       status: tx.status,
       isRefunded: tx.status === "FAILED",
       date: tx.createdAt.toISOString(),
-      serverName: tx.serverName || (tx.serverId ? "Server" : "Server 1"),
+      serverName: (tx.serverName || (tx.serverId ? "Server" : "Server 1"))
+        .replace(/\s*\([^)]*\)/g, "")
+        .replace(/clubkonnect|pairgate|smecloud|sme\s*cloud|nellobyte|autobiz|demopaysub/gi, "")
+        .trim() || "Server",
       provider: tx.provider || "CLUBKONNECT",
     })),
     ...dataTxs.map((tx) => ({
@@ -119,7 +122,10 @@ export default async function TransactionsPage(props: PageProps) {
       status: tx.status,
       isRefunded: tx.status === "FAILED",
       date: tx.createdAt.toISOString(),
-      serverName: tx.serverName || (tx.serverId ? "Server" : "Server 1"),
+      serverName: (tx.serverName || (tx.serverId ? "Server" : "Server 1"))
+        .replace(/\s*\([^)]*\)/g, "")
+        .replace(/clubkonnect|pairgate|smecloud|sme\s*cloud|nellobyte|autobiz|demopaysub/gi, "")
+        .trim() || "Server",
       provider: tx.provider || "CLUBKONNECT",
     })),
   ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())

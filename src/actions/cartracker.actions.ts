@@ -1066,6 +1066,7 @@ export interface GetOfflineVehiclesResult {
     dataExpiryDate: string | null
     vtuStatus: "EXPIRED" | "EXPIRING_SOON" | "ACTIVE" | "NEVER_LOADED"
     lastAirtimeDate: string | null
+    autoRenew: boolean
     lastSyncAt: string
   }>
   total: number
@@ -1278,6 +1279,7 @@ export async function getOfflineVehicles(params: GetOfflineVehiclesParams = {}):
       dataExpiryDate: v.dataExpiryDate ? v.dataExpiryDate.toISOString() : null,
       vtuStatus: v.vtuStatus as "EXPIRED" | "EXPIRING_SOON" | "ACTIVE" | "NEVER_LOADED",
       lastAirtimeDate: v.lastAirtimeDate ? v.lastAirtimeDate.toISOString() : null,
+      autoRenew: (v as any).autoRenew ?? true,
       lastSyncAt: v.lastSyncAt.toISOString(),
     }))
 
@@ -1421,4 +1423,73 @@ export async function rechargeSingleVehicle(payload: RechargeSingleVehiclePayloa
     }
   }
 }
+
+/**
+ * Trigger manual auto-renewal execution from UI dashboard
+ */
+export async function triggerFleetAutoRenewal(limit?: number) {
+  const user = await requireUser()
+  const { runAutoRenewalBatch } = await import("@/services/auto-renew.service")
+  
+  const result = await runAutoRenewalBatch({
+    batchLimit: limit || 25,
+    requestedByUserId: user.id,
+  })
+
+  revalidatePath("/fleet")
+  revalidatePath("/trackers")
+  revalidatePath("/transactions")
+  revalidatePath("/dashboard")
+
+  return result
+}
+
+/**
+ * Fetch live auto-renewal telemetry and configuration for the UI
+ */
+export async function getAutoRenewalTelemetry() {
+  await requireUser()
+  const { getAutoRenewalConfig, getDueVehiclesCount } = await import("@/services/auto-renew.service")
+  
+  const [config, dueCounts] = await Promise.all([
+    getAutoRenewalConfig(),
+    getDueVehiclesCount(),
+  ])
+
+  return {
+    config,
+    dueCounts,
+  }
+}
+
+/**
+ * Toggle auto-renew status for an individual vehicle
+ */
+export async function toggleVehicleAutoRenew(cartrackerId: number, autoRenew: boolean) {
+  await requireUser()
+
+  await prisma.offlineVehicle.updateMany({
+    where: { cartrackerId },
+    data: { autoRenew },
+  })
+
+  revalidatePath("/fleet")
+  return { success: true, autoRenew }
+}
+
+/**
+ * Batch toggle auto-renew status for multiple vehicles
+ */
+export async function batchToggleVehicleAutoRenew(cartrackerIds: number[], autoRenew: boolean) {
+  await requireUser()
+
+  await prisma.offlineVehicle.updateMany({
+    where: { cartrackerId: { in: cartrackerIds } },
+    data: { autoRenew },
+  })
+
+  revalidatePath("/fleet")
+  return { success: true, count: cartrackerIds.length }
+}
+
 

@@ -49,7 +49,16 @@ export default async function TrackerDetailPage({
   })
   const walletBalance = user?.walletBalance || 0
 
-  const servers = await getActiveServers()
+  const rawServers = await getActiveServers()
+  const servers = rawServers.map((s) => ({
+    ...s,
+    serverName: (s.serverName || "Server")
+      .replace(/\s*\([^)]*\)/g, "")
+      .replace(/clubkonnect|pairgate|smecloud|sme\s*cloud|nellobyte|autobiz|demopaysub/gi, "")
+      .trim() || "Server",
+    providerName: (s.providerName || "Gateway")
+      .replace(/clubkonnect|pairgate|smecloud|sme\s*cloud|nellobyte|autobiz|demopaysub/gi, "Gateway"),
+  }))
   const { provider } = await resolveServerAndProvider()
   let availablePlans: any[] = []
   try {

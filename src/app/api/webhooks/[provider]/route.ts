@@ -23,20 +23,38 @@ async function handleWebhook(request: NextRequest, provider: string) {
     let requestId: string | null = null
     let isSuccess = false
 
-    // 1. Parse GET params (ClubKonnect style)
+    // 1. Parse GET params (ClubKonnect & SMECloud style)
     const searchParams = request.nextUrl.searchParams
     if (searchParams.toString().length > 0) {
-      orderId = searchParams.get("orderid") || searchParams.get("OrderID") || null
-      requestId = searchParams.get("requestid") || searchParams.get("RequestID") || null
-      const orderStatus = (searchParams.get("orderstatus") || searchParams.get("OrderStatus") || "").toUpperCase()
-      const statusCode = searchParams.get("statuscode") || searchParams.get("StatusCode") || ""
-      isSuccess = orderStatus === "ORDER_COMPLETED" || statusCode === "200" || statusCode === "299"
+      if (provider === "smecloud") {
+        orderId = searchParams.get("recharge_id") || searchParams.get("order_id") || null
+        requestId = searchParams.get("user_reference") || null
+        const st = (searchParams.get("status") || searchParams.get("pay_status") || searchParams.get("off_status") || "").toLowerCase()
+        const tr = (searchParams.get("true_response") || "").toLowerCase()
+        isSuccess = st === "done" || st === "completed" || st === "success" || tr.includes("successful") || searchParams.get("error_code") === "1986"
+      } else {
+        orderId = searchParams.get("orderid") || searchParams.get("OrderID") || null
+        requestId = searchParams.get("requestid") || searchParams.get("RequestID") || null
+        const orderStatus = (searchParams.get("orderstatus") || searchParams.get("OrderStatus") || "").toUpperCase()
+        const statusCode = searchParams.get("statuscode") || searchParams.get("StatusCode") || ""
+        isSuccess = orderStatus === "ORDER_COMPLETED" || statusCode === "200" || statusCode === "299"
+      }
     }
 
     // 2. Parse POST body if present
     if (!orderId && !requestId && request.method === "POST") {
       try {
-        const body = await request.json()
+        let body: any = {}
+        const contentType = request.headers.get("content-type") || ""
+        if (contentType.includes("application/x-www-form-urlencoded")) {
+          const formData = await request.formData()
+          formData.forEach((val, key) => {
+            body[key] = val
+          })
+        } else {
+          body = await request.json()
+        }
+
         console.log(`[Webhook ${provider}] Received payload:`, body)
 
         if (provider === "clubkonnect") {
@@ -56,6 +74,12 @@ async function handleWebhook(request: NextRequest, provider: string) {
           requestId = pData.reference || body.reference || null
           const st = String(pData.status || body.status || "").toLowerCase().trim()
           isSuccess = st === "successful" || st === "delivered" || st === "success"
+        } else if (provider === "smecloud") {
+          orderId = String(body.recharge_id || body.order_id || "")
+          requestId = body.user_reference || null
+          const st = String(body.status || body.pay_status || body.off_status || "").toLowerCase().trim()
+          const tr = String(body.true_response || "").toLowerCase()
+          isSuccess = st === "done" || st === "completed" || st === "success" || tr.includes("successful") || body.error_code === 1986
         } else {
           // Husmodata / generic SME standard
           orderId = String(body.id || body.ident || "")
@@ -64,7 +88,7 @@ async function handleWebhook(request: NextRequest, provider: string) {
           isSuccess = st === "successful" || st === "success"
         }
       } catch {
-        // Body was not json, ignore
+        // Body was not json or form-data, ignore
       }
     }
 

@@ -97,7 +97,9 @@ export class PairgateProvider implements IVtuProvider {
     const data = await response.json().catch(() => ({}))
 
     if (!response.ok || (data.status && data.status !== "success" && data.code !== 200)) {
-      const errMsg = data.message || data.error || `Carrier airtime failed (${response.status})`
+      const errMsg = String(data.message || data.error || `Carrier airtime failed (${response.status})`)
+        .replace(/pairgate/gi, "Telecom Carrier")
+        .replace(/clubkonnect/gi, "Telecom Carrier")
       throw new Error(errMsg)
     }
 
@@ -151,7 +153,9 @@ export class PairgateProvider implements IVtuProvider {
     const data = await response.json().catch(() => ({}))
 
     if (!response.ok || (data.status && data.status !== "success" && data.code !== 200)) {
-      const errMsg = data.message || data.error || `Carrier data purchase failed (${response.status})`
+      const errMsg = String(data.message || data.error || `Carrier data purchase failed (${response.status})`)
+        .replace(/pairgate/gi, "Telecom Carrier")
+        .replace(/clubkonnect/gi, "Telecom Carrier")
       throw new Error(errMsg)
     }
 
@@ -193,7 +197,9 @@ export class PairgateProvider implements IVtuProvider {
     const data = await response.json().catch(() => ({}))
 
     if (!response.ok || data.status === "error") {
-      throw new Error(data.message || `Failed to fetch Pairgate wallet balance (${response.status})`)
+      throw new Error(
+        String(data.message || `Failed to fetch Server 2 wallet balance (${response.status})`).replace(/pairgate/gi, "Telecom Carrier")
+      )
     }
 
     const rawBal = data.data?.balance || data.balance || "0"
@@ -208,19 +214,19 @@ export class PairgateProvider implements IVtuProvider {
   async testConnection(): Promise<{ success: boolean; balance?: number; currency?: string; message?: string }> {
     try {
       if (!this.apiKey) {
-        return { success: false, message: "API Key (Bearer Token) is required for Pairgate." }
+        return { success: false, message: "API Key (Bearer Token) is required for Server 2 Gateway." }
       }
       const bal = await this.getWalletBalance()
       return {
         success: true,
         balance: bal.balance,
         currency: bal.currency,
-        message: `Pairgate connected successfully! Wallet Balance: ₦${bal.balance.toLocaleString()}`,
+        message: `Server 2 connected successfully! Wallet Balance: ₦${bal.balance.toLocaleString()}`,
       }
     } catch (err: any) {
       return {
         success: false,
-        message: err.message || "Failed to connect to Pairgate API.",
+        message: String(err.message || "Failed to connect to Server 2 API.").replace(/pairgate/gi, "Telecom Carrier"),
       }
     }
   }

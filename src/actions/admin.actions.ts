@@ -197,3 +197,24 @@ export async function seedInitialServers() {
   revalidatePath("/admin/providers")
   return { success: true }
 }
+
+/**
+ * Get Server 3 minimum balance reserve settings and telemetry
+ */
+export async function getServer3ReserveSettings() {
+  await requireAdmin()
+  const { getServer3ReserveTelemetry } = await import("@/services/auto-renew.service")
+  return await getServer3ReserveTelemetry()
+}
+
+/**
+ * Update Server 3 minimum balance reserve threshold
+ */
+export async function updateServer3ReserveSettings(minReserve: number) {
+  await requireAdmin()
+  const { updateServer3MinReserve } = await import("@/services/auto-renew.service")
+  const res = await updateServer3MinReserve(minReserve)
+  revalidatePath("/admin/providers")
+  return res
+}
+
