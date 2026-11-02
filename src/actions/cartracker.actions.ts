@@ -980,19 +980,20 @@ export async function syncOfflineVehiclesBatch(
         lastDataDate = lastData.createdAt
         const daysAgo = Math.floor((Date.now() - lastData.createdAt.getTime()) / 86400000)
 
-        const isServer1 =
+        const isWeekly380OrServer1 =
+          lastData.amount === 380 ||
           lastData.serverId === "server1" ||
           lastData.serverId === "cmrj56y3d0000hkn50a4bcy77" ||
           lastData.provider?.toLowerCase().includes("clubkonnect") ||
           lastData.serverName?.toLowerCase().includes("clubkonnect") ||
           lastData.serverName?.toLowerCase().includes("server 1")
 
-        // Server 1 (ClubKonnect) data only lasts 7 days; Server 2 / others get normal validity (30 days)
-        const validityDays = isServer1 ? 7 : extractValidityDays(lastData.plan, 30)
+        // ₦380 data and Server 1 data only last 7 days (1 week); others get normal validity (30 days)
+        const validityDays = isWeekly380OrServer1 ? 7 : extractValidityDays(lastData.plan, 30)
         dataExpiryDate = new Date(lastData.createdAt.getTime() + validityDays * 86400000)
         if (daysAgo >= validityDays) {
           vtuStatus = "EXPIRED"
-        } else if (validityDays - daysAgo <= (isServer1 ? 2 : 3)) {
+        } else if (validityDays - daysAgo <= (isWeekly380OrServer1 ? 2 : 3)) {
           vtuStatus = "EXPIRING_SOON"
         } else {
           vtuStatus = "ACTIVE"
@@ -1252,6 +1253,17 @@ export async function getOfflineVehicles(params: GetOfflineVehiclesParams = {}):
       summaryData = cachedSummaryMemory
     } else {
       try {
+        // Reconcile any cached ₦380 recharges that were previously saved with 30-day expiry instead of 7-day expiry
+        await prisma.$executeRaw`
+          UPDATE "OfflineVehicle"
+          SET "vtuStatus" = 'EXPIRED',
+              "dataExpiryDate" = "lastDataDate" + INTERVAL '7 days'
+          WHERE "lastDataAmount" = 380
+            AND "vtuStatus" != 'EXPIRED'
+            AND "lastDataDate" IS NOT NULL
+            AND "lastDataDate" <= NOW() - INTERVAL '7 days'
+        `.catch(() => {})
+
         const rawRes: any[] = await prisma.$queryRaw`
           SELECT 
             COUNT(*)::int as "totalOffline",
@@ -1312,31 +1324,45 @@ export async function getOfflineVehicles(params: GetOfflineVehiclesParams = {}):
       prisma.offlineVehicle.count({ where }),
     ])
 
-    const formattedVehicles = vehicles.map((v) => ({
-      id: v.id,
-      cartrackerId: v.cartrackerId,
-      name: v.name,
-      plateNumber: v.plateNumber,
-      imei: v.imei,
-      rawSimNumber: v.rawSimNumber,
-      normalizedPhone: v.normalizedPhone,
-      network: v.network,
-      deviceModel: v.deviceModel,
-      protocol: v.protocol,
-      speed: v.speed,
-      stopDuration: v.stopDuration,
-      lastHeartbeat: v.lastHeartbeat ? v.lastHeartbeat.toISOString() : null,
-      daysOffline: v.daysOffline,
-      hasVtuRecord: v.hasVtuRecord,
-      lastDataPlan: v.lastDataPlan,
-      lastDataAmount: v.lastDataAmount,
-      lastDataDate: v.lastDataDate ? v.lastDataDate.toISOString() : null,
-      dataExpiryDate: v.dataExpiryDate ? v.dataExpiryDate.toISOString() : null,
-      vtuStatus: v.vtuStatus as "EXPIRED" | "EXPIRING_SOON" | "ACTIVE" | "NEVER_LOADED",
-      lastAirtimeDate: v.lastAirtimeDate ? v.lastAirtimeDate.toISOString() : null,
-      autoRenew: (v as any).autoRenew ?? true,
-      lastSyncAt: v.lastSyncAt.toISOString(),
-    }))
+    const formattedVehicles = vehicles.map((v) => {
+      let computedStatus = v.vtuStatus as "EXPIRED" | "EXPIRING_SOON" | "ACTIVE" | "NEVER_LOADED"
+      let computedExpiry = v.dataExpiryDate ? v.dataExpiryDate.toISOString() : null
+
+      if (v.lastDataDate && v.lastDataAmount === 380) {
+        const expMs = v.lastDataDate.getTime() + 7 * 86400000
+        computedExpiry = new Date(expMs).toISOString()
+        const daysLeft = Math.ceil((expMs - Date.now()) / 86400000)
+        if (daysLeft <= 0) computedStatus = "EXPIRED"
+        else if (daysLeft <= 2) computedStatus = "EXPIRING_SOON"
+        else computedStatus = "ACTIVE"
+      }
+
+      return {
+        id: v.id,
+        cartrackerId: v.cartrackerId,
+        name: v.name,
+        plateNumber: v.plateNumber,
+        imei: v.imei,
+        rawSimNumber: v.rawSimNumber,
+        normalizedPhone: v.normalizedPhone,
+        network: v.network,
+        deviceModel: v.deviceModel,
+        protocol: v.protocol,
+        speed: v.speed,
+        stopDuration: v.stopDuration,
+        lastHeartbeat: v.lastHeartbeat ? v.lastHeartbeat.toISOString() : null,
+        daysOffline: v.daysOffline,
+        hasVtuRecord: v.hasVtuRecord,
+        lastDataPlan: v.lastDataPlan,
+        lastDataAmount: v.lastDataAmount,
+        lastDataDate: v.lastDataDate ? v.lastDataDate.toISOString() : null,
+        dataExpiryDate: computedExpiry,
+        vtuStatus: computedStatus,
+        lastAirtimeDate: v.lastAirtimeDate ? v.lastAirtimeDate.toISOString() : null,
+        autoRenew: (v as any).autoRenew ?? true,
+        lastSyncAt: v.lastSyncAt.toISOString(),
+      }
+    })
 
     return {
       success: true,

@@ -42,7 +42,23 @@ export function computeTrackerDiagnostics(tracker: any): EnrichedTracker {
   let isDataExpired = false
   let isExpiringSoon = false
 
-  if (tracker.dataExpiryDate) {
+  if (tracker.lastDataDate && tracker.lastDataAmount === 380) {
+    // ₦380 data bundles last 7 days (1 week), overriding any legacy 30-day expiry stored at purchase time
+    const lastTime = new Date(tracker.lastDataDate).getTime()
+    const expiryTime = lastTime + 7 * 24 * 60 * 60 * 1000
+    const diffDays = Math.ceil((expiryTime - now) / (1000 * 60 * 60 * 24))
+    dataRemainingDays = diffDays
+
+    if (diffDays <= 0) {
+      dataStatus = "EXPIRED"
+      isDataExpired = true
+    } else if (diffDays <= 2) {
+      dataStatus = "EXPIRING_SOON"
+      isExpiringSoon = true
+    } else {
+      dataStatus = "ACTIVE"
+    }
+  } else if (tracker.dataExpiryDate) {
     const expiryTime = new Date(tracker.dataExpiryDate).getTime()
     const diffDays = Math.ceil((expiryTime - now) / (1000 * 60 * 60 * 24))
     dataRemainingDays = diffDays

@@ -152,21 +152,22 @@ export async function checkSimHistory(rawPhone: string): Promise<SimDiagnosticHi
     const daysAgo = getDaysAgo(lastDataRecord.createdAt)
     const purchaseTime = new Date(lastDataRecord.createdAt).getTime()
 
-    const isServer1 =
+    const isWeekly380OrServer1 =
+      lastDataRecord.amount === 380 ||
       lastDataRecord.serverId === "server1" ||
       lastDataRecord.serverId === "cmrj56y3d0000hkn50a4bcy77" ||
       lastDataRecord.provider?.toLowerCase().includes("clubkonnect") ||
       lastDataRecord.serverName?.toLowerCase().includes("clubkonnect") ||
       lastDataRecord.serverName?.toLowerCase().includes("server 1")
 
-    // Server 1 (ClubKonnect) data purchases expire in 7 days; Server 2 / others get normal 30 days
-    const validityDays = isServer1 ? 7 : extractValidityDays(lastDataRecord.plan, 30)
+    // ₦380 data purchases and Server 1 data purchases expire in 7 days (1 week); others use normal plan validity
+    const validityDays = isWeekly380OrServer1 ? 7 : extractValidityDays(lastDataRecord.plan, 30)
     const expiryTime = purchaseTime + validityDays * 24 * 60 * 60 * 1000
     const now = Date.now()
     const diffMs = expiryTime - now
     const daysUntilExpiry = Math.ceil(diffMs / (1000 * 60 * 60 * 24))
     const isExpired = diffMs <= 0
-    const isExpiringSoon = !isExpired && (isServer1 ? daysUntilExpiry <= 2 : daysUntilExpiry <= 3)
+    const isExpiringSoon = !isExpired && (isWeekly380OrServer1 ? daysUntilExpiry <= 2 : daysUntilExpiry <= 3)
 
     lastData = {
       id: lastDataRecord.id,
