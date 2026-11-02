@@ -339,6 +339,64 @@ export function FleetTroubleshootClient({
     return norm === "online" || norm === "ack"
   }
 
+  const [copiedFleetReport, setCopiedFleetReport] = useState(false)
+
+  const formatLastConnection = (lastHeartbeat?: string | null): string => {
+    if (!lastHeartbeat) return "No recent signal"
+    const d = new Date(lastHeartbeat)
+    if (isNaN(d.getTime()) || d.getFullYear() <= 1970) {
+      return lastHeartbeat
+    }
+    return `${d.toLocaleDateString("en-GB", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    })}, ${d.toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: true,
+    })}`
+  }
+
+  const handleCopyFleetStatusReport = () => {
+    if (liveVehicles.length === 0) return
+
+    const reporting = liveVehicles.filter((v) => isVehicleConnected(v.onlineStatus))
+    const offline = liveVehicles.filter((v) => !isVehicleConnected(v.onlineStatus))
+
+    const lines: string[] = []
+    lines.push("Reporting Vehicles")
+    if (reporting.length > 0) {
+      reporting.forEach((v) => {
+        lines.push((v.name || v.plateNumber || "Unnamed Vehicle").trim())
+      })
+    } else {
+      lines.push("None")
+    }
+
+    lines.push("")
+    lines.push("Offline Vehicles")
+    if (offline.length > 0) {
+      offline.forEach((v, idx) => {
+        const vehicleLabel = (v.name || v.plateNumber || "Unnamed Vehicle").trim()
+        const sim = v.normalizedPhone || v.rawSimNumber || "N/A"
+        const lastConn = formatLastConnection(v.lastHeartbeat)
+        lines.push(vehicleLabel)
+        lines.push(`Tracker sim: ${sim}`)
+        lines.push(`Last Connection: ${lastConn}`)
+        if (idx < offline.length - 1) {
+          lines.push("")
+        }
+      })
+    } else {
+      lines.push("None")
+    }
+
+    navigator.clipboard.writeText(lines.join("\n"))
+    setCopiedFleetReport(true)
+    setTimeout(() => setCopiedFleetReport(false), 2500)
+  }
+
   const renderVehicleStatusBadge = (status: string | null | undefined) => {
     const norm = (status || "").toLowerCase().trim()
     if (norm === "online") {
@@ -1703,9 +1761,34 @@ export function FleetTroubleshootClient({
                     Account ID: #{customerInfo.id} • {customerInfo.devicesCount} Total Registered Vehicles
                   </div>
                 </div>
-                <span className="px-2.5 py-1 rounded-full bg-indigo-600 text-white font-bold text-[10px] sm:text-xs shrink-0 self-start sm:self-auto">
-                  {liveVehicles.length} Vehicles Loaded
-                </span>
+                <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+                  {liveVehicles.length > 0 && (
+                    <Button
+                      type="button"
+                      onClick={handleCopyFleetStatusReport}
+                      className={`h-8 px-3 rounded-lg font-bold text-[11px] sm:text-xs inline-flex items-center gap-1.5 shadow-2xs transition-all ${
+                        copiedFleetReport
+                          ? "bg-emerald-600 hover:bg-emerald-700 text-white"
+                          : "bg-white hover:bg-indigo-50 text-indigo-700 border border-indigo-200"
+                      }`}
+                    >
+                      {copiedFleetReport ? (
+                        <>
+                          <Check className="w-3.5 h-3.5 text-white" />
+                          <span>Copied Fleet Status!</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="w-3.5 h-3.5 text-indigo-600" />
+                          <span>Copy Vehicles Status</span>
+                        </>
+                      )}
+                    </Button>
+                  )}
+                  <span className="px-2.5 py-1 rounded-full bg-indigo-600 text-white font-bold text-[10px] sm:text-xs shrink-0">
+                    {liveVehicles.length} Vehicles Loaded
+                  </span>
+                </div>
               </div>
             )}
 
@@ -1812,7 +1895,29 @@ export function FleetTroubleshootClient({
                       )}
                     </div>
 
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={handleCopyFleetStatusReport}
+                        className={`h-7 sm:h-8 px-2.5 rounded-lg font-bold text-[11px] sm:text-xs inline-flex items-center gap-1.5 transition-all border ${
+                          copiedFleetReport
+                            ? "bg-emerald-600 text-white border-emerald-600"
+                            : "bg-indigo-600 hover:bg-indigo-700 text-white border-indigo-600 shadow-2xs"
+                        }`}
+                      >
+                        {copiedFleetReport ? (
+                          <>
+                            <Check className="w-3 h-3" />
+                            <span>Copied Report!</span>
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="w-3 h-3" />
+                            <span>Copy Status Report</span>
+                          </>
+                        )}
+                      </button>
+
                       <span className="text-[11px] text-slate-500 font-medium">Sort by:</span>
                       <select
                         value={custSortBy}
@@ -2067,7 +2172,7 @@ export function FleetTroubleshootClient({
 
                                 {/* Last Heartbeat */}
                                 <td className="py-3 px-4">
-                                  {v.lastHeartbeat ? (
+                                  {v.lastHeartbeat && !isNaN(new Date(v.lastHeartbeat).getTime()) ? (
                                     <div className="text-slate-700">
                                       <div>{new Date(v.lastHeartbeat).toLocaleDateString()}</div>
                                       <div className="text-[10px] text-slate-400">
@@ -2260,7 +2365,7 @@ export function FleetTroubleshootClient({
                                     </button>
                                   )}
                                 </div>
-                                {v.lastHeartbeat && (
+                                {v.lastHeartbeat && !isNaN(new Date(v.lastHeartbeat).getTime()) && (
                                   <div className="text-[10px] text-slate-400 mt-0.5">
                                     Heartbeat: {new Date(v.lastHeartbeat).toLocaleDateString()} {new Date(v.lastHeartbeat).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                                   </div>

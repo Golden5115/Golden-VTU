@@ -147,6 +147,7 @@ async function fetchDeviceTelemetry(
   time: string | null
   speed: number | null
   stopDuration: string | null
+  deviceData?: any
 }> {
   try {
     const res = await fetch(
@@ -163,11 +164,14 @@ async function fetchDeviceTelemetry(
     else if (it.online === "ack") onlineStatus = "ack"
     else onlineStatus = "offline"
 
+    const resolvedDate = resolveCarTrackerItemDate(it)
+
     return {
       online: onlineStatus,
-      time: it.time || null,
+      time: resolvedDate ? resolvedDate.toISOString() : null,
       speed: typeof it.speed === "number" ? it.speed : null,
       stopDuration: it.stop_duration || null,
+      deviceData: it.device_data || null,
     }
   } catch (err) {
     return { online: "unknown", time: null, speed: null, stopDuration: null }
@@ -249,7 +253,8 @@ export async function verifyDeviceLiveStatus(cartrackerId: number): Promise<Devi
  * Enriches a CarTracker device record with local VTU database diagnostics and live telemetry
  */
 async function enrichDeviceWithVtu(rawDev: any): Promise<FleetTrackerDevice> {
-  const rawSimNumber = (rawDev.sim_number || "").trim()
+  const tDevData = rawDev.telemetry?.deviceData || rawDev.device_data || {}
+  const rawSimNumber = (rawDev.sim_number || tDevData.sim_number || "").trim()
   const normalizedPhone = cleanPhoneNumber(rawSimNumber)
   const detectedNet = normalizedPhone.length >= 10 ? detectNetwork(normalizedPhone) : null
 
@@ -298,22 +303,23 @@ async function enrichDeviceWithVtu(rawDev: any): Promise<FleetTrackerDevice> {
 
   const telemetry = rawDev.telemetry || {}
   const onlineStatus: FleetTrackerDevice["onlineStatus"] = telemetry.online || (rawDev.online ?? "unknown")
-  const lastHeartbeat = telemetry.time || rawDev.time || null
+  const parsedHeartbeat = parseCarTrackerDate(telemetry.time) || resolveCarTrackerItemDate(rawDev)
+  const lastHeartbeat = parsedHeartbeat ? parsedHeartbeat.toISOString() : null
   const speed = typeof telemetry.speed === "number" ? telemetry.speed : (typeof rawDev.speed === "number" ? rawDev.speed : null)
   const stopDuration = telemetry.stopDuration || rawDev.stop_duration || null
 
   return {
     id: rawDev.id,
-    name: (rawDev.name || "Unnamed Vehicle").trim(),
-    plateNumber: (rawDev.plate_number || "").trim(),
-    imei: (rawDev.imei || "").trim(),
+    name: (rawDev.name || tDevData.name || "Unnamed Vehicle").trim(),
+    plateNumber: (rawDev.plate_number || tDevData.plate_number || "").trim(),
+    imei: (rawDev.imei || tDevData.imei || "").trim(),
     rawSimNumber,
     normalizedPhone,
     network: detectedNet ? { id: detectedNet.id, name: detectedNet.name, color: detectedNet.color } : null,
-    deviceModel: (rawDev.device_model || "").trim(),
-    expirationDate: rawDev.expiration_date || null,
-    protocol: (rawDev.protocol || "").trim(),
-    active: Boolean(rawDev.active),
+    deviceModel: (rawDev.device_model || tDevData.device_model || "").trim(),
+    expirationDate: rawDev.expiration_date || tDevData.expiration_date || null,
+    protocol: (rawDev.protocol || tDevData.protocol || "").trim(),
+    active: rawDev.active !== undefined ? Boolean(rawDev.active) : Boolean(tDevData.active),
     onlineStatus,
     lastHeartbeat,
     speed,
@@ -711,7 +717,14 @@ function parseCarTrackerDate(timeStr?: string | null, timestamp?: number | null)
   }
   if (!timeStr || typeof timeStr !== "string") return null
   const s = timeStr.trim()
-  if (s === "Expired" || s === "Disabled" || s === "-" || s === "0000-00-00 00:00:00") {
+  if (
+    !s ||
+    s === "Expired" ||
+    s === "Disabled" ||
+    s === "Not connected" ||
+    s === "-" ||
+    s === "0000-00-00 00:00:00"
+  ) {
     return null
   }
 
@@ -728,8 +741,50 @@ function parseCarTrackerDate(timeStr?: string | null, timestamp?: number | null)
     if (!isNaN(dt.getTime())) return dt
   }
 
+  // Format: "YYYY-MM-DD HH:mm:ss" e.g. "2026-09-08 22:26:06"
+  const ymdMatch = s.match(/^(\d{4})-(\d{2})-(\d{2})\s+(\d{1,2}):(\d{2}):(\d{2})$/)
+  if (ymdMatch) {
+    const [, y, m, d, h, min, sec] = ymdMatch
+    const yr = parseInt(y, 10)
+    if (yr > 1970) {
+      const dt = new Date(Date.UTC(yr, parseInt(m, 10) - 1, parseInt(d, 10), parseInt(h, 10), parseInt(min, 10), parseInt(sec, 10)))
+      if (!isNaN(dt.getTime())) return dt
+    }
+    return null
+  }
+
   const parsed = new Date(s)
-  if (!isNaN(parsed.getTime())) return parsed
+  if (!isNaN(parsed.getTime()) && parsed.getFullYear() > 1970) return parsed
+
+  return null
+}
+
+/**
+ * Extracts the most accurate last connection date from a CarTracker device item,
+ * falling back across top-level time/timestamp, device_data.time, traccar timestamps, and stop_duration_sec.
+ */
+function resolveCarTrackerItemDate(it: any): Date | null {
+  if (!it) return null
+
+  const direct = parseCarTrackerDate(it.time, it.timestamp)
+  if (direct) return direct
+
+  const devData = it.device_data || it.telemetry?.deviceData || {}
+  const devDataTime = parseCarTrackerDate(devData.time)
+  if (devDataTime) return devDataTime
+
+  const traccar = devData.traccar || it.traccar || {}
+  const traccarTime =
+    parseCarTrackerDate(traccar.server_time) ||
+    parseCarTrackerDate(traccar.time) ||
+    parseCarTrackerDate(traccar.device_time) ||
+    parseCarTrackerDate(traccar.ack_time) ||
+    parseCarTrackerDate(traccar.stoped_at)
+  if (traccarTime) return traccarTime
+
+  if (typeof it.stop_duration_sec === "number" && it.stop_duration_sec > 0) {
+    return new Date(Date.now() - it.stop_duration_sec * 1000)
+  }
 
   return null
 }
@@ -907,7 +962,7 @@ export async function syncOfflineVehiclesBatch(
       const protocol = (item.protocol || "").trim()
       const speed = typeof item.speed === "number" ? item.speed : 0
       const stopDuration = item.stop_duration || ""
-      const lastHeartbeat = parseCarTrackerDate(item.time, item.timestamp)
+      const lastHeartbeat = resolveCarTrackerItemDate(item)
       const daysOffline = computeDaysOffline(lastHeartbeat, item.time)
 
       const lastData = normalizedPhone ? latestDataByPhone.get(normalizedPhone) : null
