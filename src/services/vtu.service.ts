@@ -21,12 +21,13 @@ export async function purchaseAirtime(
   networkId: string,
   phone: string,
   amount: number,
-  serverIdOrOptions?: string | { serverId?: string; trackerId?: string; bypassSimCheck?: boolean }
+  serverIdOrOptions?: string | { serverId?: string; trackerId?: string; bypassSimCheck?: boolean; skipFastPoll?: boolean }
 ) {
   const options = typeof serverIdOrOptions === "object" ? serverIdOrOptions : { serverId: serverIdOrOptions }
   const serverId = options.serverId
   let trackerId = options.trackerId
   const bypassSimCheck = options.bypassSimCheck ?? false
+  const skipFastPoll = options.skipFastPoll ?? false
 
   // If no explicit trackerId passed, auto-detect if this phone number belongs to a registered tracker
   if (!trackerId) {
@@ -118,7 +119,7 @@ export async function purchaseAirtime(
       // If carrier queued it as pending (e.g. ClubKonnect code 100 / ORDER_RECEIVED),
       // perform a fast-poll: if buyAirtime took < 3s, pause briefly (1.5s) for gateway delivery;
       // if buyAirtime already took 3+ seconds, query immediately without added delay!
-      if (!isCompleted && typeof (provider as any).queryTransaction === "function") {
+      if (!isCompleted && !skipFastPoll && typeof (provider as any).queryTransaction === "function") {
         try {
           if (elapsedMs < 3000) {
             await new Promise((r) => setTimeout(r, 1500))
@@ -261,17 +262,19 @@ export async function purchaseData(
     planName?: string
     validityDays?: number
     bypassSimCheck?: boolean
+    skipFastPoll?: boolean
   }
 ) {
   const options =
     typeof serverIdOrOptions === "object"
       ? serverIdOrOptions
-      : { serverId: serverIdOrOptions, trackerId: undefined, planName: undefined, validityDays: undefined, bypassSimCheck: false }
+      : { serverId: serverIdOrOptions, trackerId: undefined, planName: undefined, validityDays: undefined, bypassSimCheck: false, skipFastPoll: false }
   const serverId = options.serverId
   let trackerId = options.trackerId
   const planName = options.planName
   const validityDays = options.validityDays || extractValidityDays(planName || dataPlanId, 30)
   const bypassSimCheck = options.bypassSimCheck ?? false
+  const skipFastPoll = options.skipFastPoll ?? false
 
   // If no explicit trackerId passed, auto-detect if this phone number belongs to a registered tracker
   if (!trackerId) {
@@ -364,7 +367,7 @@ export async function purchaseData(
       // If carrier queued it as pending (e.g. ClubKonnect code 100 / ORDER_RECEIVED),
       // perform a fast-poll: if buyData took < 3s, pause briefly (1.5s) for gateway delivery;
       // if buyData already took 3+ seconds, query immediately without added delay!
-      if (!isCompleted && typeof (provider as any).queryTransaction === "function") {
+      if (!isCompleted && !skipFastPoll && typeof (provider as any).queryTransaction === "function") {
         try {
           if (elapsedMs < 3000) {
             await new Promise((r) => setTimeout(r, 1500))
@@ -423,100 +426,101 @@ export async function purchaseData(
             where: { reference },
             data: { status: "SUCCESS" },
           })
+        }
 
-          const isBiWeeklyPlan =
-            dataPlanId === "6403" ||
-            /twice\s*a\s*month|bi-weekly/i.test(planName || "")
+        // Schedule bi-weekly Cycle 2 and update tracker/offline records whenever accepted by gateway (SUCCESS or async PENDING)
+        const isBiWeeklyPlan =
+          dataPlanId === "6403" ||
+          /twice\s*a\s*month|bi-weekly/i.test(planName || "")
 
-          // For the 100MB Twice a Month plan, Cycle 1 lasts 14 days, and Cycle 2 is scheduled for 14 days later
-          const effectiveDays = isBiWeeklyPlan ? 14 : validityDays
-          const expiryDate = new Date(Date.now() + effectiveDays * 24 * 60 * 60 * 1000)
+        // For the 100MB Twice a Month plan, Cycle 1 lasts 14 days, and Cycle 2 is scheduled for 14 days later
+        const effectiveDays = isBiWeeklyPlan ? 14 : validityDays
+        const expiryDate = new Date(Date.now() + effectiveDays * 24 * 60 * 60 * 1000)
 
-          if (isBiWeeklyPlan) {
-            // Schedule the second 100MB cycle for 14 days later (prepaid, 0 naira wallet deduction)
-            const scheduledDate = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000)
-            const cleanSrvName = (server.serverName || "Server 3").replace(/\s*\([^)]*\)/g, "").replace(/clubkonnect|pairgate|smecloud|sme\s*cloud|nellobyte|autobiz|demopaysub/gi, "").trim() || "Server 3"
+        if (isBiWeeklyPlan) {
+          // Schedule the second 100MB cycle for 14 days later (prepaid, 0 naira wallet deduction)
+          const scheduledDate = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000)
+          const cleanSrvName = (server.serverName || "Server 3").replace(/\s*\([^)]*\)/g, "").replace(/clubkonnect|pairgate|smecloud|sme\s*cloud|nellobyte|autobiz|demopaysub/gi, "").trim() || "Server 3"
 
-            if ((tx as any).scheduledRenewal?.create) {
-              await (tx as any).scheduledRenewal.create({
-                data: {
-                  userId,
-                  phone,
-                  network: networkId,
-                  planId: dataPlanId,
-                  planName: "MTN 100MB (Cycle 2 of 2 - Bi-Weekly Auto-Renew)",
-                  cycle: 2,
-                  scheduledDate,
-                  status: "PENDING",
-                  firstPurchaseRef: reference,
-                  serverId: server.id,
-                  serverName: cleanSrvName,
-                  vehicleId: trackerId || null,
-                },
-              })
-            } else {
-              // Direct SQL fallback if Prisma Client instance in dev hasn't reloaded the new model delegate
-              const srId = `sr_${Date.now()}_${Math.random().toString(36).substring(7)}`
-              await tx.$executeRawUnsafe(
-                `INSERT INTO "ScheduledRenewal" ("id", "userId", "phone", "network", "planId", "planName", "cycle", "scheduledDate", "status", "firstPurchaseRef", "serverId", "serverName", "vehicleId", "createdAt", "updatedAt")
-                 VALUES ($1, $2, $3, $4, $5, $6, 2, $7, 'PENDING', $8, $9, $10, $11, NOW(), NOW())`,
-                srId,
+          if ((tx as any).scheduledRenewal?.create) {
+            await (tx as any).scheduledRenewal.create({
+              data: {
                 userId,
                 phone,
-                networkId,
-                dataPlanId,
-                "MTN 100MB (Cycle 2 of 2 - Bi-Weekly Auto-Renew)",
+                network: networkId,
+                planId: dataPlanId,
+                planName: "MTN 100MB (Cycle 2 of 2 - Bi-Weekly Auto-Renew)",
+                cycle: 2,
                 scheduledDate,
-                reference,
-                server.id,
-                cleanSrvName,
-                trackerId || null
-              )
-            }
-
-            // Update plan label in dataPurchase to reflect cycle 1 of 2
-            await tx.dataPurchase.update({
-              where: { id: purchase.id },
-              data: {
-                plan: "MTN 100MB Twice a Month (Cycle 1 of 2)",
+                status: "PENDING",
+                firstPurchaseRef: reference,
+                serverId: server.id,
+                serverName: cleanSrvName,
+                vehicleId: trackerId || null,
               },
             })
+          } else {
+            // Direct SQL fallback if Prisma Client instance in dev hasn't reloaded the new model delegate
+            const srId = `sr_${Date.now()}_${Math.random().toString(36).substring(7)}`
+            await tx.$executeRawUnsafe(
+              `INSERT INTO "ScheduledRenewal" ("id", "userId", "phone", "network", "planId", "planName", "cycle", "scheduledDate", "status", "firstPurchaseRef", "serverId", "serverName", "vehicleId", "createdAt", "updatedAt")
+               VALUES ($1, $2, $3, $4, $5, $6, 2, $7, 'PENDING', $8, $9, $10, $11, NOW(), NOW())`,
+              srId,
+              userId,
+              phone,
+              networkId,
+              dataPlanId,
+              "MTN 100MB (Cycle 2 of 2 - Bi-Weekly Auto-Renew)",
+              scheduledDate,
+              reference,
+              server.id,
+              cleanSrvName,
+              trackerId || null
+            )
           }
 
-          // Update Vehicle Tracker last data top-up details and calculate expiry
-          if (trackerId) {
-            await tx.vehicleTracker.update({
-              where: { id: trackerId },
-              data: {
-                lastDataDate: new Date(),
-                lastDataPlan: isBiWeeklyPlan ? "MTN 100MB Twice a Month (Cycle 1 of 2)" : (planName || dataPlanId),
-                lastDataAmount: amount,
-                lastDataRef: reference,
-                dataValidityDays: effectiveDays,
-                dataExpiryDate: expiryDate,
-                status: "ACTIVE",
-              },
-            })
-          }
-
-          // Also update OfflineVehicle cached VTU record if phone matches
-          await tx.offlineVehicle.updateMany({
-            where: {
-              OR: [
-                { normalizedPhone: phone },
-                { rawSimNumber: phone },
-              ],
-            },
+          // Update plan label in dataPurchase to reflect cycle 1 of 2
+          await tx.dataPurchase.update({
+            where: { id: purchase.id },
             data: {
-              vtuStatus: "ACTIVE",
-              lastDataPlan: isBiWeeklyPlan ? "MTN 100MB Twice a Month (Cycle 1 of 2)" : (planName || dataPlanId),
-              lastDataAmount: amount,
-              lastDataDate: new Date(),
-              dataExpiryDate: expiryDate,
-              hasVtuRecord: true,
+              plan: "MTN 100MB Twice a Month (Cycle 1 of 2)",
             },
           })
         }
+
+        // Update Vehicle Tracker last data top-up details and calculate expiry
+        if (trackerId) {
+          await tx.vehicleTracker.update({
+            where: { id: trackerId },
+            data: {
+              lastDataDate: new Date(),
+              lastDataPlan: isBiWeeklyPlan ? "MTN 100MB Twice a Month (Cycle 1 of 2)" : (planName || dataPlanId),
+              lastDataAmount: amount,
+              lastDataRef: reference,
+              dataValidityDays: effectiveDays,
+              dataExpiryDate: expiryDate,
+              status: "ACTIVE",
+            },
+          })
+        }
+
+        // Also update OfflineVehicle cached VTU record if phone matches
+        await tx.offlineVehicle.updateMany({
+          where: {
+            OR: [
+              { normalizedPhone: phone },
+              { rawSimNumber: phone },
+            ],
+          },
+          data: {
+            vtuStatus: "ACTIVE",
+            lastDataPlan: isBiWeeklyPlan ? "MTN 100MB Twice a Month (Cycle 1 of 2)" : (planName || dataPlanId),
+            lastDataAmount: amount,
+            lastDataDate: new Date(),
+            dataExpiryDate: expiryDate,
+            hasVtuRecord: true,
+          },
+        })
       }, TX_OPTIONS)
 
       return {
@@ -718,6 +722,17 @@ export async function reconcilePendingTransactions(userId?: string) {
               where: { id: d.userId },
               data: { walletBalance: { increment: d.amount } },
             })
+            if ((tx as any).scheduledRenewal?.updateMany) {
+              await (tx as any).scheduledRenewal.updateMany({
+                where: { firstPurchaseRef: d.reference, status: "PENDING" },
+                data: { status: "CANCELLED", errorMessage: "Cycle 1 failed on carrier and was refunded" },
+              })
+            } else {
+              await tx.$executeRawUnsafe(
+                `UPDATE "ScheduledRenewal" SET "status" = 'CANCELLED', "errorMessage" = 'Cycle 1 failed on carrier and was refunded', "updatedAt" = NOW() WHERE "firstPurchaseRef" = $1 AND "status" = 'PENDING'`,
+                d.reference
+              ).catch(() => {})
+            }
           }, TX_OPTIONS)
           reconciledCount++
         }

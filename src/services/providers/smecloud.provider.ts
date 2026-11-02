@@ -125,22 +125,7 @@ export class SmeCloudProvider implements IVtuProvider {
 
     const txData = data.data || {}
     const rechargeId = txData.recharge_id || reference
-    let innerStatus = String(txData.text_status || txData.status || "").toUpperCase().trim()
-
-    // Quick 1.5s verification to catch immediate terminal states (e.g. carrier down / completed)
-    if (innerStatus === "PENDING" && rechargeId) {
-      await new Promise((r) => setTimeout(r, 1500))
-      try {
-        const queryRes = await this.queryTransaction(String(rechargeId))
-        if (queryRes.isSuccessful) {
-          innerStatus = "COMPLETED"
-        } else if (queryRes.isFailed) {
-          throw new Error(`Carrier Rejected: ${queryRes.remark || "Transaction failed on Server 3."}`)
-        }
-      } catch (err: any) {
-        if (err.message.includes("Carrier Rejected:")) throw err
-      }
-    }
+    const innerStatus = String(txData.text_status || txData.status || "").toUpperCase().trim()
 
     const isExplicitSuccess = innerStatus === "COMPLETED" || innerStatus === "SUCCESSFUL" || innerStatus === "DELIVERED"
     const isExplicitFailed = innerStatus === "FAILED" || innerStatus === "CANCELLED" || innerStatus === "REJECTED"
@@ -244,22 +229,7 @@ export class SmeCloudProvider implements IVtuProvider {
 
     const txData = data.data || {}
     const rechargeId = txData.recharge_id || reference
-    let innerStatus = String(txData.text_status || txData.status || "").toUpperCase().trim()
-
-    // Quick 1.5s verification to catch immediate terminal states (e.g. carrier down / completed)
-    if (innerStatus === "PENDING" && rechargeId) {
-      await new Promise((r) => setTimeout(r, 1500))
-      try {
-        const queryRes = await this.queryTransaction(String(rechargeId))
-        if (queryRes.isSuccessful) {
-          innerStatus = "COMPLETED"
-        } else if (queryRes.isFailed) {
-          throw new Error(`Carrier Rejected: ${queryRes.remark || "Transaction failed on Server 3."}`)
-        }
-      } catch (err: any) {
-        if (err.message.includes("Carrier Rejected:")) throw err
-      }
-    }
+    const innerStatus = String(txData.text_status || txData.status || "").toUpperCase().trim()
 
     const isExplicitSuccess = innerStatus === "COMPLETED" || innerStatus === "SUCCESSFUL" || innerStatus === "DELIVERED"
     const isExplicitFailed = innerStatus === "FAILED" || innerStatus === "CANCELLED" || innerStatus === "REJECTED"

@@ -47,10 +47,12 @@ import {
   getOfflineVehicles,
   syncOfflineVehiclesBatch,
   rechargeSingleVehicle,
+  rechargeFleetVehicles,
   verifyDeviceLiveStatus,
   type FleetTrackerDevice,
   type CustomerFleetResult,
   type GetOfflineVehiclesResult,
+  type RechargeFleetResult,
 } from "@/actions/cartracker.actions"
 import { checkSimHistory, type SimDiagnosticHistory } from "@/actions/sim-history.actions"
 import { ServerBadge } from "@/components/vtu/ServerBadge"
@@ -547,6 +549,7 @@ export function FleetTroubleshootClient({
     setOnlineSearchError(null)
     setCustomerInfo(null)
     setLiveVehicles([])
+    setSelectedCustVehicleIds([])
 
     startOnlineSearchTransition(async () => {
       setHasSearchedOnline(true)
@@ -569,6 +572,7 @@ export function FleetTroubleshootClient({
     setOnlineSearchError(null)
     setCustomerInfo(null)
     setLiveVehicles([])
+    setSelectedCustVehicleIds([])
 
     startOnlineSearchTransition(async () => {
       setHasSearchedOnline(true)
@@ -582,6 +586,229 @@ export function FleetTroubleshootClient({
         }
       }
     })
+  }
+
+  // -------------------------------------------------------------
+  // BULK CUSTOMER ACCOUNT SIM SELECTION & RECHARGE
+  // -------------------------------------------------------------
+  const [selectedCustVehicleIds, setSelectedCustVehicleIds] = useState<number[]>([])
+  const [bulkScopeMode, setBulkScopeMode] = useState<"all" | "offline">("all") // "all" (online + offline) | "offline" (offline only)
+  const [bulkCustModalOpen, setBulkCustModalOpen] = useState(false)
+  const [isBulkDispensing, setIsBulkDispensing] = useState(false)
+  const [bulkRechargeResult, setBulkRechargeResult] = useState<RechargeFleetResult | null>(null)
+
+  const getVehicleNetworkId = (v: FleetTrackerDevice): string => {
+    if (v.network?.id) return v.network.id
+    const phone = v.normalizedPhone || v.rawSimNumber || ""
+    const detected = phone ? detectNetwork(phone) : null
+    if (detected?.id) return detected.id
+    const netName = (v.network?.name || "").toUpperCase()
+    if (netName.includes("AIRTEL")) return "04"
+    if (netName.includes("GLO")) return "02"
+    if (netName.includes("9MOBILE") || netName.includes("ETISALAT")) return "03"
+    return "01"
+  }
+
+  const hasValidSim = (v: FleetTrackerDevice): boolean => {
+    const p = (v.normalizedPhone || v.rawSimNumber || "").replace(/\D/g, "")
+    return p.length >= 10
+  }
+
+  // Counts of vehicles per network under the active scope ("all" vs "offline")
+  const networkScopeCounts = useMemo(() => {
+    const counts: Record<string, { all: number; offline: number }> = {
+      "01": { all: 0, offline: 0 },
+      "04": { all: 0, offline: 0 },
+      "02": { all: 0, offline: 0 },
+      "03": { all: 0, offline: 0 },
+    }
+    for (const v of liveVehicles) {
+      if (!hasValidSim(v)) continue
+      const netId = getVehicleNetworkId(v)
+      if (!counts[netId]) counts[netId] = { all: 0, offline: 0 }
+      counts[netId].all++
+      if (!isVehicleConnected(v.onlineStatus)) {
+        counts[netId].offline++
+      }
+    }
+    return counts
+  }, [liveVehicles])
+
+  const selectVehiclesByNetwork = (netId: string, scopeOverride?: "all" | "offline") => {
+    const activeScope = scopeOverride || bulkScopeMode
+    const matchingIds = liveVehicles
+      .filter((v) => {
+        if (!hasValidSim(v)) return false
+        if (getVehicleNetworkId(v) !== netId) return false
+        if (activeScope === "offline" && isVehicleConnected(v.onlineStatus)) return false
+        return true
+      })
+      .map((v) => v.id)
+
+    setSelectedCustVehicleIds(matchingIds)
+    setModalNetworkId(netId)
+    setModalPlanValue("")
+  }
+
+  const handleBulkScopeChange = (newScope: "all" | "offline") => {
+    setBulkScopeMode(newScope)
+    // If vehicles are already selected, refine or expand them to match the new scope for the currently active network(s)
+    if (selectedCustVehicleIds.length > 0) {
+      const selectedObjs = liveVehicles.filter((v) => selectedCustVehicleIds.includes(v.id))
+      const selectedNets = Array.from(new Set(selectedObjs.map(getVehicleNetworkId)))
+      if (selectedNets.length === 1) {
+        selectVehiclesByNetwork(selectedNets[0], newScope)
+      } else if (newScope === "offline") {
+        setSelectedCustVehicleIds(
+          selectedObjs.filter((v) => !isVehicleConnected(v.onlineStatus)).map((v) => v.id)
+        )
+      }
+    }
+  }
+
+  const toggleCustVehicleSelection = (vehicleId: number) => {
+    setSelectedCustVehicleIds((prev) =>
+      prev.includes(vehicleId) ? prev.filter((id) => id !== vehicleId) : [...prev, vehicleId]
+    )
+  }
+
+  const selectableFilteredVehicles = useMemo(
+    () => filteredCustomerVehicles.filter(hasValidSim),
+    [filteredCustomerVehicles]
+  )
+
+  const areAllFilteredSelected =
+    selectableFilteredVehicles.length > 0 &&
+    selectableFilteredVehicles.every((v) => selectedCustVehicleIds.includes(v.id))
+
+  const toggleAllFilteredCustVehicles = () => {
+    if (areAllFilteredSelected) {
+      const filteredIds = new Set(selectableFilteredVehicles.map((v) => v.id))
+      setSelectedCustVehicleIds((prev) => prev.filter((id) => !filteredIds.has(id)))
+    } else {
+      const filteredIds = selectableFilteredVehicles.map((v) => v.id)
+      setSelectedCustVehicleIds((prev) => Array.from(new Set([...prev, ...filteredIds])))
+    }
+  }
+
+  const selectedBulkVehicles = useMemo(
+    () => liveVehicles.filter((v) => selectedCustVehicleIds.includes(v.id) && hasValidSim(v)),
+    [liveVehicles, selectedCustVehicleIds]
+  )
+
+  const openBulkRechargeModal = () => {
+    if (selectedBulkVehicles.length === 0) {
+      alert("Please select at least one vehicle SIM (e.g., click MTN, Airtel, Glo, or 9mobile above, or check vehicles in the table).")
+      return
+    }
+    setBulkRechargeResult(null)
+    setModalServerId(defaultServer?.id || servers[0]?.id || "")
+    setModalPlanValue("")
+
+    // Auto-detect dominant network among selected vehicles
+    const netCounts: Record<string, number> = {}
+    for (const v of selectedBulkVehicles) {
+      const n = getVehicleNetworkId(v)
+      netCounts[n] = (netCounts[n] || 0) + 1
+    }
+    const dominantNet = Object.entries(netCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || "01"
+    setModalNetworkId(dominantNet)
+    setBulkCustModalOpen(true)
+  }
+
+  const handleExecuteBulkRecharge = async () => {
+    if (selectedBulkVehicles.length === 0) return
+    if (!modalPlanValue) {
+      alert("Please select a data bundle from the dropdown.")
+      return
+    }
+
+    const totalCost = planPrice * selectedBulkVehicles.length
+    if (walletBalance < totalCost) {
+      alert(
+        `Insufficient wallet balance for ${selectedBulkVehicles.length} vehicles. Total required: ₦${totalCost.toLocaleString()}, Available: ₦${walletBalance.toLocaleString()}.`
+      )
+      return
+    }
+
+    setIsBulkDispensing(true)
+    setBulkRechargeResult(null)
+
+    try {
+      const res = await rechargeFleetVehicles({
+        vehicles: selectedBulkVehicles.map((v) => ({
+          id: v.id,
+          name: v.name,
+          plateNumber: v.plateNumber,
+          phone: v.normalizedPhone || v.rawSimNumber,
+          networkId: modalNetworkId || getVehicleNetworkId(v),
+          imei: v.imei,
+        })),
+        dataPlanId: planId,
+        planName: planName || "Data Bundle",
+        amount: planPrice,
+        validityDays: extractValidityDays(planValidity || planName || "", 30),
+        serverId: modalServerId,
+      })
+
+      setBulkRechargeResult(res)
+      if (res.newWalletBalance !== undefined) {
+        setWalletBalance(res.newWalletBalance)
+      }
+
+      const succeededIds = new Set(
+        res.results.filter((r) => r.status === "SUCCESS").map((r) => r.vehicleId)
+      )
+
+      if (succeededIds.size > 0) {
+        setLiveVehicles((prev) =>
+          prev.map((v) =>
+            succeededIds.has(v.id)
+              ? {
+                  ...v,
+                  vtuHistory: {
+                    ...v.vtuHistory,
+                    hasRecord: true,
+                    lastDataPlan: planName,
+                    lastDataAmount: planPrice,
+                    lastDataDate: new Date().toISOString(),
+                    statusBadge: "ACTIVE",
+                    isExpired: false,
+                    isExpiringSoon: false,
+                  },
+                }
+              : v
+          )
+        )
+
+        setOfflineVehicles((prev) =>
+          prev.map((v) =>
+            succeededIds.has(v.cartrackerId)
+              ? {
+                  ...v,
+                  vtuStatus: "ACTIVE",
+                  hasVtuRecord: true,
+                  lastDataPlan: planName,
+                  lastDataAmount: planPrice,
+                  lastDataDate: new Date().toISOString(),
+                }
+              : v
+          )
+        )
+      }
+    } catch (err: any) {
+      setBulkRechargeResult({
+        success: false,
+        totalAttempted: selectedBulkVehicles.length,
+        successCount: 0,
+        failureCount: selectedBulkVehicles.length,
+        results: [],
+        newWalletBalance: walletBalance,
+        error: err.message || "Failed to execute bulk fleet recharge.",
+      })
+    } finally {
+      setIsBulkDispensing(false)
+    }
   }
 
   // -------------------------------------------------------------
@@ -1795,6 +2022,120 @@ export function FleetTroubleshootClient({
             {/* Render Live Vehicles for Customer */}
             {liveVehicles.length > 0 && (
               <div className="space-y-3">
+                {/* BULK ACCOUNT SIM SELECTION & RECHARGE BAR */}
+                <div className="bg-gradient-to-r from-indigo-950 via-slate-900 to-indigo-950 text-white p-3.5 sm:p-4 rounded-xl sm:rounded-2xl border border-indigo-800/80 shadow-sm space-y-3">
+                  <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <Zap className="w-4 h-4 text-amber-400 shrink-0" />
+                        <span className="text-xs sm:text-sm font-black tracking-tight">
+                          Bulk Account SIM Selection & Recharge
+                        </span>
+                        {selectedBulkVehicles.length > 0 && (
+                          <span className="px-2 py-0.5 rounded-full bg-amber-400 text-slate-950 text-[10px] sm:text-xs font-black">
+                            {selectedBulkVehicles.length} Selected
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[10px] sm:text-xs text-slate-300">
+                        Choose whether to include <strong>All Vehicles (Online + Offline)</strong> or <strong>Only Offline Vehicles</strong>, then click a network below to select all matching SIMs on this account.
+                      </p>
+                    </div>
+
+                    {/* Scope Toggle: All Vehicles vs Only Offline Vehicles */}
+                    <div className="inline-flex items-center p-1 rounded-xl bg-slate-800/90 border border-slate-700 self-start lg:self-auto shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => handleBulkScopeChange("all")}
+                        className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-[10px] sm:text-xs font-bold transition-all cursor-pointer ${
+                          bulkScopeMode === "all"
+                            ? "bg-indigo-600 text-white shadow-xs"
+                            : "text-slate-300 hover:text-white"
+                        }`}
+                      >
+                        🌐 All Vehicles (Online + Offline)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleBulkScopeChange("offline")}
+                        className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-[10px] sm:text-xs font-bold transition-all cursor-pointer ${
+                          bulkScopeMode === "offline"
+                            ? "bg-rose-600 text-white shadow-xs"
+                            : "text-slate-300 hover:text-white"
+                        }`}
+                      >
+                        🔴 Only Offline Vehicles
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Network Quick-Select Buttons + Bulk Recharge Action */}
+                  <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-800">
+                    <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+                      <span className="text-[10px] sm:text-xs font-semibold text-slate-400 mr-1">
+                        Select SIM Network ({bulkScopeMode === "all" ? "All" : "Offline Only"}):
+                      </span>
+
+                      {[
+                        { id: "01", label: "MTN", activeBg: "bg-amber-400 text-slate-950 border-amber-300", dot: "bg-amber-400" },
+                        { id: "04", label: "Airtel", activeBg: "bg-rose-600 text-white border-rose-500", dot: "bg-rose-500" },
+                        { id: "02", label: "Glo", activeBg: "bg-emerald-600 text-white border-emerald-500", dot: "bg-emerald-500" },
+                        { id: "03", label: "9mobile", activeBg: "bg-teal-600 text-white border-teal-500", dot: "bg-teal-400" },
+                      ].map((net) => {
+                        const count =
+                          bulkScopeMode === "all"
+                            ? networkScopeCounts[net.id]?.all || 0
+                            : networkScopeCounts[net.id]?.offline || 0
+                        const isNetSelected =
+                          selectedBulkVehicles.length > 0 &&
+                          selectedBulkVehicles.every((v) => getVehicleNetworkId(v) === net.id)
+
+                        return (
+                          <button
+                            key={net.id}
+                            type="button"
+                            disabled={count === 0}
+                            onClick={() => selectVehiclesByNetwork(net.id)}
+                            className={`h-8 px-2.5 sm:px-3 rounded-lg border text-[11px] sm:text-xs font-bold inline-flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${
+                              isNetSelected
+                                ? `${net.activeBg} ring-2 ring-white/50 shadow-xs`
+                                : "bg-slate-800 hover:bg-slate-700 text-white border-slate-700"
+                            }`}
+                          >
+                            <span className={`w-2 h-2 rounded-full ${isNetSelected ? "bg-current" : net.dot}`} />
+                            <span>{net.label}</span>
+                            <span className="px-1.5 py-0.2 rounded bg-black/20 font-mono text-[10px]">
+                              {count}
+                            </span>
+                          </button>
+                        )
+                      })}
+
+                      {selectedCustVehicleIds.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setSelectedCustVehicleIds([])}
+                          className="h-8 px-2.5 rounded-lg bg-slate-800/80 hover:bg-rose-950/80 text-rose-300 border border-slate-700 text-[11px] font-semibold cursor-pointer"
+                        >
+                          Clear ({selectedCustVehicleIds.length})
+                        </button>
+                      )}
+                    </div>
+
+                    <Button
+                      type="button"
+                      disabled={selectedBulkVehicles.length === 0}
+                      onClick={openBulkRechargeModal}
+                      className="h-8 sm:h-9 px-3.5 sm:px-4 bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs rounded-xl inline-flex items-center gap-1.5 shadow-sm disabled:opacity-40"
+                    >
+                      <Zap className="w-3.5 h-3.5 fill-slate-950" />
+                      <span>
+                        Bulk Recharge Selected ({selectedBulkVehicles.length})
+                      </span>
+                    </Button>
+                  </div>
+                </div>
+
                 {/* 5-Column Filter & Sorting Bar */}
                 <div className="bg-slate-50/90 p-3 sm:p-4 rounded-xl border border-slate-200/90 space-y-3">
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2 sm:gap-2.5">
@@ -1944,6 +2285,15 @@ export function FleetTroubleshootClient({
                     <table className="w-full text-left text-xs">
                       <thead className="bg-slate-50 border-b border-slate-100 text-slate-500 font-semibold select-none">
                         <tr>
+                          <th className="py-3 pl-4 pr-2 w-9">
+                            <input
+                              type="checkbox"
+                              checked={areAllFilteredSelected}
+                              onChange={toggleAllFilteredCustVehicles}
+                              title="Select / Deselect all visible vehicles with SIM numbers"
+                              className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                            />
+                          </th>
                           {/* Vehicle & Plate with clickable sort */}
                           <th
                             onClick={() => handleCustSortToggle("plate")}
@@ -2050,7 +2400,7 @@ export function FleetTroubleshootClient({
                       <tbody className="divide-y divide-gray-100">
                         {filteredCustomerVehicles.length === 0 ? (
                           <tr>
-                            <td colSpan={8} className="py-12 text-center text-slate-500">
+                            <td colSpan={9} className="py-12 text-center text-slate-500">
                               <Database className="w-8 h-8 mx-auto text-slate-300 mb-2" />
                               <div className="text-sm font-bold text-slate-800">No Matching Vehicles Found</div>
                               <p className="text-xs text-slate-400 mt-1 max-w-md mx-auto">
@@ -2080,8 +2430,25 @@ export function FleetTroubleshootClient({
                             const isConnected = isMoving || isParkedOnline
                             const daysOff = isConnected ? 0 : getCustDaysOffline(v.lastHeartbeat)
 
+                            const isSelected = selectedCustVehicleIds.includes(v.id)
+                            const canSelect = hasValidSim(v)
+
                             return (
-                              <tr key={v.id} className="transition-colors hover:bg-slate-50/80">
+                              <tr
+                                key={v.id}
+                                className={`transition-colors ${
+                                  isSelected ? "bg-indigo-50/70 hover:bg-indigo-50" : "hover:bg-slate-50/80"
+                                }`}
+                              >
+                                <td className="py-3 pl-4 pr-2">
+                                  <input
+                                    type="checkbox"
+                                    disabled={!canSelect}
+                                    checked={isSelected}
+                                    onChange={() => toggleCustVehicleSelection(v.id)}
+                                    className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer disabled:opacity-30"
+                                  />
+                                </td>
                                 {/* Vehicle & Plate */}
                                 <td className="py-3 px-4 font-bold text-slate-900">
                                   <div className="flex items-center gap-1.5">
@@ -2304,15 +2671,31 @@ export function FleetTroubleshootClient({
                         const isConnected = isMoving || isParkedOnline
                         const daysOff = isConnected ? 0 : getCustDaysOffline(v.lastHeartbeat)
 
+                        const isSelected = selectedCustVehicleIds.includes(v.id)
+                        const canSelect = hasValidSim(v)
+
                         return (
-                          <div key={`m-cust-${v.id}`} className="p-3 bg-white hover:bg-slate-50/70 transition-colors space-y-2">
+                          <div
+                            key={`m-cust-${v.id}`}
+                            className={`p-3 transition-colors space-y-2 ${
+                              isSelected ? "bg-indigo-50/70" : "bg-white hover:bg-slate-50/70"
+                            }`}
+                          >
                             {/* Top: Name & Plate + Online/Offline Status */}
                             <div className="flex items-start justify-between gap-2">
-                              <div className="min-w-0 flex-1">
-                                <div className="font-bold text-xs text-slate-900 truncate flex items-center gap-1.5">
-                                  <Car className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
-                                  <span className="truncate">{v.name}</span>
-                                </div>
+                              <div className="min-w-0 flex-1 flex items-start gap-2">
+                                <input
+                                  type="checkbox"
+                                  disabled={!canSelect}
+                                  checked={isSelected}
+                                  onChange={() => toggleCustVehicleSelection(v.id)}
+                                  className="mt-0.5 w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer disabled:opacity-30 shrink-0"
+                                />
+                                <div className="min-w-0 flex-1">
+                                  <div className="font-bold text-xs text-slate-900 truncate flex items-center gap-1.5">
+                                    <Car className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                                    <span className="truncate">{v.name}</span>
+                                  </div>
                                 <div className="flex items-center gap-1.5 mt-0.5">
                                   {v.plateNumber ? (
                                     <span className="font-mono font-bold text-[10px] px-1.5 py-0.2 rounded bg-slate-100 text-slate-700 border border-slate-200">
@@ -2321,11 +2704,12 @@ export function FleetTroubleshootClient({
                                   ) : (
                                     <span className="text-[10px] text-slate-400 italic">No plate</span>
                                   )}
-                                  {v.imei && (
-                                    <span className="font-mono text-[10px] text-slate-400 truncate max-w-[120px]">
-                                      IMEI: {v.imei}
-                                    </span>
-                                  )}
+                                    {v.imei && (
+                                      <span className="font-mono text-[10px] text-slate-400 truncate max-w-[120px]">
+                                        IMEI: {v.imei}
+                                      </span>
+                                    )}
+                                  </div>
                                 </div>
                               </div>
 
@@ -3160,6 +3544,339 @@ export function FleetTroubleshootClient({
                   <>
                     <Zap className="w-3.5 h-3.5 mr-1 text-amber-300" />
                     <span>Dispense ({planPrice > 0 ? `₦${planPrice.toLocaleString()}` : ""})</span>
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ------------------------------------------------------------- */}
+      {/* MODAL 1B: BULK ACCOUNT SIM RECHARGE MODAL                      */}
+      {/* ------------------------------------------------------------- */}
+      {bulkCustModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 animate-fadeIn">
+          <div className="bg-white rounded-xl sm:rounded-2xl max-w-xl w-full p-4 sm:p-6 shadow-2xl border border-slate-100 space-y-3.5 sm:space-y-4 max-h-[92vh] overflow-y-auto animate-scaleUp">
+            {/* Header */}
+            <div className="flex items-start justify-between">
+              <div>
+                <div className="flex items-center gap-1.5 text-[11px] sm:text-xs font-bold text-indigo-600 uppercase tracking-wider">
+                  <Zap className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-500" />
+                  <span>Bulk Account SIM Data Top-up</span>
+                </div>
+                <h3 className="text-sm sm:text-base font-black text-slate-900 mt-0.5">
+                  {customerInfo?.email ? `Account: ${customerInfo.email}` : "Selected Fleet Vehicles"}
+                </h3>
+                <p className="text-[11px] text-slate-500 mt-0.5">
+                  {selectedBulkVehicles.length} Vehicle SIMs Selected (
+                  {selectedBulkVehicles.filter((v) => !isVehicleConnected(v.onlineStatus)).length} Offline •{" "}
+                  {selectedBulkVehicles.filter((v) => isVehicleConnected(v.onlineStatus)).length} Online)
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setBulkCustModalOpen(false)}
+                className="text-slate-400 hover:text-slate-700 p-1 rounded-lg"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Quick Scope & Network Filter inside Modal */}
+            <div className="p-2.5 sm:p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="text-[10px] sm:text-[11px] font-bold text-slate-700 uppercase tracking-wider">
+                  1. Target Vehicles Scope:
+                </span>
+                <div className="inline-flex items-center p-0.5 rounded-lg bg-slate-200/80 border border-slate-300">
+                  <button
+                    type="button"
+                    onClick={() => selectVehiclesByNetwork(modalNetworkId, "all")}
+                    className={`px-2.5 py-1 rounded-md text-[10px] sm:text-[11px] font-bold transition-all cursor-pointer ${
+                      bulkScopeMode === "all"
+                        ? "bg-indigo-600 text-white shadow-2xs"
+                        : "text-slate-700 hover:text-slate-950"
+                    }`}
+                  >
+                    🌐 All (Online + Offline)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => selectVehiclesByNetwork(modalNetworkId, "offline")}
+                    className={`px-2.5 py-1 rounded-md text-[10px] sm:text-[11px] font-bold transition-all cursor-pointer ${
+                      bulkScopeMode === "offline"
+                        ? "bg-rose-600 text-white shadow-2xs"
+                        : "text-slate-700 hover:text-slate-950"
+                    }`}
+                  >
+                    🔴 Only Offline Vehicles
+                  </button>
+                </div>
+              </div>
+
+              {/* Selected Vehicles Preview List */}
+              <div className="max-h-36 overflow-y-auto divide-y divide-slate-100 bg-white border border-slate-200 rounded-lg">
+                {selectedBulkVehicles.length === 0 ? (
+                  <div className="p-3 text-center text-xs text-slate-400 italic">
+                    No vehicles match this network & scope. Choose another network or switch scope above.
+                  </div>
+                ) : (
+                  selectedBulkVehicles.map((v) => {
+                    const isConn = isVehicleConnected(v.onlineStatus)
+                    return (
+                      <div key={`bulk-item-${v.id}`} className="px-2.5 py-1.5 flex items-center justify-between gap-2 text-[11px]">
+                        <div className="min-w-0 flex items-center gap-1.5">
+                          <span
+                            className={`w-2 h-2 rounded-full shrink-0 ${
+                              isConn ? "bg-emerald-500" : "bg-rose-500"
+                            }`}
+                            title={isConn ? "Online / Reporting" : "Offline"}
+                          />
+                          <span className="font-bold text-slate-800 truncate">{v.name}</span>
+                          {v.plateNumber && (
+                            <span className="font-mono text-[10px] px-1 rounded bg-slate-100 text-slate-600 border border-slate-200 shrink-0">
+                              {v.plateNumber}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span className="font-mono font-semibold text-slate-700">
+                            {v.normalizedPhone || v.rawSimNumber}
+                          </span>
+                          <span
+                            className={`text-[9px] font-bold px-1.5 py-0.2 rounded ${
+                              isConn ? "bg-emerald-100 text-emerald-800" : "bg-rose-100 text-rose-800"
+                            }`}
+                          >
+                            {isConn ? "Online" : "Offline"}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => toggleCustVehicleSelection(v.id)}
+                            className="text-slate-400 hover:text-rose-600"
+                            title="Remove from batch"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    )
+                  })
+                )}
+              </div>
+            </div>
+
+            {/* Telecom Network Selector */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <label className="text-[11px] sm:text-xs font-bold text-slate-700">
+                  2. Select SIM Network (Auto-selects matching account SIMs) *
+                </label>
+              </div>
+              <div className="grid grid-cols-4 gap-1.5 sm:gap-2">
+                {[
+                  { id: "01", name: "MTN", active: "ring-2 ring-amber-500 bg-amber-400 text-slate-950 font-black shadow-xs", dot: "bg-amber-500" },
+                  { id: "04", name: "Airtel", active: "ring-2 ring-rose-500 bg-rose-600 text-white font-black shadow-xs", dot: "bg-rose-500" },
+                  { id: "02", name: "Glo", active: "ring-2 ring-emerald-600 bg-emerald-600 text-white font-black shadow-xs", dot: "bg-emerald-500" },
+                  { id: "03", name: "9Mobile", active: "ring-2 ring-teal-600 bg-teal-700 text-white font-black shadow-xs", dot: "bg-teal-500" },
+                ].map((net) => {
+                  const isSelected = modalNetworkId === net.id
+                  const netCount =
+                    bulkScopeMode === "all"
+                      ? networkScopeCounts[net.id]?.all || 0
+                      : networkScopeCounts[net.id]?.offline || 0
+                  return (
+                    <button
+                      key={net.id}
+                      type="button"
+                      onClick={() => {
+                        setModalNetworkId(net.id)
+                        setModalPlanValue("")
+                        selectVehiclesByNetwork(net.id, bulkScopeMode)
+                      }}
+                      className={`h-9 sm:h-10 rounded-xl border flex items-center justify-center gap-1.5 text-xs font-bold transition-all cursor-pointer ${
+                        isSelected
+                          ? net.active
+                          : "border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700"
+                      }`}
+                    >
+                      <span className={`w-2 h-2 rounded-full ${isSelected ? "bg-current" : net.dot}`} />
+                      <span>{net.name}</span>
+                      <span className="text-[10px] opacity-80 font-mono">({netCount})</span>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+
+            {/* Telecom Server Route Selector */}
+            <div className="space-y-1">
+              <div className="flex items-center justify-between">
+                <label className="text-[11px] sm:text-xs font-bold text-slate-700">3. Telecom Server Route</label>
+                {isLoadingServerPlans && (
+                  <span className="text-[10px] text-indigo-600 font-semibold flex items-center gap-1">
+                    <Loader2 className="w-2.5 h-2.5 animate-spin" /> Loading plans...
+                  </span>
+                )}
+              </div>
+              <select
+                value={modalServerId}
+                onChange={(e) => handleModalServerChange(e.target.value)}
+                className="w-full h-9 sm:h-10 border border-slate-200 rounded-xl px-2.5 sm:px-3 text-[11px] sm:text-xs bg-white font-semibold text-slate-800"
+              >
+                {servers.map((s, idx) => {
+                  const cleanName = (s.serverName || `Server ${idx + 1}`)
+                    .replace(/\s*\([^)]*\)/g, "")
+                    .replace(/clubkonnect|pairgate|smecloud|sme\s*cloud|nellobyte|autobiz|demopaysub/gi, "")
+                    .trim() || `Server ${idx + 1}`
+                  return (
+                    <option key={s.id} value={s.id}>
+                      {cleanName} {s.isDefault ? "— (Active Default)" : ""}
+                    </option>
+                  )
+                })}
+              </select>
+            </div>
+
+            {/* Data Bundle Selector */}
+            <div className="space-y-1">
+              <div className="flex items-center justify-between">
+                <label className="text-[11px] sm:text-xs font-bold text-slate-700">4. Select Data Bundle *</label>
+                <span className="text-[10px] text-indigo-700 font-bold bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">
+                  {modalNetworkId === "01" ? "MTN Plans" : modalNetworkId === "04" ? "Airtel Plans" : modalNetworkId === "02" ? "Glo Plans" : "9Mobile Plans"}
+                </span>
+              </div>
+              <select
+                value={modalPlanValue}
+                onChange={(e) => setModalPlanValue(e.target.value)}
+                className="w-full h-9 sm:h-10 border border-slate-200 rounded-xl px-2.5 sm:px-3 text-[11px] sm:text-xs bg-white font-semibold text-slate-800"
+              >
+                <option value="">-- Choose Data Plan --</option>
+                {modalFilteredPlans.map((p) => {
+                  const hasDuration = /day|month|week|daily|weekly|monthly|\(\d+/i.test(p.name)
+                  const validityLabel = !hasDuration && p.validity ? ` (${p.validity})` : ""
+                  return (
+                    <option key={`bulk-${p.id}-${p.name}`} value={`${p.id}::${p.price}::${p.name}::${p.validity || ""}`}>
+                      {p.name} — ₦{p.price}{validityLabel}
+                    </option>
+                  )
+                })}
+              </select>
+            </div>
+
+            {/* Bulk Cost Breakdown */}
+            <div className="p-2.5 sm:p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-1.5 text-[11px] sm:text-xs">
+              <div className="flex justify-between text-slate-600">
+                <span>Selected Vehicles:</span>
+                <span className="font-bold text-slate-900">{selectedBulkVehicles.length} SIMs</span>
+              </div>
+              <div className="flex justify-between text-slate-600">
+                <span>Cost per SIM:</span>
+                <span className="font-mono font-bold text-slate-800">
+                  {planPrice > 0 ? `₦${planPrice.toLocaleString()}` : "—"}
+                </span>
+              </div>
+              <div className="flex justify-between text-slate-600">
+                <span>Total Bulk Cost:</span>
+                <span className="font-mono font-black text-indigo-700">
+                  {planPrice > 0 ? `₦${(planPrice * selectedBulkVehicles.length).toLocaleString()}` : "—"}
+                </span>
+              </div>
+              <div className="flex justify-between border-t border-slate-200 pt-1.5 font-bold">
+                <span className="text-slate-800">Available Wallet Balance:</span>
+                <span
+                  className={`font-mono ${
+                    walletBalance >= planPrice * selectedBulkVehicles.length ? "text-emerald-600" : "text-rose-600"
+                  }`}
+                >
+                  ₦{walletBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                </span>
+              </div>
+            </div>
+
+            {/* Bulk Results Summary */}
+            {bulkRechargeResult && (
+              <div className="space-y-2">
+                <div
+                  className={`p-3 rounded-xl text-xs font-bold flex items-center justify-between ${
+                    bulkRechargeResult.successCount > 0
+                      ? "bg-emerald-50 text-emerald-900 border border-emerald-200"
+                      : "bg-rose-50 text-rose-900 border border-rose-200"
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    {bulkRechargeResult.successCount > 0 ? (
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                    ) : (
+                      <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                    )}
+                    <span>
+                      {bulkRechargeResult.error
+                        ? bulkRechargeResult.error
+                        : `Bulk Recharge Complete: ${bulkRechargeResult.successCount} Succeeded, ${bulkRechargeResult.failureCount} Failed`}
+                    </span>
+                  </div>
+                </div>
+
+                {bulkRechargeResult.results.length > 0 && (
+                  <div className="max-h-36 overflow-y-auto divide-y divide-slate-100 border border-slate-200 rounded-lg bg-slate-50/50 text-[11px]">
+                    {bulkRechargeResult.results.map((r, i) => (
+                      <div key={`res-${r.vehicleId}-${i}`} className="px-2.5 py-1.5 flex items-center justify-between gap-2">
+                        <div className="truncate">
+                          <span className="font-bold text-slate-800">{r.vehicleName}</span>{" "}
+                          <span className="font-mono text-slate-500">({r.phone})</span>
+                        </div>
+                        <span
+                          className={`px-1.5 py-0.2 rounded font-bold text-[10px] shrink-0 ${
+                            r.status === "SUCCESS"
+                              ? "bg-emerald-100 text-emerald-800"
+                              : "bg-rose-100 text-rose-800"
+                          }`}
+                        >
+                          {r.status === "SUCCESS" ? "SUCCESS" : r.message || "FAILED"}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Action Buttons */}
+            <div className="flex items-center justify-end gap-2 pt-1">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setBulkCustModalOpen(false)}
+                className="h-9 sm:h-10 px-3.5 sm:px-4 text-[11px] sm:text-xs font-bold"
+              >
+                Close
+              </Button>
+
+              <Button
+                type="button"
+                disabled={
+                  isBulkDispensing ||
+                  !modalPlanValue ||
+                  selectedBulkVehicles.length === 0 ||
+                  walletBalance < planPrice * selectedBulkVehicles.length
+                }
+                onClick={handleExecuteBulkRecharge}
+                className="h-9 sm:h-10 px-4 sm:px-5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[11px] sm:text-xs rounded-xl shadow-xs"
+              >
+                {isBulkDispensing ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+                    <span>Dispensing to {selectedBulkVehicles.length} SIMs...</span>
+                  </>
+                ) : (
+                  <>
+                    <Zap className="w-3.5 h-3.5 mr-1 text-amber-300" />
+                    <span>
+                      Dispense to {selectedBulkVehicles.length} SIMs (
+                      {planPrice > 0 ? `₦${(planPrice * selectedBulkVehicles.length).toLocaleString()}` : "—"})
+                    </span>
                   </>
                 )}
               </Button>
