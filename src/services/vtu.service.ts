@@ -627,7 +627,7 @@ export async function reconcilePendingTransactions(userId?: string) {
       prisma.dataPurchase.findMany({
         where: whereClause,
         orderBy: { createdAt: "desc" },
-        take: 20,
+        take: 150,
       })
     )
 
@@ -635,7 +635,7 @@ export async function reconcilePendingTransactions(userId?: string) {
       prisma.airtimePurchase.findMany({
         where: whereClause,
         orderBy: { createdAt: "desc" },
-        take: 20,
+        take: 50,
       })
     )
 
@@ -725,13 +725,47 @@ export async function reconcilePendingTransactions(userId?: string) {
             if ((tx as any).scheduledRenewal?.updateMany) {
               await (tx as any).scheduledRenewal.updateMany({
                 where: { firstPurchaseRef: d.reference, status: "PENDING" },
-                data: { status: "CANCELLED", errorMessage: "Cycle 1 failed on carrier and was refunded" },
+                data: { status: "CANCELLED", error: "Cycle 1 failed on carrier and was refunded" },
               })
             } else {
               await tx.$executeRawUnsafe(
-                `UPDATE "ScheduledRenewal" SET "status" = 'CANCELLED', "errorMessage" = 'Cycle 1 failed on carrier and was refunded', "updatedAt" = NOW() WHERE "firstPurchaseRef" = $1 AND "status" = 'PENDING'`,
+                `UPDATE "ScheduledRenewal" SET "status" = 'CANCELLED', "error" = 'Cycle 1 failed on carrier and was refunded', "updatedAt" = NOW() WHERE "firstPurchaseRef" = $1 AND "status" = 'PENDING'`,
                 d.reference
               ).catch(() => {})
+            }
+
+            // Restore or clear OfflineVehicle VTU status so failed orders don't show as ACTIVE
+            const prevSuccess = await tx.dataPurchase.findFirst({
+              where: { phone: d.phone, status: "SUCCESS", id: { not: d.id } },
+              orderBy: { createdAt: "desc" },
+            })
+            if (prevSuccess) {
+              const isBiW = /twice\s*a\s*month|bi-weekly/i.test(prevSuccess.plan || "")
+              const vDays = prevSuccess.amount === 380 ? 7 : isBiW ? 14 : extractValidityDays(prevSuccess.plan, 30)
+              const expDate = new Date(prevSuccess.createdAt.getTime() + vDays * 86400000)
+              await tx.offlineVehicle.updateMany({
+                where: { OR: [{ normalizedPhone: d.phone }, { rawSimNumber: d.phone }] },
+                data: {
+                  vtuStatus: expDate > new Date() ? "ACTIVE" : "EXPIRED",
+                  lastDataPlan: prevSuccess.plan,
+                  lastDataAmount: prevSuccess.amount,
+                  lastDataDate: prevSuccess.createdAt,
+                  dataExpiryDate: expDate,
+                  hasVtuRecord: true,
+                },
+              })
+            } else {
+              await tx.offlineVehicle.updateMany({
+                where: { OR: [{ normalizedPhone: d.phone }, { rawSimNumber: d.phone }] },
+                data: {
+                  vtuStatus: "NEVER_LOADED",
+                  lastDataPlan: null,
+                  lastDataAmount: null,
+                  lastDataDate: null,
+                  dataExpiryDate: null,
+                  hasVtuRecord: false,
+                },
+              })
             }
           }, TX_OPTIONS)
           reconciledCount++

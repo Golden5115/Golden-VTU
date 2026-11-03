@@ -668,30 +668,101 @@ export function SimTroubleshootStation({
     setBulkIsSubmitting(true)
     setBulkFeedback(null)
 
+    const phonesToProcess = [...bulkSelectedPhones]
+    const accumulatedResults: Array<{
+      phone: string
+      success: boolean
+      reference?: string
+      error?: string
+    }> = []
+    let successCount = 0
+    let failureCount = 0
+
     try {
-      const res = await fetch("/api/vtu/bulk-purchase", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          type: bulkServiceType,
-          networkId: bulkNetworkId,
-          planId: planId,
-          planName: planName,
-          validityDays: validityDays,
-          amount: unitCost,
-          phones: bulkSelectedPhones,
-          serverId: selectedServerId || undefined,
-          bypassSimCheck: true,
-        }),
-      })
+      for (let i = 0; i < phonesToProcess.length; i++) {
+        const currentPhone = phonesToProcess[i]
+        if (i > 0) {
+          await new Promise((r) => setTimeout(r, 4500))
+        }
 
-      const data = await res.json()
-      if (!res.ok || !data.success) {
-        throw new Error(data.error || "Bulk recharge operation failed")
+        let itemResult: { phone: string; success: boolean; reference?: string; error?: string } | null = null
+        const maxAttempts = 3
+
+        for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+          try {
+            const res = await fetch("/api/vtu/bulk-purchase", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                type: bulkServiceType,
+                networkId: bulkNetworkId,
+                planId: planId,
+                planName: planName,
+                validityDays: validityDays,
+                amount: unitCost,
+                phones: [currentPhone],
+                serverId: selectedServerId || undefined,
+                bypassSimCheck: true,
+              }),
+            })
+
+            const data = await res.json()
+            if (!res.ok || !data.success) {
+              throw new Error(data.error || "Recharge failed")
+            }
+
+            const fetchedItem: { phone: string; success: boolean; reference?: string; error?: string } =
+              data.results?.[0] || {
+                phone: currentPhone,
+                success: (data.successCount || 0) > 0,
+              }
+            itemResult = fetchedItem
+
+            if (fetchedItem.success) {
+              break
+            }
+
+            const errMsg = String(fetchedItem.error || "").toLowerCase()
+            const isPermanentError =
+              errMsg.includes("barred") ||
+              errMsg.includes("nin") ||
+              errMsg.includes("insufficient") ||
+              errMsg.includes("invalid")
+            if (!isPermanentError && attempt < maxAttempts) {
+              await new Promise((r) => setTimeout(r, 30000))
+              continue
+            }
+            break
+          } catch (err: any) {
+            itemResult = {
+              phone: currentPhone,
+              success: false,
+              error: err.message || "Failed to process",
+            }
+            if (attempt < maxAttempts) {
+              await new Promise((r) => setTimeout(r, 15000))
+              continue
+            }
+          }
+        }
+
+        if (itemResult) {
+          accumulatedResults.push(itemResult)
+          if (itemResult.success) {
+            successCount++
+            setWalletBalance((prev) => Math.max(0, prev - unitCost))
+          } else {
+            failureCount++
+          }
+        }
+
+        setBulkBatchResults({
+          totalProcessed: accumulatedResults.length,
+          successCount,
+          failureCount,
+          results: [...accumulatedResults],
+        })
       }
-
-      setBulkBatchResults(data)
-      setWalletBalance((prev) => Math.max(0, prev - unitCost * (data.successCount || 0)))
 
       // Auto-sync status for all batch numbers after 3s
       setTimeout(() => {

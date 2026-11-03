@@ -77,53 +77,45 @@ export async function POST(request: NextRequest) {
       error?: string
     }> = []
 
-    const isBulkBatch = cleanPhones.length > 1
-    const CHUNK_SIZE = 3
-
-    for (let i = 0; i < cleanPhones.length; i += CHUNK_SIZE) {
-      const chunk = cleanPhones.slice(i, i + CHUNK_SIZE)
-      const chunkResults = await Promise.all(
-        chunk.map(async (phone: string, idx: number) => {
-          if (idx > 0) {
-            await new Promise((r) => setTimeout(r, idx * 150))
-          }
-          try {
-            if (type === "data") {
-              const res = await purchaseData(userId, networkId, planId, phone, unitAmount, {
-                serverId,
-                planName,
-                validityDays,
-                bypassSimCheck: true,
-                skipFastPoll: isBulkBatch,
-              })
-              return {
-                phone,
-                success: true,
-                reference: (res as any)?.reference || (res as any)?.id,
-              }
-            } else {
-              const res = await purchaseAirtime(userId, networkId, phone, unitAmount, {
-                serverId,
-                bypassSimCheck: true,
-                skipFastPoll: isBulkBatch,
-              })
-              return {
-                phone,
-                success: true,
-                reference: (res as any)?.reference || (res as any)?.id,
-              }
-            }
-          } catch (err: any) {
-            console.error(`[BulkPurchaseAPI] Failed for phone ${phone}:`, err.message)
-            return {
-              phone,
-              success: false,
-              error: err.message || "Failed to process",
-            }
-          }
+    for (let i = 0; i < cleanPhones.length; i++) {
+      const phone = cleanPhones[i]
+      if (i > 0) {
+        await new Promise((r) => setTimeout(r, 1200))
+      }
+      try {
+        if (type === "data") {
+          const res = await purchaseData(userId, networkId, planId, phone, unitAmount, {
+            serverId,
+            planName,
+            validityDays,
+            bypassSimCheck: true,
+            skipFastPoll: false,
+          })
+          results.push({
+            phone,
+            success: true,
+            reference: (res as any)?.reference || (res as any)?.id,
+          })
+        } else {
+          const res = await purchaseAirtime(userId, networkId, phone, unitAmount, {
+            serverId,
+            bypassSimCheck: true,
+            skipFastPoll: false,
+          })
+          results.push({
+            phone,
+            success: true,
+            reference: (res as any)?.reference || (res as any)?.id,
+          })
+        }
+      } catch (err: any) {
+        console.error(`[BulkPurchaseAPI] Failed for phone ${phone}:`, err.message)
+        results.push({
+          phone,
+          success: false,
+          error: err.message || "Failed to process",
         })
-      )
-      results.push(...chunkResults)
+      }
     }
 
     const successCount = results.filter((r) => r.success).length

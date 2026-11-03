@@ -592,9 +592,11 @@ export function FleetTroubleshootClient({
   // BULK CUSTOMER ACCOUNT SIM SELECTION & RECHARGE
   // -------------------------------------------------------------
   const [selectedCustVehicleIds, setSelectedCustVehicleIds] = useState<number[]>([])
-  const [bulkScopeMode, setBulkScopeMode] = useState<"all" | "offline">("all") // "all" (online + offline) | "offline" (offline only)
+  const [bulkScopeMode, setBulkScopeMode] = useState<"all" | "offline" | "needs_data">("all") // "all" | "offline" | "needs_data" (not ACTIVE)
   const [bulkCustModalOpen, setBulkCustModalOpen] = useState(false)
   const [isBulkDispensing, setIsBulkDispensing] = useState(false)
+  const [bulkProgress, setBulkProgress] = useState<{ current: number; total: number } | null>(null)
+  const abortBulkRef = useRef(false)
   const [bulkRechargeResult, setBulkRechargeResult] = useState<RechargeFleetResult | null>(null)
 
   const getVehicleNetworkId = (v: FleetTrackerDevice): string => {
@@ -614,33 +616,38 @@ export function FleetTroubleshootClient({
     return p.length >= 10
   }
 
-  // Counts of vehicles per network under the active scope ("all" vs "offline")
+  // Counts of vehicles per network under the active scope ("all" vs "offline" vs "needs_data")
   const networkScopeCounts = useMemo(() => {
-    const counts: Record<string, { all: number; offline: number }> = {
-      "01": { all: 0, offline: 0 },
-      "04": { all: 0, offline: 0 },
-      "02": { all: 0, offline: 0 },
-      "03": { all: 0, offline: 0 },
+    const counts: Record<string, { all: number; offline: number; needs_data: number }> = {
+      "01": { all: 0, offline: 0, needs_data: 0 },
+      "04": { all: 0, offline: 0, needs_data: 0 },
+      "02": { all: 0, offline: 0, needs_data: 0 },
+      "03": { all: 0, offline: 0, needs_data: 0 },
     }
     for (const v of liveVehicles) {
       if (!hasValidSim(v)) continue
       const netId = getVehicleNetworkId(v)
-      if (!counts[netId]) counts[netId] = { all: 0, offline: 0 }
+      if (!counts[netId]) counts[netId] = { all: 0, offline: 0, needs_data: 0 }
       counts[netId].all++
       if (!isVehicleConnected(v.onlineStatus)) {
         counts[netId].offline++
+      }
+      if (v.vtuHistory?.statusBadge !== "ACTIVE") {
+        counts[netId].needs_data++
       }
     }
     return counts
   }, [liveVehicles])
 
-  const selectVehiclesByNetwork = (netId: string, scopeOverride?: "all" | "offline") => {
+  const selectVehiclesByNetwork = (netId: string, scopeOverride?: "all" | "offline" | "needs_data") => {
     const activeScope = scopeOverride || bulkScopeMode
+    if (scopeOverride) setBulkScopeMode(scopeOverride)
     const matchingIds = liveVehicles
       .filter((v) => {
         if (!hasValidSim(v)) return false
         if (getVehicleNetworkId(v) !== netId) return false
         if (activeScope === "offline" && isVehicleConnected(v.onlineStatus)) return false
+        if (activeScope === "needs_data" && v.vtuHistory?.statusBadge === "ACTIVE") return false
         return true
       })
       .map((v) => v.id)
@@ -650,7 +657,7 @@ export function FleetTroubleshootClient({
     setModalPlanValue("")
   }
 
-  const handleBulkScopeChange = (newScope: "all" | "offline") => {
+  const handleBulkScopeChange = (newScope: "all" | "offline" | "needs_data") => {
     setBulkScopeMode(newScope)
     // If vehicles are already selected, refine or expand them to match the new scope for the currently active network(s)
     if (selectedCustVehicleIds.length > 0) {
@@ -661,6 +668,10 @@ export function FleetTroubleshootClient({
       } else if (newScope === "offline") {
         setSelectedCustVehicleIds(
           selectedObjs.filter((v) => !isVehicleConnected(v.onlineStatus)).map((v) => v.id)
+        )
+      } else if (newScope === "needs_data") {
+        setSelectedCustVehicleIds(
+          selectedObjs.filter((v) => v.vtuHistory?.statusBadge !== "ACTIVE").map((v) => v.id)
         )
       }
     }
@@ -732,82 +743,163 @@ export function FleetTroubleshootClient({
     }
 
     setIsBulkDispensing(true)
-    setBulkRechargeResult(null)
+    abortBulkRef.current = false
+    const vehiclesToProcess = [...selectedBulkVehicles]
+    const totalToProcess = vehiclesToProcess.length
+    setBulkProgress({ current: 0, total: totalToProcess })
+
+    const accumulatedResults: RechargeFleetResult["results"] = []
+    let successCount = 0
+    let failureCount = 0
+    let latestWalletBalance = walletBalance
+
+    setBulkRechargeResult({
+      success: true,
+      totalAttempted: totalToProcess,
+      successCount: 0,
+      failureCount: 0,
+      results: [],
+      newWalletBalance: walletBalance,
+    })
 
     try {
-      const res = await rechargeFleetVehicles({
-        vehicles: selectedBulkVehicles.map((v) => ({
-          id: v.id,
-          name: v.name,
-          plateNumber: v.plateNumber,
-          phone: v.normalizedPhone || v.rawSimNumber,
-          networkId: modalNetworkId || getVehicleNetworkId(v),
-          imei: v.imei,
-        })),
-        dataPlanId: planId,
-        planName: planName || "Data Bundle",
-        amount: planPrice,
-        validityDays: extractValidityDays(planValidity || planName || "", 30),
-        serverId: modalServerId,
-      })
+      for (let i = 0; i < totalToProcess; i++) {
+        if (abortBulkRef.current) break
 
-      setBulkRechargeResult(res)
-      if (res.newWalletBalance !== undefined) {
-        setWalletBalance(res.newWalletBalance)
+        const v = vehiclesToProcess[i]
+        setBulkProgress({ current: i + 1, total: totalToProcess })
+
+        // Pace 4.5s between consecutive SIMs so Server 3's MTN Transfer USSD channel is never burst-throttled
+        if (i > 0) {
+          await new Promise((r) => setTimeout(r, 4500))
+        }
+
+        if (abortBulkRef.current) break
+
+        let itemRes: RechargeFleetResult["results"][0] | null = null
+        const maxSimAttempts = 3
+
+        for (let simAttempt = 1; simAttempt <= maxSimAttempts; simAttempt++) {
+          if (abortBulkRef.current) break
+          try {
+            const stepRes = await rechargeFleetVehicles({
+              vehicles: [
+                {
+                  id: v.id,
+                  name: v.name,
+                  plateNumber: v.plateNumber,
+                  phone: v.normalizedPhone || v.rawSimNumber,
+                  networkId: modalNetworkId || getVehicleNetworkId(v),
+                  imei: v.imei,
+                },
+              ],
+              dataPlanId: planId,
+              planName: planName || "Data Bundle",
+              amount: planPrice,
+              validityDays: extractValidityDays(planValidity || planName || "", 30),
+              serverId: modalServerId,
+            })
+
+            if (stepRes.newWalletBalance !== undefined) {
+              latestWalletBalance = stepRes.newWalletBalance
+              setWalletBalance(stepRes.newWalletBalance)
+            }
+
+            itemRes = stepRes.results?.[0] || {
+              vehicleId: v.id,
+              vehicleName: v.name,
+              phone: v.normalizedPhone || v.rawSimNumber,
+              status: stepRes.success ? ("SUCCESS" as const) : ("FAILED" as const),
+              message: stepRes.error || (stepRes.success ? "Data dispensed successfully." : "Failed to dispense data."),
+            }
+
+            if (itemRes.status === "SUCCESS") {
+              break
+            }
+
+            // If failed due to carrier USSD burst rate-limit (not NIN barred / insufficient wallet), cool down 30s and retry
+            const errMsg = String(itemRes.message || "").toLowerCase()
+            const isPermanentError =
+              errMsg.includes("barred") ||
+              errMsg.includes("nin") ||
+              errMsg.includes("insufficient") ||
+              errMsg.includes("invalid")
+            if (!isPermanentError && simAttempt < maxSimAttempts && !abortBulkRef.current) {
+              await new Promise((r) => setTimeout(r, 30000))
+              continue
+            }
+            break
+          } catch (stepErr: any) {
+            itemRes = {
+              vehicleId: v.id,
+              vehicleName: v.name,
+              phone: v.normalizedPhone || v.rawSimNumber,
+              status: "FAILED",
+              message: stepErr?.message || "Carrier request failed.",
+            }
+            if (simAttempt < maxSimAttempts && !abortBulkRef.current) {
+              await new Promise((r) => setTimeout(r, 15000))
+              continue
+            }
+          }
+        }
+
+        if (itemRes) {
+          accumulatedResults.push(itemRes)
+          if (itemRes.status === "SUCCESS") {
+            successCount++
+            // Immediately reflect ACTIVE status on this vehicle in state
+            setLiveVehicles((prev) =>
+              prev.map((lv) =>
+                lv.id === v.id
+                  ? {
+                      ...lv,
+                      vtuHistory: {
+                        ...lv.vtuHistory,
+                        hasRecord: true,
+                        lastDataPlan: planName,
+                        lastDataAmount: planPrice,
+                        lastDataDate: new Date().toISOString(),
+                        statusBadge: "ACTIVE",
+                        isExpired: false,
+                        isExpiringSoon: false,
+                      },
+                    }
+                  : lv
+              )
+            )
+
+            setOfflineVehicles((prev) =>
+              prev.map((ov) =>
+                ov.cartrackerId === v.id
+                  ? {
+                      ...ov,
+                      vtuStatus: "ACTIVE",
+                      hasVtuRecord: true,
+                      lastDataPlan: planName,
+                      lastDataAmount: planPrice,
+                      lastDataDate: new Date().toISOString(),
+                    }
+                  : ov
+              )
+            )
+          } else {
+            failureCount++
+          }
+        }
+
+        setBulkRechargeResult({
+          success: successCount > 0,
+          totalAttempted: accumulatedResults.length,
+          successCount,
+          failureCount,
+          results: [...accumulatedResults],
+          newWalletBalance: latestWalletBalance,
+        })
       }
-
-      const succeededIds = new Set(
-        res.results.filter((r) => r.status === "SUCCESS").map((r) => r.vehicleId)
-      )
-
-      if (succeededIds.size > 0) {
-        setLiveVehicles((prev) =>
-          prev.map((v) =>
-            succeededIds.has(v.id)
-              ? {
-                  ...v,
-                  vtuHistory: {
-                    ...v.vtuHistory,
-                    hasRecord: true,
-                    lastDataPlan: planName,
-                    lastDataAmount: planPrice,
-                    lastDataDate: new Date().toISOString(),
-                    statusBadge: "ACTIVE",
-                    isExpired: false,
-                    isExpiringSoon: false,
-                  },
-                }
-              : v
-          )
-        )
-
-        setOfflineVehicles((prev) =>
-          prev.map((v) =>
-            succeededIds.has(v.cartrackerId)
-              ? {
-                  ...v,
-                  vtuStatus: "ACTIVE",
-                  hasVtuRecord: true,
-                  lastDataPlan: planName,
-                  lastDataAmount: planPrice,
-                  lastDataDate: new Date().toISOString(),
-                }
-              : v
-          )
-        )
-      }
-    } catch (err: any) {
-      setBulkRechargeResult({
-        success: false,
-        totalAttempted: selectedBulkVehicles.length,
-        successCount: 0,
-        failureCount: selectedBulkVehicles.length,
-        results: [],
-        newWalletBalance: walletBalance,
-        error: err.message || "Failed to execute bulk fleet recharge.",
-      })
     } finally {
       setIsBulkDispensing(false)
+      setBulkProgress(null)
     }
   }
 
@@ -2042,8 +2134,8 @@ export function FleetTroubleshootClient({
                       </p>
                     </div>
 
-                    {/* Scope Toggle: All Vehicles vs Only Offline Vehicles */}
-                    <div className="inline-flex items-center p-1 rounded-xl bg-slate-800/90 border border-slate-700 self-start lg:self-auto shrink-0">
+                    {/* Scope Toggle: All Vehicles vs Only Offline vs Needs Data */}
+                    <div className="inline-flex flex-wrap items-center p-1 rounded-xl bg-slate-800/90 border border-slate-700 self-start lg:self-auto shrink-0 gap-1">
                       <button
                         type="button"
                         onClick={() => handleBulkScopeChange("all")}
@@ -2053,7 +2145,7 @@ export function FleetTroubleshootClient({
                             : "text-slate-300 hover:text-white"
                         }`}
                       >
-                        🌐 All Vehicles (Online + Offline)
+                        🌐 All Vehicles
                       </button>
                       <button
                         type="button"
@@ -2064,7 +2156,18 @@ export function FleetTroubleshootClient({
                             : "text-slate-300 hover:text-white"
                         }`}
                       >
-                        🔴 Only Offline Vehicles
+                        🔴 Only Offline
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleBulkScopeChange("needs_data")}
+                        className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-[10px] sm:text-xs font-bold transition-all cursor-pointer ${
+                          bulkScopeMode === "needs_data"
+                            ? "bg-amber-500 text-slate-950 shadow-xs"
+                            : "text-slate-300 hover:text-white"
+                        }`}
+                      >
+                        ⚡ Needs Data (Skip Active)
                       </button>
                     </div>
                   </div>
@@ -2073,7 +2176,7 @@ export function FleetTroubleshootClient({
                   <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-800">
                     <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
                       <span className="text-[10px] sm:text-xs font-semibold text-slate-400 mr-1">
-                        Select SIM Network ({bulkScopeMode === "all" ? "All" : "Offline Only"}):
+                        Select SIM Network ({bulkScopeMode === "all" ? "All" : bulkScopeMode === "offline" ? "Offline Only" : "Needs Data"}):
                       </span>
 
                       {[
@@ -2085,7 +2188,9 @@ export function FleetTroubleshootClient({
                         const count =
                           bulkScopeMode === "all"
                             ? networkScopeCounts[net.id]?.all || 0
-                            : networkScopeCounts[net.id]?.offline || 0
+                            : bulkScopeMode === "offline"
+                            ? networkScopeCounts[net.id]?.offline || 0
+                            : networkScopeCounts[net.id]?.needs_data || 0
                         const isNetSelected =
                           selectedBulkVehicles.length > 0 &&
                           selectedBulkVehicles.every((v) => getVehicleNetworkId(v) === net.id)
@@ -3589,28 +3694,39 @@ export function FleetTroubleshootClient({
                 <span className="text-[10px] sm:text-[11px] font-bold text-slate-700 uppercase tracking-wider">
                   1. Target Vehicles Scope:
                 </span>
-                <div className="inline-flex items-center p-0.5 rounded-lg bg-slate-200/80 border border-slate-300">
+                <div className="inline-flex flex-wrap items-center p-0.5 rounded-lg bg-slate-200/80 border border-slate-300 gap-0.5">
                   <button
                     type="button"
                     onClick={() => selectVehiclesByNetwork(modalNetworkId, "all")}
-                    className={`px-2.5 py-1 rounded-md text-[10px] sm:text-[11px] font-bold transition-all cursor-pointer ${
+                    className={`px-2 py-1 rounded-md text-[10px] sm:text-[11px] font-bold transition-all cursor-pointer ${
                       bulkScopeMode === "all"
                         ? "bg-indigo-600 text-white shadow-2xs"
                         : "text-slate-700 hover:text-slate-950"
                     }`}
                   >
-                    🌐 All (Online + Offline)
+                    🌐 All ({networkScopeCounts[modalNetworkId]?.all || 0})
                   </button>
                   <button
                     type="button"
                     onClick={() => selectVehiclesByNetwork(modalNetworkId, "offline")}
-                    className={`px-2.5 py-1 rounded-md text-[10px] sm:text-[11px] font-bold transition-all cursor-pointer ${
+                    className={`px-2 py-1 rounded-md text-[10px] sm:text-[11px] font-bold transition-all cursor-pointer ${
                       bulkScopeMode === "offline"
                         ? "bg-rose-600 text-white shadow-2xs"
                         : "text-slate-700 hover:text-slate-950"
                     }`}
                   >
-                    🔴 Only Offline Vehicles
+                    🔴 Offline ({networkScopeCounts[modalNetworkId]?.offline || 0})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => selectVehiclesByNetwork(modalNetworkId, "needs_data")}
+                    className={`px-2 py-1 rounded-md text-[10px] sm:text-[11px] font-bold transition-all cursor-pointer ${
+                      bulkScopeMode === "needs_data"
+                        ? "bg-amber-500 text-slate-950 shadow-2xs"
+                        : "text-slate-700 hover:text-slate-950"
+                    }`}
+                  >
+                    ⚡ Needs Data ({networkScopeCounts[modalNetworkId]?.needs_data || 0})
                   </button>
                 </div>
               </div>
@@ -3685,7 +3801,9 @@ export function FleetTroubleshootClient({
                   const netCount =
                     bulkScopeMode === "all"
                       ? networkScopeCounts[net.id]?.all || 0
-                      : networkScopeCounts[net.id]?.offline || 0
+                      : bulkScopeMode === "offline"
+                      ? networkScopeCounts[net.id]?.offline || 0
+                      : networkScopeCounts[net.id]?.needs_data || 0
                   return (
                     <button
                       key={net.id}
@@ -3845,14 +3963,27 @@ export function FleetTroubleshootClient({
 
             {/* Action Buttons */}
             <div className="flex items-center justify-end gap-2 pt-1">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setBulkCustModalOpen(false)}
-                className="h-9 sm:h-10 px-3.5 sm:px-4 text-[11px] sm:text-xs font-bold"
-              >
-                Close
-              </Button>
+              {isBulkDispensing ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    abortBulkRef.current = true
+                  }}
+                  className="h-9 sm:h-10 px-3.5 sm:px-4 text-[11px] sm:text-xs font-bold text-rose-600 border-rose-200 hover:bg-rose-50"
+                >
+                  Stop Batch
+                </Button>
+              ) : (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setBulkCustModalOpen(false)}
+                  className="h-9 sm:h-10 px-3.5 sm:px-4 text-[11px] sm:text-xs font-bold"
+                >
+                  Close
+                </Button>
+              )}
 
               <Button
                 type="button"
@@ -3868,7 +3999,11 @@ export function FleetTroubleshootClient({
                 {isBulkDispensing ? (
                   <>
                     <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
-                    <span>Dispensing to {selectedBulkVehicles.length} SIMs...</span>
+                    <span>
+                      {bulkProgress
+                        ? `Dispensing ${bulkProgress.current} of ${bulkProgress.total} SIMs (${bulkRechargeResult?.successCount || 0}✓ ${bulkRechargeResult?.failureCount || 0}✗)...`
+                        : `Dispensing to ${selectedBulkVehicles.length} SIMs...`}
+                    </span>
                   </>
                 ) : (
                   <>

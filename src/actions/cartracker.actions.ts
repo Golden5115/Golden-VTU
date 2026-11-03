@@ -641,63 +641,54 @@ export async function rechargeFleetVehicles(payload: RechargeFleetPayload): Prom
   let successCount = 0
   let failureCount = 0
 
-  const isBulkBatch = payload.vehicles.length > 1
-  const CHUNK_SIZE = 3
+  // Process strictly 1 vehicle at a time sequentially so SIM-hosting transfer channels (e.g. Server 3 MTN Transfer)
+  // never collide with concurrent USSD sessions, and always verify delivery before moving to the next SIM.
+  for (let i = 0; i < payload.vehicles.length; i++) {
+    const v = payload.vehicles[i]
+    if (i > 0) {
+      await new Promise((r) => setTimeout(r, 1200))
+    }
+    try {
+      const cleanPhone = cleanPhoneNumber(v.phone)
+      if (cleanPhone.length < 10) {
+        throw new Error("Invalid tracker phone number.")
+      }
 
-  for (let i = 0; i < payload.vehicles.length; i += CHUNK_SIZE) {
-    const chunk = payload.vehicles.slice(i, i + CHUNK_SIZE)
-    const chunkResults = await Promise.all(
-      chunk.map(async (v, idx) => {
-        if (idx > 0) {
-          await new Promise((r) => setTimeout(r, idx * 150))
+      // Execute data purchase via resilient VTU engine with SIM bypass (ported SIMs supported)
+      const purchaseRes = await purchaseData(
+        user.id,
+        v.networkId,
+        payload.dataPlanId,
+        cleanPhone,
+        payload.amount,
+        {
+          serverId: payload.serverId,
+          planName: payload.planName,
+          validityDays: payload.validityDays || extractValidityDays(payload.planName, 30),
+          bypassSimCheck: true,
+          skipFastPoll: false,
         }
-        try {
-          const cleanPhone = cleanPhoneNumber(v.phone)
-          if (cleanPhone.length < 10) {
-            throw new Error("Invalid tracker phone number.")
-          }
+      )
 
-          // Execute data purchase via resilient VTU engine with SIM bypass (ported SIMs supported)
-          const purchaseRes = await purchaseData(
-            user.id,
-            v.networkId,
-            payload.dataPlanId,
-            cleanPhone,
-            payload.amount,
-            {
-              serverId: payload.serverId,
-              planName: payload.planName,
-              validityDays: payload.validityDays || extractValidityDays(payload.planName, 30),
-              bypassSimCheck: true,
-              skipFastPoll: isBulkBatch,
-            }
-          )
-
-          return {
-            vehicleId: v.id,
-            vehicleName: v.name,
-            phone: cleanPhone,
-            status: "SUCCESS" as const,
-            reference: purchaseRes.reference,
-            message: "Data dispensed successfully.",
-          }
-        } catch (err: any) {
-          console.error(`[rechargeFleetVehicles] Failed for ${v.name} (${v.phone}):`, err)
-          return {
-            vehicleId: v.id,
-            vehicleName: v.name,
-            phone: v.phone,
-            status: "FAILED" as const,
-            message: err.message || "Failed to dispense data.",
-          }
-        }
+      results.push({
+        vehicleId: v.id,
+        vehicleName: v.name,
+        phone: cleanPhone,
+        status: "SUCCESS" as const,
+        reference: purchaseRes.reference,
+        message: "Data dispensed successfully.",
       })
-    )
-
-    for (const r of chunkResults) {
-      results.push(r)
-      if (r.status === "SUCCESS") successCount++
-      else failureCount++
+      successCount++
+    } catch (err: any) {
+      console.error(`[rechargeFleetVehicles] Failed for ${v.name} (${v.phone}):`, err)
+      results.push({
+        vehicleId: v.id,
+        vehicleName: v.name,
+        phone: v.phone,
+        status: "FAILED" as const,
+        message: err.message || "Failed to dispense data.",
+      })
+      failureCount++
     }
   }
 

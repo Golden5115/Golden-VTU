@@ -125,10 +125,31 @@ export class SmeCloudProvider implements IVtuProvider {
 
     const txData = data.data || {}
     const rechargeId = txData.recharge_id || reference
-    const innerStatus = String(txData.text_status || txData.status || "").toUpperCase().trim()
+    let innerStatus = String(txData.text_status || txData.status || "").toUpperCase().trim()
 
-    const isExplicitSuccess = innerStatus === "COMPLETED" || innerStatus === "SUCCESSFUL" || innerStatus === "DELIVERED"
-    const isExplicitFailed = innerStatus === "FAILED" || innerStatus === "CANCELLED" || innerStatus === "REJECTED"
+    let isExplicitSuccess = innerStatus === "COMPLETED" || innerStatus === "SUCCESSFUL" || innerStatus === "DELIVERED" || innerStatus === "DONE"
+    let isExplicitFailed = innerStatus === "FAILED" || innerStatus === "CANCELLED" || innerStatus === "REJECTED"
+
+    // SMECloud's async worker typically finalizes MTN Data Transfer orders in 1.5s–3.5s.
+    // Poll up to 3 times (every 1.5s) when initial status is PENDING so we return the real carrier outcome.
+    if (!isExplicitSuccess && !isExplicitFailed && rechargeId) {
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        await new Promise((r) => setTimeout(r, 1500))
+        const pollRes = await this.queryTransaction(String(rechargeId))
+        if (pollRes.isSuccessful) {
+          isExplicitSuccess = true
+          innerStatus = "COMPLETED"
+          break
+        }
+        if (pollRes.isFailed) {
+          isExplicitFailed = true
+          innerStatus = "FAILED"
+          throw new Error(
+            `Carrier Rejected: ${pollRes.remark || txData.true_response || data.server_message || "Transaction failed on Server 3."}`
+          )
+        }
+      }
+    }
 
     if (isExplicitFailed) {
       throw new Error(`Carrier Rejected: ${txData.true_response || data.server_message || "Transaction failed on Server 3."}`)
@@ -190,59 +211,97 @@ export class SmeCloudProvider implements IVtuProvider {
 
     const productCode = PLAN_CODE_MAP[String(dataPlanId)] || String(dataPlanId)
 
-    const payload = {
-      product_code: productCode,
-      phone_number: mobileNumber,
-      action: "vend",
-      user_reference: reference,
-      processing_mode: "async",
-      ...(callbackUrl ? { callback: callbackUrl } : {}),
+    const executeVendAttempt = async (attemptRef: string): Promise<VtuTransactionResponse> => {
+      const payload = {
+        product_code: productCode,
+        phone_number: mobileNumber,
+        action: "vend",
+        user_reference: attemptRef,
+        processing_mode: "async",
+        ...(callbackUrl ? { callback: callbackUrl } : {}),
+      }
+
+      console.log(`[SMECloud Provider] Buying data at ${this.baseUrl}:`, payload)
+
+      const response = await fetch(this.baseUrl, {
+        method: "POST",
+        headers: this.getHeaders(),
+        body: JSON.stringify(payload),
+        cache: "no-store",
+      })
+
+      const data = await response.json().catch(() => ({}))
+      console.log(`[SMECloud Provider] Data response:`, data)
+
+      // Check for API-level errors
+      if (!response.ok || data.status === false) {
+        const rawErrMsg =
+          data.data?.true_response ||
+          data.server_message ||
+          data.data?.text_status ||
+          `Carrier Data purchase failed (${response.status})`
+        const cleanMsg = String(rawErrMsg)
+          .replace(/sme\s*cloud(?:\.io)?/gi, "Telecom Carrier")
+          .replace(/smecloud(?:\.io)?/gi, "Telecom Carrier")
+          .replace(/pairgate/gi, "Telecom Carrier")
+          .replace(/clubkonnect/gi, "Telecom Carrier")
+          .replace(/autobiz(?:_vending_index\.php)?/gi, "Carrier Gateway")
+        throw new Error(cleanMsg)
+      }
+
+      const txData = data.data || {}
+      const rechargeId = txData.recharge_id || attemptRef
+      let innerStatus = String(txData.text_status || txData.status || "").toUpperCase().trim()
+
+      let isExplicitSuccess = innerStatus === "COMPLETED" || innerStatus === "SUCCESSFUL" || innerStatus === "DELIVERED" || innerStatus === "DONE"
+      let isExplicitFailed = innerStatus === "FAILED" || innerStatus === "CANCELLED" || innerStatus === "REJECTED"
+
+      // SMECloud's async worker typically finalizes MTN Data Transfer orders in 1.5s–3.5s.
+      // Poll up to 4 times (every 1.5s) when initial status is PENDING so we return the real carrier outcome.
+      if (!isExplicitSuccess && !isExplicitFailed && rechargeId) {
+        for (let attempt = 1; attempt <= 4; attempt++) {
+          await new Promise((r) => setTimeout(r, 1500))
+          const pollRes = await this.queryTransaction(String(rechargeId))
+          if (pollRes.isSuccessful) {
+            isExplicitSuccess = true
+            innerStatus = "COMPLETED"
+            break
+          }
+          if (pollRes.isFailed) {
+            isExplicitFailed = true
+            innerStatus = "FAILED"
+            throw new Error(
+              `Carrier Rejected: ${pollRes.remark || txData.true_response || data.server_message || "Transaction failed on Server 3."}`
+            )
+          }
+        }
+      }
+
+      if (isExplicitFailed) {
+        throw new Error(`Carrier Rejected: ${txData.true_response || data.server_message || "Transaction failed on Server 3."}`)
+      }
+
+      return {
+        isSuccessful: isExplicitSuccess,
+        isPending: !isExplicitSuccess,
+        providerReference: String(rechargeId),
+        rawResponse: data,
+      }
     }
 
-    console.log(`[SMECloud Provider] Buying data at ${this.baseUrl}:`, payload)
-
-    const response = await fetch(this.baseUrl, {
-      method: "POST",
-      headers: this.getHeaders(),
-      body: JSON.stringify(payload),
-      cache: "no-store",
-    })
-
-    const data = await response.json().catch(() => ({}))
-    console.log(`[SMECloud Provider] Data response:`, data)
-
-    // Check for API-level errors
-    if (!response.ok || data.status === false) {
-      const rawErrMsg =
-        data.data?.true_response ||
-        data.server_message ||
-        data.data?.text_status ||
-        `Carrier Data purchase failed (${response.status})`
-      const cleanMsg = String(rawErrMsg)
-        .replace(/sme\s*cloud(?:\.io)?/gi, "Telecom Carrier")
-        .replace(/smecloud(?:\.io)?/gi, "Telecom Carrier")
-        .replace(/pairgate/gi, "Telecom Carrier")
-        .replace(/clubkonnect/gi, "Telecom Carrier")
-        .replace(/autobiz(?:_vending_index\.php)?/gi, "Carrier Gateway")
-      throw new Error(cleanMsg)
-    }
-
-    const txData = data.data || {}
-    const rechargeId = txData.recharge_id || reference
-    const innerStatus = String(txData.text_status || txData.status || "").toUpperCase().trim()
-
-    const isExplicitSuccess = innerStatus === "COMPLETED" || innerStatus === "SUCCESSFUL" || innerStatus === "DELIVERED"
-    const isExplicitFailed = innerStatus === "FAILED" || innerStatus === "CANCELLED" || innerStatus === "REJECTED"
-
-    if (isExplicitFailed) {
-      throw new Error(`Carrier Rejected: ${txData.true_response || data.server_message || "Transaction failed on Server 3."}`)
-    }
-
-    return {
-      isSuccessful: isExplicitSuccess,
-      isPending: !isExplicitSuccess,
-      providerReference: String(rechargeId),
-      rawResponse: data,
+    try {
+      return await executeVendAttempt(reference)
+    } catch (firstErr: any) {
+      const msg = String(firstErr?.message || "").toLowerCase()
+      // If MTN Data Transfer SIM channel was briefly busy (generic "reach out to admin" collision), wait 3s and retry once
+      const isTransientChannelBusy =
+        msg.includes("reach out to admin") || msg.includes("transaction failed") && !msg.includes("barred") && !msg.includes("nin") && !msg.includes("insufficient")
+      if (isTransientChannelBusy) {
+        console.warn(`[SMECloud Provider] Transient transfer channel collision for ${mobileNumber}, cooling down 3s and retrying once...`)
+        await new Promise((r) => setTimeout(r, 3000))
+        return await executeVendAttempt(`${reference}-R1`)
+      }
+      throw firstErr
     }
   }
 
@@ -356,13 +415,13 @@ export class SmeCloudProvider implements IVtuProvider {
 
       const data = await response.json().catch(() => ({}))
       const txData = data.data || {}
-      const st = String(txData.status || data.text_status || "").toUpperCase().trim()
+      const st = String(txData.status || txData.text_status || data.text_status || "").toUpperCase().trim()
 
-      const isSuccessful = st === "COMPLETED" || st === "SUCCESSFUL" || st === "DONE"
+      const isSuccessful = st === "COMPLETED" || st === "SUCCESSFUL" || st === "DONE" || st === "DELIVERED"
       const isFailed = st === "FAILED" || st === "CANCELLED" || st === "REJECTED"
       const isPending = !isSuccessful && !isFailed
 
-      const rawRemark = data.server_message || txData.true_response || st
+      const rawRemark = txData.true_response || data.server_message || st
       const cleanRemark = String(rawRemark || "")
         .replace(/sme\s*cloud(?:\.io)?/gi, "Telecom Carrier")
         .replace(/smecloud(?:\.io)?/gi, "Telecom Carrier")
