@@ -237,14 +237,10 @@ export async function purchaseAirtime(
         .replace(/nellobyte/gi, "Network Gateway")
         .replace(/autobiz(?:_vending_index\.php)?/gi, "Carrier Gateway")
 
-      if (isInsufficientBalance || !rawMsg || rawMsg.toLowerCase().includes("carrier processing error")) {
-        throw new Error(
-          `Transaction failed on ${cleanServerName}. Your wallet has been automatically refunded.`
-        )
-      }
+      console.error(`[VTU Airtime Failure] ${cleanServerName} failed for phone ${phone}: ${rawMsg}`)
 
       throw new Error(
-        `Transaction failed on ${cleanServerName}. Your wallet has been automatically refunded. (${cleanErrorMsg})`
+        `Transaction failed on ${cleanServerName}. Your wallet has been automatically refunded.`
       )
     }
   })
@@ -568,14 +564,10 @@ export async function purchaseData(
         .replace(/nellobyte/gi, "Network Gateway")
         .replace(/autobiz(?:_vending_index\.php)?/gi, "Carrier Gateway")
 
-      if (isInsufficientBalance || !rawMsg || rawMsg.toLowerCase().includes("carrier processing error")) {
-        throw new Error(
-          `Transaction failed on ${cleanServerName}. Your wallet has been automatically refunded.`
-        )
-      }
+      console.error(`[VTU Data Failure] ${cleanServerName} failed for phone ${phone}: ${rawMsg}`)
 
       throw new Error(
-        `Transaction failed on ${cleanServerName}. Your wallet has been automatically refunded. (${cleanErrorMsg})`
+        `Transaction failed on ${cleanServerName}. Your wallet has been automatically refunded.`
       )
     }
   })
