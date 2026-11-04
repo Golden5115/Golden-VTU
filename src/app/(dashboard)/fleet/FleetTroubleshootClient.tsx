@@ -37,6 +37,7 @@ import {
   ArrowUpDown,
   ArrowUp,
   ArrowDown,
+  FileText,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -342,6 +343,13 @@ export function FleetTroubleshootClient({
   }
 
   const [copiedFleetReport, setCopiedFleetReport] = useState(false)
+  const [statusReportModalOpen, setStatusReportModalOpen] = useState(false)
+  const [reportSelectedOfflineIds, setReportSelectedOfflineIds] = useState<number[]>([])
+  const [reportIncludeReporting, setReportIncludeReporting] = useState(true)
+  const [reportIncludeRemarks, setReportIncludeRemarks] = useState(true)
+  const [reportIncludeExpiry, setReportIncludeExpiry] = useState(true)
+  const [reportCustomText, setReportCustomText] = useState("")
+  const [isEditingReportText, setIsEditingReportText] = useState(false)
 
   const formatLastConnection = (lastHeartbeat?: string | null): string => {
     if (!lastHeartbeat) return "No recent signal"
@@ -360,43 +368,282 @@ export function FleetTroubleshootClient({
     })}`
   }
 
-  const handleCopyFleetStatusReport = () => {
-    if (liveVehicles.length === 0) return
+  const formatLastReported = (dateStr?: string | null): string => {
+    if (!dateStr) return "No recent signal"
+    const d = new Date(dateStr)
+    if (isNaN(d.getTime()) || d.getFullYear() <= 1970) {
+      return dateStr
+    }
+    const day = String(d.getDate()).padStart(2, "0")
+    const month = String(d.getMonth() + 1).padStart(2, "0")
+    const year = d.getFullYear()
+    const hours = String(d.getHours()).padStart(2, "0")
+    const minutes = String(d.getMinutes()).padStart(2, "0")
+    const seconds = String(d.getSeconds()).padStart(2, "0")
+    return `${day}-${month}-${year} ${hours}:${minutes}:${seconds}`
+  }
 
-    const reporting = liveVehicles.filter((v) => isVehicleConnected(v.onlineStatus))
-    const offline = liveVehicles.filter((v) => !isVehicleConnected(v.onlineStatus))
+  const formatVehicleDisplayName = (v: { name?: string | null; plateNumber?: string | null }): string => {
+    const name = (v.name || "").trim()
+    const plate = (v.plateNumber || "").trim()
 
-    const lines: string[] = []
-    lines.push("Reporting Vehicles")
-    if (reporting.length > 0) {
-      reporting.forEach((v) => {
-        lines.push((v.name || v.plateNumber || "Unnamed Vehicle").trim())
-      })
-    } else {
-      lines.push("None")
+    if (name && plate) {
+      const normName = name.replace(/[\s\-_]/g, "").toLowerCase()
+      const normPlate = plate.replace(/[\s\-_]/g, "").toLowerCase()
+      if (normName.includes(normPlate)) {
+        return name
+      }
+      return `${name} - ${plate}`
+    }
+    return name || plate || "Unnamed Vehicle"
+  }
+
+  const generateExpiryReminderSummary = (vehicles: FleetTrackerDevice[]): string => {
+    const monthMap: Record<string, { monthYear: string; count: number; date: Date }> = {}
+    let totalWithExpiry = 0
+
+    for (const v of vehicles) {
+      if (!v.expirationDate) continue
+      const d = new Date(v.expirationDate)
+      if (isNaN(d.getTime()) || d.getFullYear() <= 1970) continue
+      const month = d.toLocaleString("en-US", { month: "long" })
+      const year = d.getFullYear()
+      const key = `${year}-${String(d.getMonth() + 1).padStart(2, "0")}`
+      const label = `${month} ${year}`
+
+      if (!monthMap[key]) {
+        monthMap[key] = { monthYear: label, count: 0, date: d }
+      }
+      monthMap[key].count++
+      totalWithExpiry++
     }
 
+    if (totalWithExpiry === 0) {
+      return "Expiry Reminder: No upcoming vehicle service expiry dates recorded."
+    }
+
+    const sorted = Object.values(monthMap).sort((a, b) => a.date.getTime() - b.date.getTime())
+    const parts = sorted.map((g) => `${g.count} vehicle${g.count === 1 ? "" : "s"} expiring in ${g.monthYear}`)
+
+    return `Expiry Reminder: ${parts.join(", ")}`
+  }
+
+  const generateVehicleStatusReport = (params: {
+    clientEmail?: string | null
+    liveVehicles: FleetTrackerDevice[]
+    selectedOfflineIds: number[]
+    includeReporting?: boolean
+    includeRemarks?: boolean
+    includeExpiry?: boolean
+  }): string => {
+    const {
+      clientEmail,
+      liveVehicles,
+      selectedOfflineIds,
+      includeReporting = true,
+      includeRemarks = true,
+      includeExpiry = true,
+    } = params
+
+    const reportingVehicles = liveVehicles.filter((v) => isVehicleConnected(v.onlineStatus))
+    const offlineVehicles = liveVehicles.filter((v) => !isVehicleConnected(v.onlineStatus))
+    const selectedOffline = offlineVehicles.filter((v) => selectedOfflineIds.includes(v.id))
+
+    const lines: string[] = []
+
+    // Header
+    if (clientEmail && clientEmail.trim()) {
+      lines.push(clientEmail.trim())
+    }
+    lines.push("VEHICLE STATUS REPORT")
     lines.push("")
-    lines.push("Offline Vehicles")
-    if (offline.length > 0) {
-      offline.forEach((v, idx) => {
-        const vehicleLabel = (v.name || v.plateNumber || "Unnamed Vehicle").trim()
+
+    // Summary
+    lines.push("Summary")
+    lines.push(`Total Vehicles: ${liveVehicles.length}`)
+    lines.push(`Reporting: ${reportingVehicles.length}`)
+    lines.push(`Offline Vehicles: ${selectedOffline.length}`)
+    lines.push("")
+
+    // ✅ Reporting Vehicles
+    if (includeReporting) {
+      lines.push("✅ Reporting Vehicles")
+      if (reportingVehicles.length > 0) {
+        reportingVehicles.forEach((v) => {
+          lines.push(formatVehicleDisplayName(v))
+        })
+      } else {
+        lines.push("None")
+      }
+      lines.push("")
+    }
+
+    // 🛑 Switched Off Vehicles
+    lines.push("🛑 Switched Off Vehicles")
+    if (selectedOffline.length > 0) {
+      selectedOffline.forEach((v, idx) => {
+        const vehicleLabel = formatVehicleDisplayName(v)
         const sim = v.normalizedPhone || v.rawSimNumber || "N/A"
-        const lastConn = formatLastConnection(v.lastHeartbeat)
+        const lastReported = formatLastReported(v.lastHeartbeat)
+
         lines.push(vehicleLabel)
-        lines.push(`Tracker sim: ${sim}`)
-        lines.push(`Last Connection: ${lastConn}`)
-        if (idx < offline.length - 1) {
+        lines.push(`Tracker Sim: ${sim}`)
+        lines.push(`Last Reported: ${lastReported}`)
+        if (idx < selectedOffline.length - 1) {
           lines.push("")
         }
       })
     } else {
       lines.push("None")
     }
+    lines.push("")
 
-    navigator.clipboard.writeText(lines.join("\n"))
+    // ⚠️ Remarks & Recommendation (Switched Off)
+    if (includeRemarks) {
+      lines.push("⚠️ Remarks & Recommendation (Switched Off)")
+      lines.push(
+        "Trackers may be offline due to weak network coverage or power disconnection. Please verify the vehicle's ignition or battery connection."
+      )
+      lines.push("")
+    }
+
+    // ⏰ Expiry Reminder Summary
+    if (includeExpiry) {
+      lines.push("⏰ Expiry Reminder Summary")
+      lines.push(generateExpiryReminderSummary(liveVehicles))
+    }
+
+    return lines.join("\n").trim()
+  }
+
+  const openStatusReportModal = () => {
+    if (liveVehicles.length === 0) return
+
+    const offlineVehicles = liveVehicles.filter((v) => !isVehicleConnected(v.onlineStatus))
+    const tableSelectedOfflineIds = selectedCustVehicleIds.filter((id) =>
+      offlineVehicles.some((ov) => ov.id === id)
+    )
+
+    const initialOfflineIds =
+      tableSelectedOfflineIds.length > 0
+        ? tableSelectedOfflineIds
+        : offlineVehicles.map((v) => v.id)
+
+    setReportSelectedOfflineIds(initialOfflineIds)
+    setIsEditingReportText(false)
+
+    const initialText = generateVehicleStatusReport({
+      clientEmail: customerInfo?.email || emailInput || (directQuery.includes("@") ? directQuery : undefined),
+      liveVehicles,
+      selectedOfflineIds: initialOfflineIds,
+      includeReporting: reportIncludeReporting,
+      includeRemarks: reportIncludeRemarks,
+      includeExpiry: reportIncludeExpiry,
+    })
+
+    setReportCustomText(initialText)
+    setStatusReportModalOpen(true)
+  }
+
+  const handleToggleReportOfflineVehicle = (vehicleId: number) => {
+    const next = reportSelectedOfflineIds.includes(vehicleId)
+      ? reportSelectedOfflineIds.filter((id) => id !== vehicleId)
+      : [...reportSelectedOfflineIds, vehicleId]
+    setReportSelectedOfflineIds(next)
+    setIsEditingReportText(false)
+    setReportCustomText(
+      generateVehicleStatusReport({
+        clientEmail: customerInfo?.email || emailInput || (directQuery.includes("@") ? directQuery : undefined),
+        liveVehicles,
+        selectedOfflineIds: next,
+        includeReporting: reportIncludeReporting,
+        includeRemarks: reportIncludeRemarks,
+        includeExpiry: reportIncludeExpiry,
+      })
+    )
+  }
+
+  const handleSelectAllReportOffline = () => {
+    const allOfflineIds = liveVehicles
+      .filter((v) => !isVehicleConnected(v.onlineStatus))
+      .map((v) => v.id)
+    setReportSelectedOfflineIds(allOfflineIds)
+    setIsEditingReportText(false)
+    setReportCustomText(
+      generateVehicleStatusReport({
+        clientEmail: customerInfo?.email || emailInput || (directQuery.includes("@") ? directQuery : undefined),
+        liveVehicles,
+        selectedOfflineIds: allOfflineIds,
+        includeReporting: reportIncludeReporting,
+        includeRemarks: reportIncludeRemarks,
+        includeExpiry: reportIncludeExpiry,
+      })
+    )
+  }
+
+  const handleDeselectAllReportOffline = () => {
+    setReportSelectedOfflineIds([])
+    setIsEditingReportText(false)
+    setReportCustomText(
+      generateVehicleStatusReport({
+        clientEmail: customerInfo?.email || emailInput || (directQuery.includes("@") ? directQuery : undefined),
+        liveVehicles,
+        selectedOfflineIds: [],
+        includeReporting: reportIncludeReporting,
+        includeRemarks: reportIncludeRemarks,
+        includeExpiry: reportIncludeExpiry,
+      })
+    )
+  }
+
+  const handleToggleReportSection = (section: "reporting" | "remarks" | "expiry") => {
+    let nextReporting = reportIncludeReporting
+    let nextRemarks = reportIncludeRemarks
+    let nextExpiry = reportIncludeExpiry
+
+    if (section === "reporting") {
+      nextReporting = !reportIncludeReporting
+      setReportIncludeReporting(nextReporting)
+    } else if (section === "remarks") {
+      nextRemarks = !reportIncludeRemarks
+      setReportIncludeRemarks(nextRemarks)
+    } else if (section === "expiry") {
+      nextExpiry = !reportIncludeExpiry
+      setReportIncludeExpiry(nextExpiry)
+    }
+
+    setIsEditingReportText(false)
+    setReportCustomText(
+      generateVehicleStatusReport({
+        clientEmail: customerInfo?.email || emailInput || (directQuery.includes("@") ? directQuery : undefined),
+        liveVehicles,
+        selectedOfflineIds: reportSelectedOfflineIds,
+        includeReporting: nextReporting,
+        includeRemarks: nextRemarks,
+        includeExpiry: nextExpiry,
+      })
+    )
+  }
+
+  const handleCopyGeneratedReport = () => {
+    const textToCopy =
+      reportCustomText ||
+      generateVehicleStatusReport({
+        clientEmail: customerInfo?.email || emailInput || (directQuery.includes("@") ? directQuery : undefined),
+        liveVehicles,
+        selectedOfflineIds: reportSelectedOfflineIds,
+        includeReporting: reportIncludeReporting,
+        includeRemarks: reportIncludeRemarks,
+        includeExpiry: reportIncludeExpiry,
+      })
+
+    navigator.clipboard.writeText(textToCopy)
     setCopiedFleetReport(true)
     setTimeout(() => setCopiedFleetReport(false), 2500)
+  }
+
+  const handleCopyFleetStatusReport = () => {
+    openStatusReportModal()
   }
 
   const renderVehicleStatusBadge = (status: string | null | undefined) => {
@@ -4204,6 +4451,259 @@ export function FleetTroubleshootClient({
                 className="h-8 sm:h-9 px-4 bg-slate-900 hover:bg-slate-800 text-white font-bold text-[11px] sm:text-xs rounded-xl"
               >
                 Close
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ------------------------------------------------------------- */}
+      {/* MODAL 4: VEHICLE STATUS REPORT GENERATOR & SELECTOR MODAL     */}
+      {/* ------------------------------------------------------------- */}
+      {statusReportModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 animate-fadeIn">
+          <div className="bg-white rounded-xl sm:rounded-2xl max-w-2xl w-full p-4 sm:p-6 shadow-2xl border border-slate-100 space-y-4 max-h-[92vh] overflow-y-auto animate-scaleUp">
+            {/* Header */}
+            <div className="flex items-start justify-between gap-3 border-b border-slate-100 pb-3">
+              <div>
+                <div className="flex items-center gap-1.5 text-[11px] sm:text-xs font-bold text-indigo-600 uppercase tracking-wider">
+                  <FileText className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-indigo-600" />
+                  <span>Vehicle Status Report</span>
+                </div>
+                <h3 className="text-sm sm:text-base font-black text-slate-900 mt-0.5">
+                  {customerInfo?.email || emailInput || (directQuery.includes("@") ? directQuery : "Customer Fleet Status")}
+                </h3>
+                <p className="text-[10px] sm:text-xs text-slate-500">
+                  Select offline vehicles to include, customize sections, and copy report.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setStatusReportModalOpen(false)}
+                className="text-slate-400 hover:text-slate-700 p-1 rounded-lg"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Summary KPI Cards */}
+            <div className="grid grid-cols-3 gap-2 text-center text-xs">
+              <div className="p-2 sm:p-2.5 rounded-xl bg-slate-50 border border-slate-200">
+                <div className="text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase">Total Vehicles</div>
+                <div className="text-sm sm:text-base font-black text-slate-900">{liveVehicles.length}</div>
+              </div>
+              <div className="p-2 sm:p-2.5 rounded-xl bg-emerald-50 border border-emerald-200">
+                <div className="text-[9px] sm:text-[10px] font-bold text-emerald-700 uppercase">Reporting</div>
+                <div className="text-sm sm:text-base font-black text-emerald-800">
+                  {liveVehicles.filter((v) => isVehicleConnected(v.onlineStatus)).length}
+                </div>
+              </div>
+              <div className="p-2 sm:p-2.5 rounded-xl bg-rose-50 border border-rose-200">
+                <div className="text-[9px] sm:text-[10px] font-bold text-rose-700 uppercase">Switched Off</div>
+                <div className="text-sm sm:text-base font-black text-rose-800">
+                  {reportSelectedOfflineIds.length} / {liveVehicles.filter((v) => !isVehicleConnected(v.onlineStatus)).length}
+                </div>
+              </div>
+            </div>
+
+            {/* 1. Offline Vehicles Selector */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <label className="text-[11px] sm:text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                  <span>1. Select Switched Off Vehicles to Include</span>
+                  <span className="text-[10px] font-semibold text-slate-500 font-mono">
+                    ({reportSelectedOfflineIds.length} of {liveVehicles.filter((v) => !isVehicleConnected(v.onlineStatus)).length} selected)
+                  </span>
+                </label>
+                <div className="flex items-center gap-1.5 text-[10px]">
+                  <button
+                    type="button"
+                    onClick={handleSelectAllReportOffline}
+                    className="text-indigo-600 hover:text-indigo-700 font-bold hover:underline"
+                  >
+                    Select All
+                  </button>
+                  <span className="text-slate-300">•</span>
+                  <button
+                    type="button"
+                    onClick={handleDeselectAllReportOffline}
+                    className="text-rose-600 hover:text-rose-700 font-bold hover:underline"
+                  >
+                    Clear All
+                  </button>
+                </div>
+              </div>
+
+              {/* Checkbox list */}
+              <div className="max-h-44 overflow-y-auto divide-y divide-slate-100 border border-slate-200 rounded-xl bg-slate-50/50 p-1">
+                {liveVehicles.filter((v) => !isVehicleConnected(v.onlineStatus)).length === 0 ? (
+                  <div className="p-3 text-center text-xs text-slate-400 italic">
+                    All vehicles are currently online / reporting. None are switched off.
+                  </div>
+                ) : (
+                  liveVehicles
+                    .filter((v) => !isVehicleConnected(v.onlineStatus))
+                    .map((v) => {
+                      const isSelected = reportSelectedOfflineIds.includes(v.id)
+                      const lastConn = formatLastReported(v.lastHeartbeat)
+                      const sim = v.normalizedPhone || v.rawSimNumber || "No SIM"
+                      const daysOff = getCustDaysOffline(v.lastHeartbeat)
+
+                      return (
+                        <label
+                          key={`rep-off-${v.id}`}
+                          className={`px-2.5 py-1.5 flex items-center justify-between gap-2 text-[11px] rounded-lg cursor-pointer transition-colors ${
+                            isSelected ? "bg-indigo-50/80 font-medium text-slate-900" : "hover:bg-slate-100 text-slate-600"
+                          }`}
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => handleToggleReportOfflineVehicle(v.id)}
+                              className="w-3.5 h-3.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer shrink-0"
+                            />
+                            <div className="truncate">
+                              <span className="font-bold text-slate-800">{formatVehicleDisplayName(v)}</span>
+                              <span className="text-slate-500 font-mono text-[10px] ml-1.5">({sim})</span>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0 text-[10px]">
+                            <span className="text-slate-500 hidden sm:inline">Last: {lastConn}</span>
+                            <span
+                              className={`px-1.5 py-0.2 rounded font-bold ${
+                                daysOff >= 30 ? "bg-rose-100 text-rose-800" : "bg-amber-100 text-amber-800"
+                              }`}
+                            >
+                              {daysOff === 0 ? "<24h" : `${daysOff}d off`}
+                            </span>
+                          </div>
+                        </label>
+                      )
+                    })
+                )}
+              </div>
+            </div>
+
+            {/* 2. Section Options */}
+            <div className="space-y-1.5">
+              <label className="text-[11px] sm:text-xs font-bold text-slate-800">
+                2. Report Sections & Extras
+              </label>
+              <div className="flex flex-wrap items-center gap-2 text-[11px]">
+                <button
+                  type="button"
+                  onClick={() => handleToggleReportSection("reporting")}
+                  className={`px-2.5 py-1 rounded-lg border text-xs font-bold transition-all cursor-pointer inline-flex items-center gap-1.5 ${
+                    reportIncludeReporting
+                      ? "bg-emerald-50 text-emerald-800 border-emerald-300"
+                      : "bg-slate-50 text-slate-500 border-slate-200"
+                  }`}
+                >
+                  <span>{reportIncludeReporting ? "✓" : "○"}</span>
+                  <span>Reporting Vehicles ({liveVehicles.filter((v) => isVehicleConnected(v.onlineStatus)).length})</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleToggleReportSection("remarks")}
+                  className={`px-2.5 py-1 rounded-lg border text-xs font-bold transition-all cursor-pointer inline-flex items-center gap-1.5 ${
+                    reportIncludeRemarks
+                      ? "bg-amber-50 text-amber-800 border-amber-300"
+                      : "bg-slate-50 text-slate-500 border-slate-200"
+                  }`}
+                >
+                  <span>{reportIncludeRemarks ? "✓" : "○"}</span>
+                  <span>Remarks & Recommendation</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleToggleReportSection("expiry")}
+                  className={`px-2.5 py-1 rounded-lg border text-xs font-bold transition-all cursor-pointer inline-flex items-center gap-1.5 ${
+                    reportIncludeExpiry
+                      ? "bg-indigo-50 text-indigo-800 border-indigo-300"
+                      : "bg-slate-50 text-slate-500 border-slate-200"
+                  }`}
+                >
+                  <span>{reportIncludeExpiry ? "✓" : "○"}</span>
+                  <span>Expiry Reminder Summary</span>
+                </button>
+              </div>
+            </div>
+
+            {/* 3. Live Report Preview (Editable) */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <label className="text-[11px] sm:text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                  <span>3. Formatted Report Preview</span>
+                  <span className="text-[10px] text-slate-400 font-normal">
+                    (Editable — ready to paste into WhatsApp, Email, or Slack)
+                  </span>
+                </label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsEditingReportText(false)
+                    setReportCustomText(
+                      generateVehicleStatusReport({
+                        clientEmail: customerInfo?.email || emailInput || (directQuery.includes("@") ? directQuery : undefined),
+                        liveVehicles,
+                        selectedOfflineIds: reportSelectedOfflineIds,
+                        includeReporting: reportIncludeReporting,
+                        includeRemarks: reportIncludeRemarks,
+                        includeExpiry: reportIncludeExpiry,
+                      })
+                    )
+                  }}
+                  className="text-[10px] text-indigo-600 hover:text-indigo-800 font-semibold hover:underline"
+                  title="Reset text back to generated format"
+                >
+                  Reset to Generated
+                </button>
+              </div>
+              <textarea
+                value={reportCustomText}
+                onChange={(e) => {
+                  setIsEditingReportText(true)
+                  setReportCustomText(e.target.value)
+                }}
+                rows={9}
+                className="w-full text-xs font-mono p-3 rounded-xl border border-slate-200 bg-slate-900 text-slate-100 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 resize-y leading-relaxed"
+              />
+            </div>
+
+            {/* Footer Buttons */}
+            <div className="flex items-center justify-between pt-2 border-t border-slate-100">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setStatusReportModalOpen(false)}
+                className="h-9 px-4 text-xs font-bold"
+              >
+                Close
+              </Button>
+
+              <Button
+                type="button"
+                onClick={handleCopyGeneratedReport}
+                className={`h-9 px-5 font-bold text-xs rounded-xl shadow-xs transition-all ${
+                  copiedFleetReport
+                    ? "bg-emerald-600 hover:bg-emerald-700 text-white"
+                    : "bg-indigo-600 hover:bg-indigo-700 text-white"
+                }`}
+              >
+                {copiedFleetReport ? (
+                  <>
+                    <Check className="w-4 h-4 mr-1.5" />
+                    <span>Copied to Clipboard!</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-4 h-4 mr-1.5" />
+                    <span>Copy to Clipboard</span>
+                  </>
+                )}
               </Button>
             </div>
           </div>

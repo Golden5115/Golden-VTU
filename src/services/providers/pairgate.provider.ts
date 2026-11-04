@@ -56,6 +56,7 @@ export class PairgateProvider implements IVtuProvider {
       "Content-Type": "application/json",
       Accept: "application/json",
       "Cache-Control": "no-cache",
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
     }
   }
 
@@ -97,7 +98,11 @@ export class PairgateProvider implements IVtuProvider {
     const data = await response.json().catch(() => ({}))
 
     if (!response.ok || (data.status && data.status !== "success" && data.code !== 200)) {
-      const errMsg = String(data.message || data.error || `Carrier airtime failed (${response.status})`)
+      let defaultMsg = `Carrier airtime failed (${response.status})`
+      if (response.status === 403) {
+        defaultMsg = "Carrier access forbidden (403). Please verify IP Whitelist settings in the Server 2 gateway dashboard."
+      }
+      const errMsg = String(data.message || data.error || defaultMsg)
         .replace(/pairgate/gi, "Telecom Carrier")
         .replace(/clubkonnect/gi, "Telecom Carrier")
       throw new Error(errMsg)
@@ -153,7 +158,11 @@ export class PairgateProvider implements IVtuProvider {
     const data = await response.json().catch(() => ({}))
 
     if (!response.ok || (data.status && data.status !== "success" && data.code !== 200)) {
-      const errMsg = String(data.message || data.error || `Carrier data purchase failed (${response.status})`)
+      let defaultMsg = `Carrier data purchase failed (${response.status})`
+      if (response.status === 403) {
+        defaultMsg = "Carrier access forbidden (403). Please verify IP Whitelist settings in the Server 2 gateway dashboard."
+      }
+      const errMsg = String(data.message || data.error || defaultMsg)
         .replace(/pairgate/gi, "Telecom Carrier")
         .replace(/clubkonnect/gi, "Telecom Carrier")
       throw new Error(errMsg)
