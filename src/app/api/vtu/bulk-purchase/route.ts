@@ -80,7 +80,8 @@ export async function POST(request: NextRequest) {
     for (let i = 0; i < cleanPhones.length; i++) {
       const phone = cleanPhones[i]
       if (i > 0) {
-        await new Promise((r) => setTimeout(r, 1200))
+        // Safe 2.5s pacing to satisfy carrier rate limiters (e.g. Pairgate 2s minimum gap)
+        await new Promise((r) => setTimeout(r, 2500))
       }
       try {
         if (type === "data") {

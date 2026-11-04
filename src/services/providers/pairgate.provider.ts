@@ -88,20 +88,76 @@ export class PairgateProvider implements IVtuProvider {
 
     console.log(`[Pairgate Provider] Buying airtime at ${url}:`, payload)
 
-    const response = await fetch(url, {
-      method: "POST",
-      headers: this.getHeaders(),
-      body: JSON.stringify(payload),
-      cache: "no-store",
-    })
+    const maxAttempts = 3
+    let response: Response | null = null
+    let rawText = ""
+    let data: any = {}
 
-    const data = await response.json().catch(() => ({}))
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        response = await fetch(url, {
+          method: "POST",
+          headers: this.getHeaders(),
+          body: JSON.stringify(payload),
+          cache: "no-store",
+        })
 
-    if (!response.ok || (data.status && data.status !== "success" && data.code !== 200)) {
-      let defaultMsg = `Carrier airtime failed (${response.status})`
-      if (response.status === 403) {
-        defaultMsg = "Carrier access forbidden (403). Please verify IP Whitelist settings in the Server 2 gateway dashboard."
+        rawText = await response.text().catch(() => "")
+        try {
+          data = JSON.parse(rawText)
+        } catch {
+          data = {}
+        }
+      } catch (networkErr: any) {
+        console.warn(`[Pairgate Provider Airtime] Attempt ${attempt} network exception:`, networkErr.message)
+        if (attempt < maxAttempts) {
+          await new Promise((r) => setTimeout(r, 2000))
+          continue
+        }
+        throw new Error(`Carrier connection error: ${networkErr.message}`)
       }
+
+      // Check if this was a rate-limiting temporary error (429 or "Please wait X seconds")
+      const isRateLimited =
+        response.status === 429 ||
+        (data.code === 201 && String(data.message || "").toLowerCase().includes("wait"))
+
+      // Or a transient 5xx / 403 blip on Cloudflare
+      const isTransientBlock = response.status === 403 || response.status >= 500
+
+      if ((isRateLimited || isTransientBlock) && attempt < maxAttempts) {
+        const waitMs = isRateLimited ? 2500 : 1500
+        console.warn(`[Pairgate Provider Airtime] Attempt ${attempt} temporary failure HTTP ${response.status} (${data.message || "WAF/Rate-limit"}). Retrying in ${waitMs}ms...`)
+        await new Promise((r) => setTimeout(r, waitMs))
+        continue
+      }
+
+      break
+    }
+
+    if (!response || !response.ok || (data.status && data.status !== "success" && data.code !== 200)) {
+      console.error(`[Pairgate Provider Airtime Error] ${url} returned HTTP ${response?.status} ${response?.statusText}`)
+      console.error(`[Pairgate Provider Error Headers]:`, response ? Object.fromEntries(response.headers.entries()) : {})
+      console.error(`[Pairgate Provider Error Body]:`, rawText)
+
+      let errorDetails = data.message || data.error || (data.errors ? JSON.stringify(data.errors) : "")
+      if (!errorDetails && rawText) {
+        const titleMatch = rawText.match(/<title[^>]*>([^<]+)<\/title>/i)
+        if (titleMatch) {
+          errorDetails = `Page: "${titleMatch[1].trim()}"`
+        } else {
+          errorDetails = rawText.length > 300 ? rawText.substring(0, 300) + "..." : rawText
+        }
+      }
+
+      const resStatus = response?.status || 500
+      let defaultMsg = `Carrier airtime failed (${resStatus})`
+      if (resStatus === 403) {
+        defaultMsg = `Carrier access forbidden (403): ${errorDetails || "IP Whitelist or Cloudflare security block"}`
+      } else if (errorDetails) {
+        defaultMsg = `Carrier error (${resStatus}): ${errorDetails}`
+      }
+
       const errMsg = String(data.message || data.error || defaultMsg)
         .replace(/pairgate/gi, "Telecom Carrier")
         .replace(/clubkonnect/gi, "Telecom Carrier")
@@ -148,20 +204,76 @@ export class PairgateProvider implements IVtuProvider {
 
     console.log(`[Pairgate Provider] Buying data at ${url}:`, payload)
 
-    const response = await fetch(url, {
-      method: "POST",
-      headers: this.getHeaders(),
-      body: JSON.stringify(payload),
-      cache: "no-store",
-    })
+    const maxAttempts = 3
+    let response: Response | null = null
+    let rawText = ""
+    let data: any = {}
 
-    const data = await response.json().catch(() => ({}))
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        response = await fetch(url, {
+          method: "POST",
+          headers: this.getHeaders(),
+          body: JSON.stringify(payload),
+          cache: "no-store",
+        })
 
-    if (!response.ok || (data.status && data.status !== "success" && data.code !== 200)) {
-      let defaultMsg = `Carrier data purchase failed (${response.status})`
-      if (response.status === 403) {
-        defaultMsg = "Carrier access forbidden (403). Please verify IP Whitelist settings in the Server 2 gateway dashboard."
+        rawText = await response.text().catch(() => "")
+        try {
+          data = JSON.parse(rawText)
+        } catch {
+          data = {}
+        }
+      } catch (networkErr: any) {
+        console.warn(`[Pairgate Provider Data] Attempt ${attempt} network exception:`, networkErr.message)
+        if (attempt < maxAttempts) {
+          await new Promise((r) => setTimeout(r, 2000))
+          continue
+        }
+        throw new Error(`Carrier connection error: ${networkErr.message}`)
       }
+
+      // Check if this was a rate-limiting temporary error (429 or "Please wait X seconds")
+      const isRateLimited =
+        response.status === 429 ||
+        (data.code === 201 && String(data.message || "").toLowerCase().includes("wait"))
+
+      // Or a transient 5xx / 403 blip on Cloudflare
+      const isTransientBlock = response.status === 403 || response.status >= 500
+
+      if ((isRateLimited || isTransientBlock) && attempt < maxAttempts) {
+        const waitMs = isRateLimited ? 2500 : 1500
+        console.warn(`[Pairgate Provider Data] Attempt ${attempt} temporary failure HTTP ${response.status} (${data.message || "WAF/Rate-limit"}). Retrying in ${waitMs}ms...`)
+        await new Promise((r) => setTimeout(r, waitMs))
+        continue
+      }
+
+      break
+    }
+
+    if (!response || !response.ok || (data.status && data.status !== "success" && data.code !== 200)) {
+      console.error(`[Pairgate Provider Data Error] ${url} returned HTTP ${response?.status} ${response?.statusText}`)
+      console.error(`[Pairgate Provider Error Headers]:`, response ? Object.fromEntries(response.headers.entries()) : {})
+      console.error(`[Pairgate Provider Error Body]:`, rawText)
+
+      let errorDetails = data.message || data.error || (data.errors ? JSON.stringify(data.errors) : "")
+      if (!errorDetails && rawText) {
+        const titleMatch = rawText.match(/<title[^>]*>([^<]+)<\/title>/i)
+        if (titleMatch) {
+          errorDetails = `Page: "${titleMatch[1].trim()}"`
+        } else {
+          errorDetails = rawText.length > 300 ? rawText.substring(0, 300) + "..." : rawText
+        }
+      }
+
+      const resStatus = response?.status || 500
+      let defaultMsg = `Carrier data purchase failed (${resStatus})`
+      if (resStatus === 403) {
+        defaultMsg = `Carrier access forbidden (403): ${errorDetails || "IP Whitelist or Cloudflare security block"}`
+      } else if (errorDetails) {
+        defaultMsg = `Carrier error (${resStatus}): ${errorDetails}`
+      }
+
       const errMsg = String(data.message || data.error || defaultMsg)
         .replace(/pairgate/gi, "Telecom Carrier")
         .replace(/clubkonnect/gi, "Telecom Carrier")
@@ -203,9 +315,17 @@ export class PairgateProvider implements IVtuProvider {
       cache: "no-store",
     })
 
-    const data = await response.json().catch(() => ({}))
+    const rawText = await response.text().catch(() => "")
+    let data: any = {}
+    try {
+      data = JSON.parse(rawText)
+    } catch {
+      data = {}
+    }
 
     if (!response.ok || data.status === "error") {
+      console.error(`[Pairgate Provider Balance Error] ${url} returned HTTP ${response.status} ${response.statusText}`)
+      console.error(`[Pairgate Provider Error Body]:`, rawText)
       throw new Error(
         String(data.message || `Failed to fetch Server 2 wallet balance (${response.status})`).replace(/pairgate/gi, "Telecom Carrier")
       )
