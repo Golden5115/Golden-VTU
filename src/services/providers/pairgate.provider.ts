@@ -40,12 +40,12 @@ export class PairgateProvider implements IVtuProvider {
   readonly identifier = "PAIRGATE"
 
   private apiKey: string = ""
-  private baseUrl: string = "https://pairgate.com/api/v1"
+  private baseUrl: string = "https://pairgate-proxy.ayomide-ayoola91.workers.dev/api/v1"
   private isTestMode: boolean = false
 
   initialize(config: ProviderInitConfig): void {
     this.apiKey = config.apiKey || process.env.PAIRGATE_API_KEY || ""
-    this.baseUrl = config.baseUrl || process.env.PAIRGATE_BASE_URL || "https://pairgate.com/api/v1"
+    this.baseUrl = config.baseUrl || process.env.PAIRGATE_BASE_URL || "https://pairgate-proxy.ayomide-ayoola91.workers.dev/api/v1"
     this.isTestMode = this.baseUrl.includes("/test") || this.apiKey.toLowerCase().startsWith("test_")
   }
 

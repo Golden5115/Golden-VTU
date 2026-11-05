@@ -58,7 +58,7 @@ export const SUPPORTED_PROVIDER_TEMPLATES: ProviderTemplate[] = [
   {
     identifier: "PAIRGATE",
     name: "Pairgate",
-    defaultBaseUrl: "https://pairgate.com/api/v1",
+    defaultBaseUrl: "https://pairgate-proxy.ayomide-ayoola91.workers.dev/api/v1",
     requiresUserId: false,
     requiresApiKey: true,
     requiresSecretKey: false,
