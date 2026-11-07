@@ -3789,27 +3789,27 @@ export function FleetTroubleshootClient({
                   <>
                     <option value="6403::400::MTN 100MB Twice a Month (Bi-Weekly Auto-Renew)::30 Days">MTN 100MB Twice a Month (2x Bi-Weekly) — ₦400 (Recommended Tracker Plan)</option>
                     <option value="1224::580::MTN 1GB Monthly (Transfer)::30 Days">MTN 1GB Monthly (Transfer) — ₦580 (30-Day Plan)</option>
-                    <option value="14::380::500MB (CG) (30 Days)::30 Days">500MB (CG) (30 Days) — ₦380</option>
-                    <option value="8::380::1.0GB SME (30 Days)::30 Days">1.0GB SME (30 Days) — ₦380 (Recommended 30-Day Plan)</option>
+                    <option value="14::380::500MB (CG) (7 Days)::7 Days">500MB (CG) (7 Days) — ₦380</option>
+                    <option value="8::380::1.0GB SME (7 Days)::7 Days">1.0GB SME (7 Days) — ₦380</option>
                     <option value="9::660::2.0GB SME (30 Days)::30 Days">2.0GB SME (30 Days) — ₦660</option>
                   </>
                 )}
                 {modalFilteredPlans.length === 0 && modalNetworkId === "04" && (
                   <>
-                    <option value="89::380::500MB (CG) (30 Days)::30 Days">500MB (CG) (30 Days) — ₦380 (Recommended for Airtel Trackers)</option>
+                    <option value="89::380::500MB (CG) (7 Days)::7 Days">500MB (CG) (7 Days) — ₦380 (Recommended for Airtel Trackers)</option>
                     <option value="90::500::1.0GB (CG) (30 Days)::30 Days">1.0GB (CG) (30 Days) — ₦500</option>
                     <option value="91::1000::2.0GB (CG) (30 Days)::30 Days">2.0GB (CG) (30 Days) — ₦1,000</option>
                   </>
                 )}
                 {modalFilteredPlans.length === 0 && modalNetworkId === "02" && (
                   <>
-                    <option value="glo-500::380::500MB (Gifting) (30 Days)::30 Days">500MB (Gifting) (30 Days) — ₦380</option>
+                    <option value="glo-500::380::500MB (Gifting) (7 Days)::7 Days">500MB (Gifting) (7 Days) — ₦380</option>
                     <option value="glo-1000::500::1.0GB (Gifting) (30 Days)::30 Days">1.0GB (Gifting) (30 Days) — ₦500</option>
                   </>
                 )}
                 {modalFilteredPlans.length === 0 && modalNetworkId === "03" && (
                   <>
-                    <option value="9mob-500::380::500MB (SME) (30 Days)::30 Days">500MB (SME) (30 Days) — ₦380</option>
+                    <option value="9mob-500::380::500MB (SME) (7 Days)::7 Days">500MB (SME) (7 Days) — ₦380</option>
                     <option value="9mob-1000::500::1.0GB (SME) (30 Days)::30 Days">1.0GB (SME) (30 Days) — ₦500</option>
                   </>
                 )}

@@ -237,9 +237,9 @@ function resolvePlanForNetwork(
       return {
         serverId: servers.server2.id,
         planId: "14",
-        planName: "500MB (CG) (30 Days)",
+        planName: "500MB (CG) (7 Days)",
         amount: 380,
-        validityDays: 30,
+        validityDays: 7,
       }
     }
   }
@@ -261,9 +261,9 @@ function resolvePlanForNetwork(
       return {
         serverId: servers.server2.id,
         planId: "glo-500",
-        planName: "500MB (Gifting) (30 Days)",
+        planName: "500MB (Gifting) (7 Days)",
         amount: 380,
-        validityDays: 30,
+        validityDays: 7,
       }
     }
   }
@@ -275,9 +275,9 @@ function resolvePlanForNetwork(
       return {
         serverId: servers.server2.id,
         planId: config.airtelPlanId || "89",
-        planName: "500MB (CG) (30 Days)",
+        planName: "500MB (CG) (7 Days)",
         amount: 380,
-        validityDays: 30,
+        validityDays: 7,
       }
     }
   }
@@ -289,9 +289,9 @@ function resolvePlanForNetwork(
       return {
         serverId: servers.server2.id,
         planId: config.nineMobilePlanId || "66",
-        planName: "500MB (CG) (30 Days)",
+        planName: "500MB (CG) (7 Days)",
         amount: 380,
-        validityDays: 30,
+        validityDays: 7,
       }
     }
   }

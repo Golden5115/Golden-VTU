@@ -1556,7 +1556,7 @@ export function SimTroubleshootStation({
                                   })}
                                   {networkPlans.length === 0 && (
                                     <>
-                                      <option value="8::380::1.0GB SME (30 Days)::30 Days">1.0GB — ₦380 (Recommended for Trackers, 30 Days)</option>
+                                      <option value="8::380::1.0GB SME (7 Days)::7 Days">1.0GB — ₦380 (Recommended for Trackers, 7 Days)</option>
                                       <option value="7::245::500MB SME (30 Days)::30 Days">500MB — ₦245 (Budget Plan, 30 Days)</option>
                                       <option value="9::660::2.0GB SME (30 Days)::30 Days">2.0GB — ₦660 (30 Days)</option>
                                     </>
@@ -2280,7 +2280,7 @@ export function SimTroubleshootStation({
                             })}
                             {bulkNetworkPlans.length === 0 && (
                               <>
-                                <option value="8::380::1.0GB SME (30 Days)::30 Days">1.0GB — ₦380 (Recommended for Trackers, 30 Days)</option>
+                                <option value="8::380::1.0GB SME (7 Days)::7 Days">1.0GB — ₦380 (Recommended for Trackers, 7 Days)</option>
                                 <option value="7::245::500MB SME (30 Days)::30 Days">500MB — ₦245 (Budget Plan, 30 Days)</option>
                                 <option value="9::660::2.0GB SME (30 Days)::30 Days">2.0GB — ₦660 (30 Days)</option>
                               </>

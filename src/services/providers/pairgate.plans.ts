@@ -6,7 +6,7 @@ export const RAW_PAIRGATE_PLANS = [
     "networkName": "MTN",
     "name": "500MB (CG)",
     "rawPrice": 270,
-    "validity": "30 Days"
+    "validity": "7 Days"
   },
   {
     "id": "15",

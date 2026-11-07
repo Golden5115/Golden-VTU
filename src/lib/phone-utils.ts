@@ -196,6 +196,9 @@ const KNOWN_PLAN_ID_VALIDITY: Record<string, number> = {
   "8": 3,    // Glo 1GB SME (3 days)
   "19": 7,   // Airtel Weekly Bundle (7 days)
 
+  // Pairgate MTN CG Weekly Plans
+  "14": 7,   // MTN 500MB (CG) - 7 Days
+
   // Pairgate Airtel CG Weekly Plans (IDs 89, 90, 91, 94, 96, 98, 101)
   "89": 7,   // Airtel 500MB (CG) - 7 Days
   "90": 7,   // Airtel 1GB (CG) - 7 Days
@@ -249,7 +252,7 @@ const KNOWN_PLAN_DISPLAY_MAP: Record<string, string> = {
   "101": "18GB (CG) • 7 Days",
   "102": "18GB (CG) • 30 Days",
   "19": "500MB Weekly • 7 Days",
-  "14": "500MB (CG) • 30 Days",
+  "14": "500MB (CG) • 7 Days",
   "15": "1GB (CG) • 30 Days",
   "16": "2GB (CG) • 30 Days",
   "17": "3GB (CG) • 30 Days",
