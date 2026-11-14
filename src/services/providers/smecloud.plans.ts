@@ -21,6 +21,14 @@ export const RAW_SMECLOUD_PLANS: RawSmeCloudPlan[] = [
     validity: "30 Days (2x 14-Day Cycles)",
   },
   {
+    id: "1223",
+    network: "01",
+    networkName: "MTN",
+    name: "MTN 500MB Monthly (Transfer)",
+    rawPrice: 300,
+    validity: "30 Days",
+  },
+  {
     id: "1224",
     network: "01",
     networkName: "MTN",

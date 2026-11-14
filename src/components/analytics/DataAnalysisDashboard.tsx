@@ -24,11 +24,19 @@ import {
   Sparkles,
   Smartphone,
   Activity,
+  Copy,
+  Check,
+  FileSpreadsheet,
+  FileText,
+  Filter,
+  CalendarRange,
+  X,
+  Phone,
 } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import type { AnalyticsDataPayload } from "@/lib/analytics-utils"
+import type { AnalyticsDataPayload, SimDataAnalyticsItem } from "@/lib/analytics-utils"
 import { getDataAnalysisMetrics } from "@/actions/analytics.actions"
 
 interface DataAnalysisDashboardProps {
@@ -43,27 +51,69 @@ const TIMEFRAME_OPTIONS = [
   { id: "30days", label: "Last 30 Days" },
 ]
 
+const NETWORK_FILTERS = [
+  { id: "all", label: "All Networks", color: "#64748B", dotBg: "bg-slate-400" },
+  { id: "01", label: "MTN", color: "#FFC300", dotBg: "bg-amber-400" },
+  { id: "04", label: "Airtel", color: "#EF4444", dotBg: "bg-rose-500" },
+  { id: "02", label: "Glo", color: "#10B981", dotBg: "bg-emerald-500" },
+  { id: "03", label: "9Mobile", color: "#006848", dotBg: "bg-teal-600" },
+]
+
 export function DataAnalysisDashboard({ initialData }: DataAnalysisDashboardProps) {
   const [data, setData] = useState<AnalyticsDataPayload>(initialData)
   const [selectedTimeframe, setSelectedTimeframe] = useState<string>(initialData.summary.timeframe || "all")
   const [selectedScope, setSelectedScope] = useState<"all" | "user">(initialData.summary.scope || "all")
-  const [selectedNetworkFilter, setSelectedNetworkFilter] = useState<string>("all")
+  const [selectedNetwork, setSelectedNetwork] = useState<string>(initialData.summary.selectedNetworkId || "all")
+
+  // Custom Date Range states
+  const [customStartDate, setCustomStartDate] = useState<string>(initialData.summary.startDate || "")
+  const [customEndDate, setCustomEndDate] = useState<string>(initialData.summary.endDate || "")
+  const [isCustomDateActive, setIsCustomDateActive] = useState<boolean>(
+    Boolean(initialData.summary.startDate || initialData.summary.endDate)
+  )
+
+  // SIM Section state
+  const [simSearchQuery, setSimSearchQuery] = useState<string>("")
+  const [copiedSim, setCopiedSim] = useState<string | null>(null)
+  const [copyAllStatus, setCopyAllStatus] = useState<boolean>(false)
+
+  // Transaction table filter states
+  const [txSearchQuery, setTxSearchQuery] = useState<string>("")
   const [statusFilter, setStatusFilter] = useState<string>("all")
-  const [searchQuery, setSearchQuery] = useState<string>("")
   const [isPending, startTransition] = useTransition()
 
-  // Handle timeframe or scope changes by refetching via Server Action
-  const handleFilterChange = (newTimeframe: string, newScope?: "all" | "user") => {
-    const targetTimeframe = newTimeframe
-    const targetScope = newScope || selectedScope
-    setSelectedTimeframe(targetTimeframe)
-    if (newScope) setSelectedScope(targetScope)
+  // Central refetch function via Server Action
+  const fetchMetrics = (options: {
+    timeframe?: string
+    scope?: "all" | "user"
+    networkId?: string
+    startDate?: string
+    endDate?: string
+  }) => {
+    const targetTimeframe = options.timeframe ?? selectedTimeframe
+    const targetScope = options.scope ?? selectedScope
+    const targetNetwork = options.networkId ?? selectedNetwork
+    const targetStart =
+      options.startDate !== undefined
+        ? options.startDate
+        : isCustomDateActive
+        ? customStartDate
+        : undefined
+    const targetEnd =
+      options.endDate !== undefined
+        ? options.endDate
+        : isCustomDateActive
+        ? customEndDate
+        : undefined
 
     startTransition(async () => {
       try {
         const updated = await getDataAnalysisMetrics({
           timeframe: targetTimeframe,
           scope: targetScope,
+          networkId: targetNetwork,
+          startDate: targetStart || undefined,
+          endDate: targetEnd || undefined,
         })
         setData(updated)
       } catch (err) {
@@ -72,45 +122,186 @@ export function DataAnalysisDashboard({ initialData }: DataAnalysisDashboardProp
     })
   }
 
-  const { summary, networkRankings, recentTransactions, dailyTrends, airtimeComparison } = data
+  // Handle Preset Timeframe Changes
+  const handleTimeframeChange = (tfId: string) => {
+    setSelectedTimeframe(tfId)
+    setIsCustomDateActive(false)
+    setCustomStartDate("")
+    setCustomEndDate("")
+    fetchMetrics({
+      timeframe: tfId,
+      startDate: "",
+      endDate: "",
+    })
+  }
 
-  // Filter recent transactions based on search query, network filter, and status filter
+  // Handle Custom Date Range Apply
+  const handleApplyCustomDates = () => {
+    if (!customStartDate && !customEndDate) return
+    setIsCustomDateActive(true)
+    setSelectedTimeframe("custom")
+    fetchMetrics({
+      timeframe: "custom",
+      startDate: customStartDate,
+      endDate: customEndDate,
+    })
+  }
+
+  // Handle Clear Custom Dates
+  const handleClearCustomDates = () => {
+    setIsCustomDateActive(false)
+    setCustomStartDate("")
+    setCustomEndDate("")
+    setSelectedTimeframe("all")
+    fetchMetrics({
+      timeframe: "all",
+      startDate: "",
+      endDate: "",
+    })
+  }
+
+  // Handle Network Selector Filter
+  const handleNetworkFilterChange = (netId: string) => {
+    setSelectedNetwork(netId)
+    fetchMetrics({ networkId: netId })
+  }
+
+  // Handle Scope toggle (All Platform Users vs My Account)
+  const handleScopeChange = (scope: "all" | "user") => {
+    setSelectedScope(scope)
+    fetchMetrics({ scope })
+  }
+
+  const { summary, networkRankings, recentTransactions, simList = [], dailyTrends, airtimeComparison } = data
+
+  // Filter SIM list by search query (phone number, plan, or status)
+  const filteredSimList = useMemo(() => {
+    if (!simSearchQuery.trim()) return simList
+    const q = simSearchQuery.toLowerCase().trim()
+    return simList.filter(
+      (sim: SimDataAnalyticsItem) =>
+        sim.phone.includes(q) ||
+        sim.networkName.toLowerCase().includes(q) ||
+        sim.lastPlan.toLowerCase().includes(q) ||
+        sim.lastStatus.toLowerCase().includes(q)
+    )
+  }, [simList, simSearchQuery])
+
+  // Filter recent transactions based on search query and status filter
   const filteredTransactions = useMemo(() => {
     return recentTransactions.filter((tx) => {
       const matchesSearch =
-        searchQuery === "" ||
-        tx.phone.includes(searchQuery) ||
-        tx.reference.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        tx.planName.toLowerCase().includes(searchQuery.toLowerCase())
-
-      const matchesNetwork =
-        selectedNetworkFilter === "all" || tx.networkId === selectedNetworkFilter
+        txSearchQuery === "" ||
+        tx.phone.includes(txSearchQuery) ||
+        tx.reference.toLowerCase().includes(txSearchQuery.toLowerCase()) ||
+        tx.planName.toLowerCase().includes(txSearchQuery.toLowerCase())
 
       const matchesStatus =
         statusFilter === "all" || tx.status.toUpperCase() === statusFilter.toUpperCase()
 
-      return matchesSearch && matchesNetwork && matchesStatus
+      return matchesSearch && matchesStatus
     })
-  }, [recentTransactions, searchQuery, selectedNetworkFilter, statusFilter])
+  }, [recentTransactions, txSearchQuery, statusFilter])
 
-  // Export filtered transactions to CSV
-  const handleExportCsv = () => {
+  // EXPORT 1: Export SIM Numbers where data was added to CSV
+  const handleExportSimsCsv = () => {
+    const headers = [
+      "Phone Number",
+      "Network",
+      "Total Data Added (Count)",
+      "Total Spend (NGN)",
+      "Successful Orders",
+      "Failed Orders",
+      "Last Data Plan Added",
+      "Last Recharge Date",
+      "Last Status",
+    ]
+
+    const rows = filteredSimList.map((sim) => [
+      `"${sim.phone}"`,
+      `"${sim.networkName}"`,
+      sim.totalCount,
+      sim.totalAmount.toFixed(2),
+      sim.successCount,
+      sim.failedCount,
+      `"${sim.lastPlan.replace(/"/g, '""')}"`,
+      `"${sim.lastFormattedDate}"`,
+      sim.lastStatus,
+    ])
+
+    const csvContent =
+      "data:text/csv;charset=utf-8," +
+      [headers.join(","), ...rows.map((r) => r.join(","))].join("\n")
+    const encodedUri = encodeURI(csvContent)
+    const link = document.createElement("a")
+    link.setAttribute("href", encodedUri)
+    const netSuffix = selectedNetwork !== "all" ? `_${selectedNetwork}` : ""
+    const dateSuffix = isCustomDateActive ? `_${customStartDate || "start"}_to_${customEndDate || "end"}` : `_${selectedTimeframe}`
+    link.setAttribute("download", `golden_vtu_sim_numbers_data_added${netSuffix}${dateSuffix}.csv`)
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+  }
+
+  // EXPORT 2: Download Plain Phone Numbers as TXT (one per line)
+  const handleDownloadSimsTxt = () => {
+    const textContent = filteredSimList.map((s) => s.phone).join("\n")
+    const blob = new Blob([textContent], { type: "text/plain;charset=utf-8" })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement("a")
+    link.href = url
+    const netSuffix = selectedNetwork !== "all" ? `_${selectedNetwork}` : ""
+    link.download = `golden_vtu_sim_numbers${netSuffix}.txt`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+  }
+
+  // EXPORT 3: Copy all SIM numbers to clipboard (comma-separated for bulk recharges)
+  const handleCopyAllSims = async () => {
+    if (filteredSimList.length === 0) return
+    const phonesStr = filteredSimList.map((s) => s.phone).join(", ")
+    try {
+      await navigator.clipboard.writeText(phonesStr)
+      setCopyAllStatus(true)
+      setTimeout(() => setCopyAllStatus(false), 2500)
+    } catch (e) {
+      console.error("Clipboard copy failed:", e)
+    }
+  }
+
+  // Copy single SIM number
+  const handleCopySingleSim = async (phone: string) => {
+    try {
+      await navigator.clipboard.writeText(phone)
+      setCopiedSim(phone)
+      setTimeout(() => setCopiedSim(null), 2000)
+    } catch (e) {
+      console.error("Clipboard copy failed:", e)
+    }
+  }
+
+  // EXPORT 4: Export Transactions Table to CSV
+  const handleExportTransactionsCsv = () => {
     const headers = ["Reference", "Network", "Phone", "Plan", "Amount (NGN)", "Status", "Date"]
     const rows = filteredTransactions.map((tx) => [
       tx.reference,
       tx.networkName,
       tx.phone,
-      `"${tx.planName}"`,
+      `"${tx.planName.replace(/"/g, '""')}"`,
       tx.amount.toFixed(2),
       tx.status,
       `"${tx.formattedDate}"`,
     ])
 
-    const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map((e) => e.join(","))].join("\n")
+    const csvContent =
+      "data:text/csv;charset=utf-8," +
+      [headers.join(","), ...rows.map((e) => e.join(","))].join("\n")
     const encodedUri = encodeURI(csvContent)
     const link = document.createElement("a")
     link.setAttribute("href", encodedUri)
-    link.setAttribute("download", `golden_vtu_data_analysis_${selectedTimeframe}.csv`)
+    link.setAttribute("download", `golden_vtu_data_transactions_${selectedTimeframe}.csv`)
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
@@ -122,6 +313,7 @@ export function DataAnalysisDashboard({ initialData }: DataAnalysisDashboardProp
   }
 
   const leader = summary.leaderNetwork
+  const activeNetworkMeta = NETWORK_FILTERS.find((n) => n.id === selectedNetwork)
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-12 print:space-y-4">
@@ -135,7 +327,7 @@ export function DataAnalysisDashboard({ initialData }: DataAnalysisDashboardProp
             <div>
               <div className="flex items-center gap-2">
                 <h1 className="text-2xl md:text-3xl font-black tracking-tight text-slate-900">
-                  Data Analysis Module
+                  Data Analysis & Export Module
                 </h1>
                 <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200">
                   <Sparkles className="w-3 h-3 text-blue-600" />
@@ -143,7 +335,7 @@ export function DataAnalysisDashboard({ initialData }: DataAnalysisDashboardProp
                 </span>
               </div>
               <p className="text-xs md:text-sm text-slate-500 mt-0.5">
-                Comprehensive ranking and distribution analysis of network providers where data has been added
+                Analyze data added across networks, set custom date ranges, filter by carrier, and export recipient SIM numbers
               </p>
             </div>
           </div>
@@ -155,7 +347,8 @@ export function DataAnalysisDashboard({ initialData }: DataAnalysisDashboardProp
             <div className="inline-flex p-1 bg-slate-100 rounded-xl border border-slate-200 text-xs font-semibold">
               <button
                 type="button"
-                onClick={() => handleFilterChange(selectedTimeframe, "all")}
+                onClick={() => handleScopeChange("all")}
+                disabled={isPending}
                 className={`px-3 py-1.5 rounded-lg transition-all ${
                   selectedScope === "all"
                     ? "bg-white text-blue-700 shadow-xs font-bold"
@@ -166,7 +359,8 @@ export function DataAnalysisDashboard({ initialData }: DataAnalysisDashboardProp
               </button>
               <button
                 type="button"
-                onClick={() => handleFilterChange(selectedTimeframe, "user")}
+                onClick={() => handleScopeChange("user")}
+                disabled={isPending}
                 className={`px-3 py-1.5 rounded-lg transition-all ${
                   selectedScope === "user"
                     ? "bg-white text-blue-700 shadow-xs font-bold"
@@ -178,15 +372,28 @@ export function DataAnalysisDashboard({ initialData }: DataAnalysisDashboardProp
             </div>
           )}
 
+          {/* Quick Export SIMs Button */}
+          <Button
+            variant="default"
+            size="sm"
+            onClick={handleExportSimsCsv}
+            className="text-xs h-9 gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-xs"
+            title="Export SIM numbers where data was added"
+          >
+            <Smartphone className="w-3.5 h-3.5" />
+            Export SIMs ({filteredSimList.length})
+          </Button>
+
+          {/* Export Transactions CSV */}
           <Button
             variant="outline"
             size="sm"
-            onClick={handleExportCsv}
+            onClick={handleExportTransactionsCsv}
             className="text-xs h-9 gap-1.5 border-slate-200 hover:bg-slate-50"
-            title="Download CSV export"
+            title="Download full transactions CSV export"
           >
             <Download className="w-3.5 h-3.5 text-slate-600" />
-            Export CSV
+            Export Txns
           </Button>
 
           <Button
@@ -203,7 +410,7 @@ export function DataAnalysisDashboard({ initialData }: DataAnalysisDashboardProp
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => handleFilterChange(selectedTimeframe)}
+            onClick={() => fetchMetrics({})}
             disabled={isPending}
             className="text-xs h-9 px-2.5 text-slate-500 hover:text-slate-800"
             title="Refresh statistics"
@@ -213,32 +420,165 @@ export function DataAnalysisDashboard({ initialData }: DataAnalysisDashboardProp
         </div>
       </div>
 
-      {/* Timeframe Selector Pills */}
-      <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
-        <span className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5 pl-1 shrink-0">
-          <Calendar className="w-3.5 h-3.5 text-slate-400" />
-          Time Period:
-        </span>
-        <div className="flex items-center gap-1.5 bg-slate-100/90 p-1 rounded-xl border border-slate-200/70 shrink-0">
-          {TIMEFRAME_OPTIONS.map((tf) => {
-            const isActive = selectedTimeframe === tf.id
-            return (
-              <button
-                key={tf.id}
-                type="button"
-                onClick={() => handleFilterChange(tf.id)}
-                disabled={isPending}
-                className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${
-                  isActive
-                    ? "bg-white text-blue-700 shadow-xs font-bold border border-blue-100"
-                    : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/50"
-                }`}
-              >
-                {tf.label}
-              </button>
-            )
-          })}
+      {/* FILTER CONTROLS BAR: Network Selector + Timeframe Presets + Custom Date Range */}
+      <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs space-y-4">
+        {/* Row 1: Network Provider Selector */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
+            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5 pl-1 shrink-0">
+              <Filter className="w-3.5 h-3.5 text-blue-600" />
+              Network:
+            </span>
+            <div className="flex items-center gap-1.5 bg-slate-100/90 p-1 rounded-xl border border-slate-200/70 shrink-0">
+              {NETWORK_FILTERS.map((net) => {
+                const isActive = selectedNetwork === net.id
+                return (
+                  <button
+                    key={net.id}
+                    type="button"
+                    onClick={() => handleNetworkFilterChange(net.id)}
+                    disabled={isPending}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${
+                      isActive
+                        ? "bg-white text-slate-900 shadow-xs font-bold border border-slate-300 ring-1 ring-blue-500/20"
+                        : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/50"
+                    }`}
+                  >
+                    {net.id !== "all" && (
+                      <span
+                        className="w-2.5 h-2.5 rounded-full shrink-0 shadow-2xs"
+                        style={{ backgroundColor: net.color }}
+                      />
+                    )}
+                    {net.label}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          {/* Active Network Indicator Pill */}
+          {selectedNetwork !== "all" && (
+            <div className="flex items-center gap-2">
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-amber-50 text-amber-900 border border-amber-200">
+                Filtered: {activeNetworkMeta?.label}
+                <button
+                  type="button"
+                  onClick={() => handleNetworkFilterChange("all")}
+                  className="ml-1 hover:text-rose-600"
+                  title="Clear network filter"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </span>
+            </div>
+          )}
         </div>
+
+        {/* Row 2: Timeframe Presets & Custom Date Range */}
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pt-3 border-t border-slate-100">
+          {/* Preset Buttons */}
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
+            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5 pl-1 shrink-0">
+              <Calendar className="w-3.5 h-3.5 text-slate-400" />
+              Timeframe:
+            </span>
+            <div className="flex items-center gap-1.5 bg-slate-100/90 p-1 rounded-xl border border-slate-200/70 shrink-0">
+              {TIMEFRAME_OPTIONS.map((tf) => {
+                const isActive = !isCustomDateActive && selectedTimeframe === tf.id
+                return (
+                  <button
+                    key={tf.id}
+                    type="button"
+                    onClick={() => handleTimeframeChange(tf.id)}
+                    disabled={isPending}
+                    className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${
+                      isActive
+                        ? "bg-white text-blue-700 shadow-xs font-bold border border-blue-100"
+                        : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/50"
+                    }`}
+                  >
+                    {tf.label}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          {/* Custom Date Range Picker */}
+          <div className="flex flex-wrap items-center gap-2 bg-slate-50 p-1.5 sm:p-2 rounded-xl border border-slate-200/80">
+            <span className="text-xs font-bold text-slate-600 flex items-center gap-1 px-1">
+              <CalendarRange className="w-3.5 h-3.5 text-indigo-600" />
+              Custom Range:
+            </span>
+            <div className="flex items-center gap-1">
+              <span className="text-[11px] text-slate-500 font-medium">From</span>
+              <Input
+                type="date"
+                value={customStartDate}
+                onChange={(e) => setCustomStartDate(e.target.value)}
+                className="h-8 text-xs w-32 sm:w-36 bg-white border-slate-300"
+              />
+            </div>
+            <div className="flex items-center gap-1">
+              <span className="text-[11px] text-slate-500 font-medium">To</span>
+              <Input
+                type="date"
+                value={customEndDate}
+                onChange={(e) => setCustomEndDate(e.target.value)}
+                className="h-8 text-xs w-32 sm:w-36 bg-white border-slate-300"
+              />
+            </div>
+            <Button
+              size="sm"
+              onClick={handleApplyCustomDates}
+              disabled={isPending || (!customStartDate && !customEndDate)}
+              className="h-8 px-3 text-xs bg-blue-600 hover:bg-blue-700 text-white font-bold"
+            >
+              Apply
+            </Button>
+            {isCustomDateActive && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleClearCustomDates}
+                disabled={isPending}
+                className="h-8 px-2.5 text-xs text-slate-600 hover:text-rose-600 border-slate-300"
+                title="Reset to All Time"
+              >
+                <X className="w-3.5 h-3.5 mr-1" />
+                Clear
+              </Button>
+            )}
+          </div>
+        </div>
+
+        {/* Filter Feedback Banner */}
+        {(isCustomDateActive || selectedNetwork !== "all") && (
+          <div className="flex items-center justify-between bg-blue-50/70 border border-blue-200/70 rounded-xl px-3.5 py-2 text-xs text-blue-900">
+            <div className="flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-blue-600 shrink-0" />
+              <span>
+                <strong>Active Filter:</strong>{" "}
+                {selectedNetwork !== "all" ? `${activeNetworkMeta?.label} Network` : "All Networks"}{" "}
+                •{" "}
+                {isCustomDateActive
+                  ? `Custom Date Range (${customStartDate || "Beginning"} to ${customEndDate || "Present"})`
+                  : `Period: ${selectedTimeframe}`}
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                handleNetworkFilterChange("all")
+                handleClearCustomDates()
+              }}
+              className="text-[11px] font-bold text-blue-700 hover:text-blue-900 underline shrink-0"
+            >
+              Reset All Filters
+            </button>
+          </div>
+        )}
       </div>
 
       {/* TOP CHAMPION HERO BANNER: The Leading Network Provider */}
@@ -251,7 +591,7 @@ export function DataAnalysisDashboard({ initialData }: DataAnalysisDashboardProp
             <div className="space-y-3">
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-400/20 border border-amber-400/40 text-amber-300 text-xs font-black uppercase tracking-wider">
                 <Trophy className="w-4 h-4 text-amber-400" />
-                #1 Highest Data Network Provider
+                {selectedNetwork !== "all" ? `${leader.name} Network Performance` : "#1 Highest Data Network Provider"}
               </div>
 
               <div className="flex items-center gap-4">
@@ -266,7 +606,9 @@ export function DataAnalysisDashboard({ initialData }: DataAnalysisDashboardProp
                     {leader.fullName}
                   </h2>
                   <p className="text-slate-300 text-xs md:text-sm mt-0.5">
-                    Leads with the largest volume of data added across all subscribers
+                    {selectedNetwork !== "all"
+                      ? `Analytics for ${leader.fullName} across ${summary.uniquePhonesCount} unique subscriber SIM numbers`
+                      : "Leads with the largest volume of data added across all subscribers"}
                   </p>
                 </div>
               </div>
@@ -312,7 +654,7 @@ export function DataAnalysisDashboard({ initialData }: DataAnalysisDashboardProp
                   Top Up {leader.name} Data Now
                 </Button>
               </Link>
-              <Link href="/transactions">
+              <Link href={`/transactions?network=${leader.networkId}`}>
                 <Button variant="outline" className="w-full border-white/20 text-white hover:bg-white/10 text-xs h-9">
                   View {leader.name} Transactions
                 </Button>
@@ -323,9 +665,9 @@ export function DataAnalysisDashboard({ initialData }: DataAnalysisDashboardProp
       ) : (
         <Card className="p-8 text-center bg-slate-50 border-dashed">
           <Wifi className="w-10 h-10 text-slate-400 mx-auto mb-2" />
-          <h3 className="text-base font-bold text-slate-700">No Data Transactions in Selected Timeframe</h3>
+          <h3 className="text-base font-bold text-slate-700">No Data Transactions in Selected Range</h3>
           <p className="text-xs text-slate-500 mt-1">
-            Try switching to &quot;All Time&quot; or topping up data on MTN, Airtel, or Glo.
+            Try adjusting your date range, switching networks, or topping up data on MTN, Airtel, or Glo.
           </p>
           <Link href="/data">
             <Button size="sm" className="mt-3 text-xs bg-blue-600">
@@ -514,7 +856,13 @@ export function DataAnalysisDashboard({ initialData }: DataAnalysisDashboardProp
                 : "bg-slate-100 text-slate-600 border-slate-200"
 
             const rankMedal =
-              item.rank === 1 ? "🥇 #1 Top Provider" : item.rank === 2 ? "🥈 #2 Provider" : item.rank === 3 ? "🥉 #3 Provider" : `#4 Provider`
+              item.rank === 1
+                ? "🥇 #1 Top Provider"
+                : item.rank === 2
+                ? "🥈 #2 Provider"
+                : item.rank === 3
+                ? "🥉 #3 Provider"
+                : `#4 Provider`
 
             return (
               <Card
@@ -674,6 +1022,271 @@ export function DataAnalysisDashboard({ initialData }: DataAnalysisDashboardProp
         </div>
       </div>
 
+      {/* NEW SECTION: RECIPIENT SIM NUMBERS (DATA ADDED) WITH LIVE EXPORT & ACTIONS */}
+      <Card className="border-slate-200/80 shadow-xs" id="sim-numbers-section">
+        <CardHeader className="pb-3">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+            <div>
+              <div className="flex items-center gap-2">
+                <CardTitle className="text-base md:text-lg font-bold text-slate-900 flex items-center gap-2">
+                  <Smartphone className="w-5 h-5 text-indigo-600" />
+                  Recipient SIM Numbers (Data Added)
+                </CardTitle>
+                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                  {filteredSimList.length} Unique SIMs
+                </span>
+              </div>
+              <CardDescription className="text-xs mt-0.5">
+                Every mobile phone number where data was added during the selected date range and network, with total top-up counts, spending, and export options.
+              </CardDescription>
+            </div>
+
+            {/* SIM Export & Clipboard Controls */}
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleCopyAllSims}
+                disabled={filteredSimList.length === 0}
+                className="text-xs h-8 gap-1.5 border-slate-300 hover:bg-slate-100"
+                title="Copy all phone numbers as comma-separated values"
+              >
+                {copyAllStatus ? (
+                  <>
+                    <Check className="w-3.5 h-3.5 text-emerald-600" />
+                    <span className="text-emerald-700 font-bold">Copied All!</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-3.5 h-3.5 text-slate-600" />
+                    <span>Copy Numbers</span>
+                  </>
+                )}
+              </Button>
+
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleDownloadSimsTxt}
+                disabled={filteredSimList.length === 0}
+                className="text-xs h-8 gap-1.5 border-slate-300 hover:bg-slate-100"
+                title="Download phone numbers as plain text (.txt)"
+              >
+                <FileText className="w-3.5 h-3.5 text-slate-600" />
+                <span>Text (.txt)</span>
+              </Button>
+
+              <Button
+                variant="default"
+                size="sm"
+                onClick={handleExportSimsCsv}
+                disabled={filteredSimList.length === 0}
+                className="text-xs h-8 gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold"
+                title="Download spreadsheet CSV of all SIM recipient statistics"
+              >
+                <FileSpreadsheet className="w-3.5 h-3.5" />
+                <span>Export SIMs (CSV)</span>
+              </Button>
+            </div>
+          </div>
+
+          {/* SIM Search Input */}
+          <div className="pt-3">
+            <div className="relative max-w-md">
+              <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <Input
+                type="text"
+                placeholder="Search by phone number, network, or data plan..."
+                value={simSearchQuery}
+                onChange={(e) => setSimSearchQuery(e.target.value)}
+                className="pl-8 text-xs h-8 bg-slate-50 border-slate-200"
+              />
+              {simSearchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSimSearchQuery("")}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+          </div>
+        </CardHeader>
+
+        <CardContent>
+          {filteredSimList.length === 0 ? (
+            <div className="text-center py-10 border border-dashed rounded-xl bg-slate-50/60">
+              <Smartphone className="w-8 h-8 text-slate-400 mx-auto mb-2" />
+              <p className="text-xs font-semibold text-slate-700">No recipient SIM numbers found</p>
+              <p className="text-[11px] text-slate-400 mt-0.5">
+                Try clearing your search query or adjusting your date range and network filter.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <div className="overflow-x-auto max-h-[460px] overflow-y-auto rounded-xl border border-slate-200">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-slate-50 text-slate-600 border-b border-slate-200 font-bold uppercase text-[10px] tracking-wider sticky top-0 z-10">
+                    <tr>
+                      <th className="py-2.5 px-3">#</th>
+                      <th className="py-2.5 px-3">Recipient Phone</th>
+                      <th className="py-2.5 px-3">Network</th>
+                      <th className="py-2.5 px-3">Data Added Count</th>
+                      <th className="py-2.5 px-3">Total Spend</th>
+                      <th className="py-2.5 px-3">Last Data Plan</th>
+                      <th className="py-2.5 px-3">Last Recharged</th>
+                      <th className="py-2.5 px-3">Status</th>
+                      <th className="py-2.5 px-3 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 bg-white">
+                    {filteredSimList.map((sim, index) => {
+                      const isJustCopied = copiedSim === sim.phone
+                      return (
+                        <tr key={sim.phone} className="hover:bg-slate-50/80 transition-colors">
+                          <td className="py-2.5 px-3 text-slate-400 font-mono text-[11px]">
+                            {index + 1}
+                          </td>
+
+                          {/* Recipient Phone with Copy Button */}
+                          <td className="py-2.5 px-3">
+                            <div className="flex items-center gap-1.5">
+                              <span className="font-mono font-bold text-slate-900">{sim.phone}</span>
+                              <button
+                                type="button"
+                                onClick={() => handleCopySingleSim(sim.phone)}
+                                className="p-1 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+                                title="Copy phone number"
+                              >
+                                {isJustCopied ? (
+                                  <Check className="w-3.5 h-3.5 text-emerald-600" />
+                                ) : (
+                                  <Copy className="w-3.5 h-3.5" />
+                                )}
+                              </button>
+                              {isJustCopied && (
+                                <span className="text-[10px] font-bold text-emerald-600 animate-fade-in">
+                                  Copied!
+                                </span>
+                              )}
+                            </div>
+                          </td>
+
+                          {/* Network Badge */}
+                          <td className="py-2.5 px-3">
+                            <span
+                              className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[11px] font-bold shadow-2xs"
+                              style={{
+                                backgroundColor:
+                                  sim.networkId === "01"
+                                    ? "#FEF08A"
+                                    : sim.networkId === "04"
+                                    ? "#FEE2E2"
+                                    : sim.networkId === "02"
+                                    ? "#D1FAE5"
+                                    : "#CCFBF1",
+                                color:
+                                  sim.networkId === "01"
+                                    ? "#713F12"
+                                    : sim.networkId === "04"
+                                    ? "#991B1B"
+                                    : sim.networkId === "02"
+                                    ? "#065F46"
+                                    : "#115E59",
+                              }}
+                            >
+                              <span
+                                className="w-2 h-2 rounded-full"
+                                style={{ backgroundColor: sim.brandColor }}
+                              />
+                              {sim.networkName}
+                            </span>
+                          </td>
+
+                          {/* Total Count */}
+                          <td className="py-2.5 px-3">
+                            <span className="font-black text-slate-900">{sim.totalCount}</span>
+                            <span className="text-slate-500 text-[11px] ml-1">
+                              ({sim.successCount} ok{sim.failedCount > 0 ? `, ${sim.failedCount} failed` : ""})
+                            </span>
+                          </td>
+
+                          {/* Total Spend */}
+                          <td className="py-2.5 px-3 font-mono font-bold text-emerald-700">
+                            ₦{sim.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                          </td>
+
+                          {/* Last Plan */}
+                          <td className="py-2.5 px-3 text-slate-700 font-medium truncate max-w-[180px]">
+                            {sim.lastPlan}
+                          </td>
+
+                          {/* Last Date */}
+                          <td className="py-2.5 px-3 text-slate-500 font-medium text-[11px]">
+                            {sim.lastFormattedDate}
+                          </td>
+
+                          {/* Last Status */}
+                          <td className="py-2.5 px-3">
+                            {sim.lastStatus === "SUCCESS" ? (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
+                                <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                                SUCCESS
+                              </span>
+                            ) : sim.lastStatus === "FAILED" ? (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-100 text-rose-800">
+                                <XCircle className="w-3 h-3 text-rose-600" />
+                                FAILED
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">
+                                <Clock className="w-3 h-3 text-amber-600" />
+                                PENDING
+                              </span>
+                            )}
+                          </td>
+
+                          {/* Action */}
+                          <td className="py-2.5 px-3 text-right">
+                            <Link href={`/data?phone=${sim.phone}&network=${sim.networkId}`}>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-7 px-2 text-[11px] text-blue-600 hover:text-blue-800 hover:bg-blue-50"
+                              >
+                                Top Up
+                                <ArrowUpRight className="w-3 h-3 ml-0.5" />
+                              </Button>
+                            </Link>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Table Summary Footer */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-1 text-xs text-slate-500">
+                <span>
+                  Showing <strong>{filteredSimList.length}</strong> unique recipient SIM numbers
+                </span>
+                <span className="font-semibold text-slate-700">
+                  Total Spending on these SIMs:{" "}
+                  <strong className="text-emerald-700">
+                    ₦
+                    {filteredSimList
+                      .reduce((acc, curr) => acc + curr.totalAmount, 0)
+                      .toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                  </strong>
+                </span>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       {/* AIRTIME VS DATA COMPARISON TABLE */}
       <Card className="border-slate-200/80 shadow-xs">
         <CardHeader className="pb-3">
@@ -762,6 +1375,9 @@ export function DataAnalysisDashboard({ initialData }: DataAnalysisDashboardProp
               <span className="flex items-center gap-1">
                 <span className="w-2.5 h-2.5 rounded-xs bg-[#10B981]" /> Glo
               </span>
+              <span className="flex items-center gap-1">
+                <span className="w-2.5 h-2.5 rounded-xs bg-[#006848]" /> 9Mobile
+              </span>
             </div>
           </div>
         </CardHeader>
@@ -774,6 +1390,8 @@ export function DataAnalysisDashboard({ initialData }: DataAnalysisDashboardProp
                 const mtnPct = day.totalCount > 0 ? (day.mtnCount / day.totalCount) * 100 : 0
                 const airtelPct = day.totalCount > 0 ? (day.airtelCount / day.totalCount) * 100 : 0
                 const gloPct = day.totalCount > 0 ? (day.gloCount / day.totalCount) * 100 : 0
+                const nineMobilePct =
+                  day.totalCount > 0 ? (day.nineMobileCount / day.totalCount) * 100 : 0
 
                 return (
                   <div key={day.dateStr} className="flex flex-col items-center gap-1.5 group">
@@ -784,8 +1402,11 @@ export function DataAnalysisDashboard({ initialData }: DataAnalysisDashboardProp
                       <div
                         className="w-full rounded-xs flex flex-col overflow-hidden transition-all duration-500 shadow-2xs"
                         style={{ height: `${heightPct}%` }}
-                        title={`${day.dayLabel}: ${day.totalCount} orders (MTN: ${day.mtnCount}, Airtel: ${day.airtelCount}, Glo: ${day.gloCount})`}
+                        title={`${day.dayLabel}: ${day.totalCount} orders (MTN: ${day.mtnCount}, Airtel: ${day.airtelCount}, Glo: ${day.gloCount}, 9Mobile: ${day.nineMobileCount})`}
                       >
+                        {nineMobilePct > 0 && (
+                          <div style={{ height: `${nineMobilePct}%`, backgroundColor: "#006848" }} />
+                        )}
                         {gloPct > 0 && (
                           <div style={{ height: `${gloPct}%`, backgroundColor: "#10B981" }} />
                         )}
@@ -828,26 +1449,12 @@ export function DataAnalysisDashboard({ initialData }: DataAnalysisDashboardProp
                 <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
                 <Input
                   type="text"
-                  placeholder="Search phone or plan..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search phone, plan, ref..."
+                  value={txSearchQuery}
+                  onChange={(e) => setTxSearchQuery(e.target.value)}
                   className="pl-8 text-xs h-8 w-full bg-slate-50"
                 />
               </div>
-
-              {/* Network Filter */}
-              <select
-                aria-label="Filter transactions by network provider"
-                value={selectedNetworkFilter}
-                onChange={(e) => setSelectedNetworkFilter(e.target.value)}
-                className="text-xs h-8 px-2.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-700 font-semibold focus:outline-hidden focus:ring-1 focus:ring-blue-500"
-              >
-                <option value="all">All Networks</option>
-                <option value="01">MTN Only</option>
-                <option value="04">Airtel Only</option>
-                <option value="02">Glo Only</option>
-                <option value="03">9Mobile Only</option>
-              </select>
 
               {/* Status Filter */}
               <select

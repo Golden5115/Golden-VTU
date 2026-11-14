@@ -17,10 +17,13 @@ import {
   type DailyTrendItem,
   type AirtimeComparisonItem,
   type AnalyticsDataPayload,
+  type SimDataAnalyticsItem,
 } from "@/lib/analytics-utils"
 
 export async function getDataAnalysisMetrics(options?: {
   timeframe?: string
+  startDate?: string
+  endDate?: string
   scope?: "all" | "user"
   networkId?: string
 }): Promise<AnalyticsDataPayload> {
@@ -36,8 +39,8 @@ export async function getDataAnalysisMetrics(options?: {
   const requestedScope = options?.scope || (isAdmin ? "all" : "user")
   const activeScope: "all" | "user" = isAdmin ? requestedScope : "user"
 
-  const timeframe = options?.timeframe || "all"
-  const cutoffDate = getTimeframeCutoff(timeframe)
+  const timeframe = options?.timeframe || (options?.startDate || options?.endDate ? "custom" : "all")
+  const cutoffDate = timeframe !== "custom" ? getTimeframeCutoff(timeframe) : null
 
   // Build Prisma Where Clause for DataPurchase
   const where: Prisma.DataPurchaseWhereInput = {}
@@ -46,12 +49,66 @@ export async function getDataAnalysisMetrics(options?: {
     where.userId = session.user.id
   }
 
-  if (cutoffDate) {
+  // Handle custom date range vs preset cutoff
+  if (options?.startDate || options?.endDate) {
+    where.createdAt = {}
+    if (options.startDate) {
+      const start = new Date(options.startDate)
+      start.setHours(0, 0, 0, 0)
+      where.createdAt.gte = start
+    }
+    if (options.endDate) {
+      const end = new Date(options.endDate)
+      end.setHours(23, 59, 59, 999)
+      where.createdAt.lte = end
+    }
+  } else if (cutoffDate) {
     where.createdAt = { gte: cutoffDate }
   }
 
-  if (options?.networkId && options.networkId !== "all") {
-    where.network = options.networkId
+  const selectedNetId =
+    options?.networkId && options.networkId !== "all"
+      ? normalizeNetworkId(options.networkId)
+      : "all"
+
+  if (selectedNetId !== "all") {
+    const netVariants = [selectedNetId]
+    if (selectedNetId === "01") netVariants.push("MTN")
+    else if (selectedNetId === "02") netVariants.push("GLO", "GLOBACOM")
+    else if (selectedNetId === "03") netVariants.push("9MOBILE", "ETISALAT", "9MOB")
+    else if (selectedNetId === "04") netVariants.push("AIRTEL")
+
+    where.network = { in: netVariants }
+  }
+
+  // Build Prisma Where Clause for AirtimePurchase
+  const whereAirtime: Prisma.AirtimePurchaseWhereInput = {}
+  if (activeScope === "user") {
+    whereAirtime.userId = session.user.id
+  }
+  if (options?.startDate || options?.endDate) {
+    whereAirtime.createdAt = {}
+    if (options.startDate) {
+      const start = new Date(options.startDate)
+      start.setHours(0, 0, 0, 0)
+      whereAirtime.createdAt.gte = start
+    }
+    if (options.endDate) {
+      const end = new Date(options.endDate)
+      end.setHours(23, 59, 59, 999)
+      whereAirtime.createdAt.lte = end
+    }
+  } else if (cutoffDate) {
+    whereAirtime.createdAt = { gte: cutoffDate }
+  }
+  if (selectedNetId !== "all") {
+    const netVariants = [selectedNetId]
+    if (selectedNetId === "01") netVariants.push("MTN")
+    else if (selectedNetId === "02") netVariants.push("GLO", "GLOBACOM")
+    else if (selectedNetId === "03") netVariants.push("9MOBILE", "ETISALAT", "9MOB")
+    else if (selectedNetId === "04") netVariants.push("AIRTEL")
+
+    whereAirtime.network = { in: netVariants }
   }
 
   // 1. Fetch all matching Data Purchases
@@ -73,7 +130,7 @@ export async function getDataAnalysisMetrics(options?: {
       orderBy: { createdAt: "desc" },
     }),
     prisma.airtimePurchase.findMany({
-      where: activeScope === "user" ? { userId: session.user.id } : {},
+      where: whereAirtime,
       select: {
         network: true,
         amount: true,
@@ -139,6 +196,7 @@ export async function getDataAnalysisMetrics(options?: {
   }
 
   const globalUniquePhones = new Set<string>()
+  const simMap = new Map<string, SimDataAnalyticsItem>()
   let totalDataCount = 0
   let totalDataAmount = 0
   let totalSuccessCount = 0
@@ -166,10 +224,13 @@ export async function getDataAnalysisMetrics(options?: {
     totalDataCount += 1
     totalDataAmount += item.amount || 0
 
-    if (item.status === "SUCCESS") {
+    const isSuccess = item.status === "SUCCESS"
+    const isFailed = item.status === "FAILED"
+
+    if (isSuccess) {
       bucket.successCount += 1
       totalSuccessCount += 1
-    } else if (item.status === "FAILED") {
+    } else if (isFailed) {
       bucket.failedCount += 1
       totalFailedCount += 1
     } else {
@@ -177,8 +238,34 @@ export async function getDataAnalysisMetrics(options?: {
     }
 
     if (item.phone) {
-      bucket.uniquePhones.add(item.phone)
-      globalUniquePhones.add(item.phone)
+      const trimmedPhone = item.phone.trim()
+      bucket.uniquePhones.add(trimmedPhone)
+      globalUniquePhones.add(trimmedPhone)
+
+      const existingSim = simMap.get(trimmedPhone)
+      if (!existingSim) {
+        const meta = NETWORK_METADATA[netId]
+        const dt = format12HourDateTime(item.createdAt)
+        simMap.set(trimmedPhone, {
+          phone: trimmedPhone,
+          networkId: netId,
+          networkName: meta?.name || NETWORKS[netId]?.name || item.network || `Network ${netId}`,
+          brandColor: meta?.brandColor || NETWORKS[netId]?.color || "#64748B",
+          totalCount: 1,
+          totalAmount: item.amount || 0,
+          lastPlan: formatPlanFriendly(item.plan),
+          lastDate: item.createdAt.toISOString(),
+          lastFormattedDate: dt.full,
+          lastStatus: item.status,
+          successCount: isSuccess ? 1 : 0,
+          failedCount: isFailed ? 1 : 0,
+        })
+      } else {
+        existingSim.totalCount += 1
+        existingSim.totalAmount += item.amount || 0
+        if (isSuccess) existingSim.successCount += 1
+        if (isFailed) existingSim.failedCount += 1
+      }
     }
 
     const planKey = item.plan || "unknown"
@@ -188,6 +275,14 @@ export async function getDataAnalysisMetrics(options?: {
     bucket.plansMap[planKey].count += 1
     bucket.plansMap[planKey].amount += item.amount || 0
   }
+
+  // Build sorted list of recipient SIMs where data was added
+  const simList: SimDataAnalyticsItem[] = Array.from(simMap.values())
+    .map((s) => ({
+      ...s,
+      totalAmount: Number(s.totalAmount.toFixed(2)),
+    }))
+    .sort((a, b) => b.totalCount - a.totalCount || b.totalAmount - a.totalAmount)
 
   // Convert network buckets to ranked array sorted by totalCount DESCENDING
   const rawRankings = Object.values(networkBuckets).map((bucket) => {
@@ -281,12 +376,15 @@ export async function getDataAnalysisMetrics(options?: {
     uniquePhonesCount: globalUniquePhones.size,
     leaderNetwork,
     timeframe,
+    startDate: options?.startDate || null,
+    endDate: options?.endDate || null,
+    selectedNetworkId: selectedNetId !== "all" ? selectedNetId : null,
     scope: activeScope,
     isAdmin,
   }
 
-  // Format latest 25 transactions for explorer view
-  const recentTransactions: RecentDataTransaction[] = dataPurchases.slice(0, 25).map((tx) => {
+  // Format up to 100 latest transactions for explorer view
+  const recentTransactions: RecentDataTransaction[] = dataPurchases.slice(0, 100).map((tx) => {
     const netId = normalizeNetworkId(tx.network)
     const meta = NETWORK_METADATA[netId]
     const dt = format12HourDateTime(tx.createdAt)
@@ -382,6 +480,7 @@ export async function getDataAnalysisMetrics(options?: {
     summary,
     networkRankings,
     recentTransactions,
+    simList,
     dailyTrends,
     airtimeComparison,
   }

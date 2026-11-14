@@ -3788,6 +3788,7 @@ export function FleetTroubleshootClient({
                 {modalFilteredPlans.length === 0 && modalNetworkId === "01" && (
                   <>
                     <option value="6403::400::MTN 100MB Twice a Month (Bi-Weekly Auto-Renew)::30 Days">MTN 100MB Twice a Month (2x Bi-Weekly) — ₦400 (Recommended Tracker Plan)</option>
+                    <option value="1223::400::MTN 500MB Monthly (Transfer)::30 Days">MTN 500MB Monthly (Transfer) — ₦400 (30-Day Plan)</option>
                     <option value="1224::580::MTN 1GB Monthly (Transfer)::30 Days">MTN 1GB Monthly (Transfer) — ₦580 (30-Day Plan)</option>
                     <option value="14::380::500MB (CG) (7 Days)::7 Days">500MB (CG) (7 Days) — ₦380</option>
                     <option value="8::380::1.0GB SME (7 Days)::7 Days">1.0GB SME (7 Days) — ₦380</option>

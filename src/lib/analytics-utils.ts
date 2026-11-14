@@ -32,6 +32,21 @@ export interface NetworkAnalyticsItem {
   topPlans: TopPlanStat[]
 }
 
+export interface SimDataAnalyticsItem {
+  phone: string
+  networkId: string
+  networkName: string
+  brandColor: string
+  totalCount: number
+  totalAmount: number
+  lastPlan: string
+  lastDate: string
+  lastFormattedDate: string
+  lastStatus: string
+  successCount: number
+  failedCount: number
+}
+
 export interface AnalyticsSummary {
   totalDataCount: number
   totalDataAmount: number
@@ -41,6 +56,9 @@ export interface AnalyticsSummary {
   uniquePhonesCount: number
   leaderNetwork: NetworkAnalyticsItem | null
   timeframe: string
+  startDate?: string | null
+  endDate?: string | null
+  selectedNetworkId?: string | null
   scope: "all" | "user"
   isAdmin: boolean
 }
@@ -85,6 +103,7 @@ export interface AnalyticsDataPayload {
   summary: AnalyticsSummary
   networkRankings: NetworkAnalyticsItem[]
   recentTransactions: RecentDataTransaction[]
+  simList: SimDataAnalyticsItem[]
   dailyTrends: DailyTrendItem[]
   airtimeComparison: AirtimeComparisonItem[]
 }

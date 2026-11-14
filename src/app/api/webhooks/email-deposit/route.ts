@@ -26,7 +26,7 @@ interface ParsedMoniepointEmail {
  * Robust Moniepoint & Nigerian bank credit notification parser.
  * Specifically handles Moniepoint format: "Credit Amount\n100.00", "Account Number:\n3006410113", etc.
  */
-export function parseCreditEmail(text: string, subject: string = ""): ParsedMoniepointEmail {
+function parseCreditEmail(text: string, subject: string = ""): ParsedMoniepointEmail {
   const combined = `${subject}\n${text}`
   const cleanText = combined.replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " ")
 
